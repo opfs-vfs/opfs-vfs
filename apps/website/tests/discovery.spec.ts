@@ -20,7 +20,7 @@ test('sitemaps cover public pages and link to usable pages with distinct metadat
     expect(response.status()).toBe(200);
     urls.push(...[...(await response.text()).matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]!));
   }
-  const expected = readdirSync('dist', { recursive: true })
+  const expected = readdirSync('.vercel/output/static', { recursive: true })
     .filter((file): file is string => typeof file === 'string' && file.endsWith('.html'))
     .map((file) => `/${file.replace(/index\.html$/, '')}`)
     .filter((path) => path !== '/404.html' && !hidden.includes(path))
