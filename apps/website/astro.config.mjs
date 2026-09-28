@@ -1,12 +1,35 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import vercel from '@astrojs/vercel';
 import { defineConfig } from 'astro/config';
 
 const manifest = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
+const copyVercelHeaders = () => ({
+  name: 'copy-vercel-headers-to-build-output',
+  hooks: {
+    'astro:build:done': () => {
+      const configUrl = new URL('./.vercel/output/config.json', import.meta.url);
+      const output = manifest('./.vercel/output/config.json');
+      const { headers = [] } = manifest('./vercel.json');
+      // ponytail: current headers use source paths; extend conversion if route syntax becomes more complex.
+      const routes = headers.map(({ source, headers: values }) => ({
+        src: `^${source}$`,
+        headers: Object.fromEntries(values.map(({ key, value }) => [key, value])),
+        continue: true,
+      }));
+      output.routes.splice(
+        output.routes.findIndex((route) => route.handle === 'filesystem'),
+        0,
+        ...routes,
+      );
+      writeFileSync(configUrl, `${JSON.stringify(output, null, 2)}\n`);
+    },
+  },
+});
 const packageVersion = manifest('../../packages/opfs-vfs/package.json').version;
 const pgliteVersion = manifest('./package.json').dependencies['@electric-sql/pglite'];
 let sourceCommit = 'unavailable';
@@ -20,6 +43,7 @@ try {
 
 export default defineConfig({
   site: 'https://opfs.dev',
+  adapter: vercel(),
   server: {
     port: 4325,
     headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' },
@@ -44,6 +68,7 @@ export default defineConfig({
     worker: { format: 'es' },
   },
   integrations: [
+    copyVercelHeaders(),
     react(),
     sitemap({
       filter: (page) =>

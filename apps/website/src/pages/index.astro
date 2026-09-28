@@ -139,6 +139,12 @@ export function App() {
     <img class="benchmark-art" src="/images/storage-comparison.webp" alt="A storage volume, folders, a database, and a memory module shown side by side." width="1536" height="1024" loading="lazy" decoding="async" />
     <a class="button" href="/benchmarks/">Benchmark overview →</a>
   </section>
+  <section class="contact-callout" aria-labelledby="contact-heading">
+    <p class="kicker">Start a conversation</p>
+    <h2 id="contact-heading">Building something that needs a place for its files?</h2>
+    <p>Tell us about it. We’d love to hear what you’re making with OPFS VFS.</p>
+    <button class="button solid" type="button" data-contact-trigger>Contact us <span aria-hidden="true">→</span></button>
+  </section>
 </SiteLayout>
 <style>
   .use-cases { padding: clamp(48px, 7vw, 88px) 0; border-top: 1px solid var(--line); }
@@ -225,6 +231,11 @@ export function App() {
   .benchmark-callout p:not(.kicker) { max-width: 560px; color: var(--muted); line-height: 1.65; margin: 0; }
   .benchmark-art { display: block; width: min(100%, 840px); height: auto; aspect-ratio: 3 / 1; object-fit: cover; margin-top: 32px; }
   .benchmark-callout .button { margin-top: 28px; }
+  .contact-callout { margin: 72px 0 0; padding: clamp(36px, 7vw, 80px); border: 1px solid var(--accent); border-radius: 12px; background: var(--primary-bg); color: var(--primary-fg); text-align: center; }
+  .contact-callout .kicker { color: color-mix(in srgb, var(--primary-fg) 70%, transparent); }
+  .contact-callout h2 { max-width: 720px; margin: 14px auto; font-size: clamp(32px, 4.8vw, 58px); line-height: 1.05; }
+  .contact-callout p:not(.kicker) { max-width: 540px; margin: 0 auto; color: color-mix(in srgb, var(--primary-fg) 76%, transparent); line-height: 1.65; }
+  .contact-callout .button { margin-top: 28px; border-color: var(--primary-fg); background: var(--primary-fg); color: var(--primary-bg); cursor: pointer; }
   @media (max-width: 700px) {
     .file-reactivity { grid-template-columns: 1fr; padding: 56px 0 0; margin-top: 56px; }
     .browser-support { margin-top: 56px; padding-top: 56px; }

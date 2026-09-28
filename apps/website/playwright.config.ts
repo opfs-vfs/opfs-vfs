@@ -15,7 +15,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `node_modules/.bin/astro preview --host localhost --port ${process.env.WEBSITE_TEST_PORT ?? 4325}`,
+    command: `node scripts/static-preview.mjs --host localhost --port ${process.env.WEBSITE_TEST_PORT ?? 4325}`,
     env: { ASTRO_PREVIEW_BACKGROUND: '1' },
     url: `http://localhost:${process.env.WEBSITE_TEST_PORT ?? 4325}`,
     reuseExistingServer: !process.env.CI,

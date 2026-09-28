@@ -19,7 +19,7 @@ pnpm --filter @opfs-vfs/website build
 pnpm --filter @opfs-vfs/website preview --host localhost
 ```
 
-Astro can run its server in the background in agent environments. Use `pnpm --filter @opfs-vfs/website exec astro preview status` or `astro preview stop` to inspect or stop that project’s preview.
+To test the contact form locally, set `RESEND_API_KEY` in `apps/website/.env`. Resend must verify the `opfs.dev` domain before it can send as `website@opfs.dev`. The static production preview does not serve the contact endpoint; use the development server for that request.
 
 ## Content
 
@@ -74,7 +74,7 @@ Browser tests run against a production preview on port 4325 with real OPFS. Each
 
 The separate `opfs-vfs` project in `bastians-projects-7056af61` serves `https://opfs.dev`. `opfs-vfs.dev` redirects to the same path on `opfs.dev`.
 
-Use Node.js 24 and Root Directory `apps/website`, with files outside the root included. Keep the Other framework preset; Astro builds the static `dist` output. Keep the whole monorepo in the build context: the website uses workspace packages and root pnpm patches. `vercel.json` builds those dependencies before Astro, including the generated AI assets. The pinned package manager is selected through Corepack with Vercel's `ENABLE_EXPERIMENTAL_COREPACK=1` build variable.
+Use Node.js 24 and Root Directory `apps/website`, with files outside the root included. Keep the Other framework preset; Astro prerenders the static pages and emits Vercel Build Output API artifacts for the contact endpoint. Keep the whole monorepo in the build context: the website uses workspace packages and root pnpm patches. `vercel.json` builds those dependencies before Astro, including the generated AI assets. The pinned package manager is selected through Corepack with Vercel's `ENABLE_EXPERIMENTAL_COREPACK=1` build variable.
 
 The website has no application-level access gate. Check Vercel's separate Deployment Protection setting before launch; this repository does not control it. Existing deployments retain their original configuration, so deploy this revision to remove the old gate from the current site.
 

@@ -10,7 +10,9 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   use: { browserName: 'chromium', baseURL: 'http://localhost:4339', headless: true, trace: 'retain-on-failure' },
   webServer: {
-    command: `node_modules/.bin/astro ${development ? 'dev' : 'preview'} --host localhost --port 4339`,
+    command: development
+      ? 'node_modules/.bin/astro dev --host localhost --port 4339'
+      : 'node scripts/static-preview.mjs --host localhost --port 4339',
     env: { ASTRO_PREVIEW_BACKGROUND: '1', ASTRO_DEV_BACKGROUND: '1' },
     url: 'http://localhost:4339',
     reuseExistingServer: false,
