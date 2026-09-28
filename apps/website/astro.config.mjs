@@ -59,6 +59,7 @@ export default defineConfig({
       title: 'OPFS VFS',
       head: [{ tag: 'link', attrs: { rel: 'describedby', href: '/llms.txt', type: 'text/markdown' } }],
       components: {
+        Head: './src/components/docs/Head.astro',
         ThemeSelect: './src/components/ThemeControl.astro',
         SiteTitle: './src/components/docs/SiteTitle.astro',
       },
