@@ -99,11 +99,26 @@ function OpfsLogo({ size }: { size: number }) {
   );
 }
 
+const launcherPositions = {
+  'top-left': [0, 0],
+  'top-center': [0.5, 0],
+  'top-right': [1, 0],
+  'right-center': [1, 0.5],
+  'bottom-right': [1, 1],
+  'bottom-center': [0.5, 1],
+  'bottom-left': [0, 1],
+  'left-center': [0, 0.5],
+} as const;
+export type LauncherPosition = keyof typeof launcherPositions;
+const launcherPositionNames = Object.keys(launcherPositions) as LauncherPosition[];
+const launcherHint = 'Drag to reposition. Alt + arrow keys cycle through the eight positions.';
+
 export type Props = {
   runtime?: DevtoolsSession;
   initialVolumes?: MockVolume[];
   initialOpen?: boolean;
   initialDock?: Dock;
+  initialPosition?: LauncherPosition;
   initialScenario?: 'normal' | 'empty' | 'disconnected';
   initialTheme?: 'dark' | 'light';
   initialPath?: string;
@@ -142,6 +157,7 @@ export function DebugPanel({
   initialVolumes = [],
   initialOpen = false,
   initialDock = 'floating',
+  initialPosition = 'bottom-right',
   initialScenario = 'normal',
   initialTheme = 'dark',
   initialPath = '/README.md',
@@ -202,6 +218,9 @@ export function DebugPanel({
   const [detailsTab, setDetailsTab] = useState('volume');
   const [previewSource, setPreviewSource] = useState(initialSource);
   const launcher = useRef<HTMLButtonElement>(null);
+  const [launcherPosition, setLauncherPosition] = useState(initialPosition);
+  const [launcherDrag, setLauncherDrag] = useState<{ left: number; top: number } | null>(null);
+  const launcherDragged = useRef(false);
   const panel = useRef<HTMLElement>(null);
   const terminalOutput = useRef<HTMLPreElement>(null);
   const modal = useRef<HTMLDialogElement>(null);
@@ -277,6 +296,28 @@ export function DebugPanel({
       clearInterval(timer);
     };
   }, [runtime, open]);
+  useEffect(() => {
+    if (!runtime || !open || !enabled || saving || working) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        if (!document.hidden) {
+          const next = await runtime.listDirectory(active, directory, controller.signal);
+          if (!controller.signal.aborted) setVolumes([...next]);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) setNotice(String(error));
+      } finally {
+        if (!controller.signal.aborted) timer = setTimeout(() => void refresh(), 500);
+      }
+    };
+    void refresh();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [runtime, open, enabled, active, directory, saving, working]);
   useEffect(() => {
     if (!runtime || !enabled || !currentFile || currentFile.loaded || currentFile.error) return;
     let live = true;
@@ -700,12 +741,18 @@ export function DebugPanel({
       setNotice(`Deleted ${target.name} from simulated data only.`);
     } else if (dialog.kind === 'import' || dialog.kind === 'export') simulateTransfer(dialog.kind);
   }
-  function startPointer(event: ReactPointerEvent<HTMLElement>, kind: 'move' | 'resize' | 'split' | 'terminal') {
+  function startPointer(
+    event: ReactPointerEvent<HTMLElement>,
+    kind: 'move' | 'resize' | 'split' | 'terminal' | 'launcher',
+  ) {
     if (event.button !== 0 || (kind === 'move' && dock !== 'floating')) return;
     event.preventDefault();
     const target = event.currentTarget;
     target.focus();
     target.setPointerCapture(event.pointerId);
+    if (kind === 'launcher') launcherDragged.current = false;
+    const bounds = target.getBoundingClientRect();
+    let launcherPoint = { left: bounds.left, top: bounds.top };
     const initial = {
       x: event.clientX,
       y: event.clientY,
@@ -717,6 +764,14 @@ export function DebugPanel({
     const move = (next: PointerEvent) => {
       const dx = next.clientX - initial.x,
         dy = next.clientY - initial.y;
+      if (kind === 'launcher' && (launcherDragged.current || Math.hypot(dx, dy) > 5)) {
+        launcherDragged.current = true;
+        launcherPoint = {
+          left: Math.max(0, Math.min(window.innerWidth - bounds.width, bounds.left + dx)),
+          top: Math.max(0, Math.min(window.innerHeight - bounds.height, bounds.top + dy)),
+        };
+        setLauncherDrag(launcherPoint);
+      }
       if (kind === 'move')
         setRect(
           clampRect(
@@ -745,7 +800,20 @@ export function DebugPanel({
       if (kind === 'split') setSplit(Math.min(70, Math.max(30, initial.split + (dx / panelWidth) * 100)));
       if (kind === 'terminal') setTerminalHeight(Math.min(300, Math.max(110, initial.terminalHeight - dy)));
     };
-    const stop = () => {
+    const stop = (end: Event) => {
+      if (kind === 'launcher') {
+        if (end.type === 'pointerup' && launcherDragged.current) {
+          const distance = (position: LauncherPosition) => {
+            const [x, y] = launcherPositions[position];
+            return Math.hypot(
+              launcherPoint.left - (16 + x * (window.innerWidth - bounds.width - 32)),
+              launcherPoint.top - (16 + y * (window.innerHeight - bounds.height - 32)),
+            );
+          };
+          setLauncherPosition(launcherPositionNames.reduce((a, b) => (distance(a) <= distance(b) ? a : b)));
+        }
+        setLauncherDrag(null);
+      }
       target.removeEventListener('pointermove', move);
       target.removeEventListener('pointerup', stop);
       target.removeEventListener('pointercancel', stop);
@@ -757,6 +825,7 @@ export function DebugPanel({
     target.addEventListener('pointercancel', stop);
     target.addEventListener('lostpointercapture', stop);
   }
+  const [launcherX, launcherY] = launcherPositions[launcherPosition];
   const visibleRect = clampRect(rect, viewport.width, viewport.height);
   const geometry: CSSProperties =
     viewport.width < 600
@@ -840,10 +909,37 @@ export function DebugPanel({
       <button
         ref={launcher}
         className="opfs-launcher"
+        data-position={launcherPosition}
+        data-dragging={!!launcherDrag}
+        style={
+          launcherDrag
+            ? { ...launcherDrag, transform: 'none' }
+            : {
+                left: `calc(${launcherX * 100}% + ${16 * (1 - 2 * launcherX)}px)`,
+                top: `calc(${launcherY * 100}% + ${16 * (1 - 2 * launcherY)}px)`,
+                transform: `translate(${-launcherX * 100}%, ${-launcherY * 100}%)`,
+              }
+        }
+        title={launcherHint}
+        aria-description={launcherHint}
         aria-label={open ? 'Hide OPFS VFS Volume Explorer' : 'Open OPFS VFS Volume Explorer'}
         aria-expanded={open}
         aria-controls={`${id}-panel`}
-        onClick={() => (open ? closePanel() : setOpen(true))}
+        onPointerDown={(event) => startPointer(event, 'launcher')}
+        onKeyDown={(event) => {
+          if (event.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+            event.preventDefault();
+            const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+            setLauncherPosition(
+              (position) => launcherPositionNames[(launcherPositionNames.indexOf(position) + direction + 8) % 8],
+            );
+          }
+        }}
+        onClick={(event) => {
+          if (event.detail && launcherDragged.current) return;
+          if (open) closePanel();
+          else setOpen(true);
+        }}
       >
         <OpfsLogo size={22} />
         <span>OPFS</span>

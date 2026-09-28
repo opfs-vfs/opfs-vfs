@@ -1,11 +1,13 @@
 import { createRoot } from 'react-dom/client';
-import { DebugPanel } from './DebugPanel';
+import { DebugPanel, type LauncherPosition } from './DebugPanel';
+export type { LauncherPosition } from './DebugPanel';
 import { DevtoolsSession } from './runtime';
 import type { PreviewExtension } from '@opfs-vfs/file-preview';
 export type { PreviewExtension, PreviewProps } from '@opfs-vfs/file-preview';
 export type DevtoolsOptions = {
   initialOpen?: boolean;
   initialDock?: 'floating' | 'left' | 'right' | 'top' | 'bottom';
+  initialPosition?: LauncherPosition;
   initialTheme?: 'dark' | 'light';
   previewExtensions?: PreviewExtension[];
 };
