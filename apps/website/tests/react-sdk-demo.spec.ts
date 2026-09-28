@@ -107,7 +107,7 @@ test('drops image files, preserves duplicate names, and rejects files above the 
 
 async function openTodos(page: Page) {
   await page.goto(route);
-  await page.getByRole('button', { name: 'Todo lists' }).click();
+  await page.getByRole('tab', { name: 'Todo lists' }).click();
   await expect(page.getByRole('button', { name: 'New list' })).toBeEnabled({ timeout: 30_000 });
 }
 
@@ -186,6 +186,10 @@ test('opens devtools with recognizable volumes from both React examples', async 
   await openInbox(page);
   const launcher = page.getByRole('button', { name: 'Open OPFS VFS Volume Explorer', exact: true });
   await expect(launcher).toBeVisible();
+  await page.getByRole('tab', { name: 'File inbox', exact: true }).press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Todo lists', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Todo lists', exact: true }).press('ArrowLeft');
+  await expect(page.getByRole('tab', { name: 'File inbox', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' })).not.toBeVisible();
   await openTodos(page);
   await expect(launcher).toBeVisible();

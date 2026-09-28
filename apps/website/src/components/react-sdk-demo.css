@@ -170,6 +170,8 @@
 }
 .react-demo-switcher {
   margin-bottom: 18px;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
 }
 .react-demo-switcher button,
 .react-todos button,
@@ -186,7 +188,6 @@
 .react-todos button {
   cursor: pointer;
 }
-.react-demo-switcher button[aria-pressed='true'],
 .react-todos aside button.selected {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
@@ -281,4 +282,22 @@
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
+}
+
+.react-demo-switcher [role='tab'] {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  padding: 12px 18px;
+  background: transparent;
+  color: var(--muted);
+}
+.react-demo-switcher [role='tab'][aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.react-demo-switcher [role='tab']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

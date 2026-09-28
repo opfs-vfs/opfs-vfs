@@ -1,3 +1,4 @@
+import { Tabs } from '@base-ui/react/tabs';
 import { FilePreview } from '@opfs-vfs/file-preview';
 import '@opfs-vfs/file-preview/styles.css';
 import { VolumeProvider, useFile, useFileContent, useFolder, useVolume, useVolumeClient } from '@opfs-vfs/react';
@@ -850,32 +851,33 @@ export default function ReactSdkDemo() {
   };
   return (
     <>
-      <div className="react-demo-switcher" role="group" aria-label="React SDK examples">
-        <button
-          type="button"
-          onClick={() => switchExample('inbox')}
-          aria-pressed={example === 'inbox'}
-          disabled={example === 'todos' && (todoDirty || todoBusy)}
-        >
-          File inbox
-        </button>
-        <button type="button" onClick={() => switchExample('todos')} aria-pressed={example === 'todos'}>
-          Todo lists
-        </button>
-        <DemoDevtools />
-      </div>
-      <p className="react-inbox-status">
-        Volume: <code>{example === 'todos' ? todoVolumeName : volumeName}</code>
-      </p>
-      {example === 'inbox' ? (
-        <VolumeProvider key={volumeName} fileName={volumeName} transport="dedicated">
-          <Inbox />
-        </VolumeProvider>
-      ) : (
-        <VolumeProvider key={todoVolumeName} fileName={todoVolumeName} transport="dedicated">
-          <TodoLists onDirtyChange={setTodoDirty} onBusyChange={setTodoBusy} />
-        </VolumeProvider>
-      )}
+      <DemoDevtools />
+      <Tabs.Root
+        value={example}
+        onValueChange={(value) => {
+          if (value === 'inbox' || value === 'todos') switchExample(value);
+        }}
+      >
+        <Tabs.List className="react-demo-switcher" aria-label="React SDK examples" activateOnFocus>
+          <Tabs.Tab value="inbox" disabled={example === 'todos' && (todoDirty || todoBusy)}>
+            File inbox
+          </Tabs.Tab>
+          <Tabs.Tab value="todos">Todo lists</Tabs.Tab>
+        </Tabs.List>
+        <p className="react-inbox-status">
+          Volume: <code>{example === 'todos' ? todoVolumeName : volumeName}</code>
+        </p>
+        <Tabs.Panel value="inbox">
+          <VolumeProvider key={volumeName} fileName={volumeName} transport="dedicated">
+            <Inbox />
+          </VolumeProvider>
+        </Tabs.Panel>
+        <Tabs.Panel value="todos">
+          <VolumeProvider key={todoVolumeName} fileName={todoVolumeName} transport="dedicated">
+            <TodoLists onDirtyChange={setTodoDirty} onBusyChange={setTodoBusy} />
+          </VolumeProvider>
+        </Tabs.Panel>
+      </Tabs.Root>
     </>
   );
 }
