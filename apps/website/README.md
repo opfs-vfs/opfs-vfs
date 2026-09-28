@@ -74,17 +74,15 @@ Browser tests run against a production preview on port 4325 with real OPFS. Each
 
 The separate `opfs-vfs` project in `bastians-projects-7056af61` serves `https://opfs.dev`. `opfs-vfs.dev` redirects to the same path on `opfs.dev`.
 
-Use Node.js 24 and Root Directory `apps/website`, with files outside the root included. Select the Other framework preset: Vercel's Astro preset rejects custom routing middleware. The site still builds with Astro and serves its static `dist` output. Keep the whole monorepo in the build context: the website uses workspace packages and root pnpm patches. `vercel.json` builds those dependencies before Astro, including the generated AI assets. The pinned package manager is selected through Corepack with Vercel's `ENABLE_EXPERIMENTAL_COREPACK=1` build variable.
+Use Node.js 24 and Root Directory `apps/website`, with files outside the root included. Keep the Other framework preset; Astro builds the static `dist` output. Keep the whole monorepo in the build context: the website uses workspace packages and root pnpm patches. `vercel.json` builds those dependencies before Astro, including the generated AI assets. The pinned package manager is selected through Corepack with Vercel's `ENABLE_EXPERIMENTAL_COREPACK=1` build variable.
 
-`proxy.ts` is Vercel Routing Middleware, applied to every page and asset. Set encrypted `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` variables in both Production and Preview. Empty credentials or a username containing `:` return 503. Missing or incorrect authentication returns 401. Protected responses use `private, no-store` and `noindex, nofollow`. Never put credentials in Git or in `PUBLIC_` variables.
-
-To launch publicly, set `BASIC_AUTH_DISABLED=true` and redeploy. Any other value keeps protection enabled. Changing credentials also requires a new deployment. Existing deployment URLs retain their original configuration, so remove obsolete deployments when revoking old credentials.
+The website has no application-level access gate. Check Vercel's separate Deployment Protection setting before launch; this repository does not control it. Existing deployments retain their original configuration, so deploy this revision to remove the old gate from the current site.
 
 The production branch is temporarily `codex/vercel-deployment`, which includes the complete PR stack. Change it to `main` after the stack is merged. This does not require merging the stack for the first deployment.
 
-Vercel adds `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` to all routes, matching local dev and preview. Worker and WASM files stay on the same origin. Astro's local dev/preview servers do not run Vercel's authentication middleware.
+Vercel adds `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` to all routes, matching local dev and preview. Worker and WASM files stay on the same origin.
 
-Run `node --test tests/proxy.test.ts` from this app for the access checks. Before assigning production domains, verify deployed HTML, JavaScript and WASM with valid credentials, then the same URLs without credentials and with wrong credentials. The latter requests must return 401 even after authenticated requests warm the cache. Also start a demo worker in an authenticated browser and verify `crossOriginIsolated`.
+After deployment, verify unauthenticated access to HTML, JavaScript, WASM, and `/robots.txt`. Start a demo worker in a browser and verify `crossOriginIsolated`.
 
 Spreadsheet previews use SheetJS 0.20.3 from the [official distribution](https://docs.sheetjs.com/docs/getting-started/installation/frameworks/); the npm `xlsx` endpoint is obsolete. The lockfile pins the tarball integrity.
 
@@ -108,6 +106,6 @@ The MediaPipe prompt uses the Gemma 4 system/user/model turn format. Model tool 
 
 The [copy map](../../docs/website-copy-map.md) records the pre-edit route purposes and text sources. Product motivation lives at `/motivation/`; backend and durability guidance stays at `/benchmarks/storage/`. The old `#motivation` anchor links to the new page.
 
-`/sitemap/` lists product pages and derives documentation entries from the content collection. Astro's sitemap integration generates `/sitemap-index.xml` and its child sitemap. The internal hero study and embedded explorer are excluded and marked `noindex`. `/robots.txt` points crawlers to the XML index. Deployment authentication still controls access to these files.
+`/sitemap/` lists product pages and derives documentation entries from the content collection. Astro's sitemap integration generates `/sitemap-index.xml` and its child sitemap. The internal hero study and embedded explorer are excluded and marked `noindex`. `/robots.txt` points crawlers to the XML index.
 
 `public/llms.txt` is the curated LLM guide. `/llm.txt` serves the same source for the requested alternate spelling. Update the guide and human sitemap when adding product pages; documentation entries and XML routes are generated. Run the discovery browser test after building to check route coverage, canonical URLs, exclusions, and links.

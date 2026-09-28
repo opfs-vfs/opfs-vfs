@@ -32,7 +32,6 @@
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vercel/functions": "3.9.8",
     "@webgpu/types": "0.1.69",
     "astro": "7.2.4",
     "class-variance-authority": "0.7.1",
