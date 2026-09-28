@@ -3,6 +3,7 @@ import '../styles/global.css';
 import Analytics from '@vercel/analytics/astro';
 import ThemeControl from '../components/ThemeControl.astro';
 import Brand from '../components/Brand.astro';
+import SocialImage from '../components/SocialImage.astro';
 import ContactDialog from '../components/ContactDialog';
 interface Props { title?: string; description: string; noindex?: boolean }
 const { title = 'OPFS VFS', description, noindex = false } = Astro.props;
@@ -15,6 +16,13 @@ const activeLink = links.find(([href]) => href !== '/#plugins' && Astro.url.path
   <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width" /><meta name="theme-color" content="#fbfaf5" /><meta name="description" content={description} /><title>{title}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OPFS VFS" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <SocialImage />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <link rel="describedby" href="/llms.txt" type="text/markdown" />
     <Analytics />
