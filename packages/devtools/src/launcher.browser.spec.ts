@@ -96,3 +96,44 @@ test('launcher accepts all initial positions and animates drag snapping without 
     target.remove();
   }
 }, 30000);
+
+test('the full title bar moves the floating panel while controls remain clickable', async () => {
+  await page.viewport(1400, 1000);
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  root.render(createElement(DebugPanel, { initialOpen: true }));
+  const target = document.createElement('div');
+  document.body.append(target);
+  try {
+    await expect.element(page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' })).toBeVisible();
+    const panel = host.querySelector<HTMLElement>('.debug-panel')!;
+    const header = host.querySelector<HTMLElement>('.panel-titlebar')!;
+    const before = panel.getBoundingClientRect();
+    const bar = header.getBoundingClientRect();
+    target.style.cssText = `position:fixed;left:${bar.left + bar.width / 2 + 60}px;top:${bar.top + bar.height / 2 + 60}px;width:2px;height:2px;z-index:20000`;
+    await userEvent.dragAndDrop(header, target, { sourcePosition: { x: bar.width / 2, y: bar.height / 2 } });
+    target.remove();
+    await expect.poll(() => panel.getBoundingClientRect().left).toBeGreaterThan(before.left + 50);
+    expect(panel.getBoundingClientRect().top).toBeGreaterThan(before.top + 50);
+    expect(document.activeElement).toBe(host.querySelector('.drag-title'));
+    const moved = panel.getBoundingClientRect();
+    const theme = host.querySelector('.opfs-mock')!.getAttribute('data-theme');
+    await page.getByRole('button', { name: 'Toggle panel theme' }).click();
+    expect(host.querySelector('.opfs-mock')!.getAttribute('data-theme')).not.toBe(theme);
+    expect(panel.getBoundingClientRect().left).toBe(moved.left);
+    expect(panel.getBoundingClientRect().top).toBe(moved.top);
+    await page.getByRole('button', { name: 'Dock left', exact: true }).click();
+    await expect
+      .element(page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' }))
+      .toHaveAttribute('data-dock', 'left');
+    await page.getByRole('button', { name: 'Reset panel layout' }).click();
+    expect(panel.dataset.dock).toBe('floating');
+    await page.getByRole('button', { name: 'Close volume explorer' }).click();
+    await expect.poll(() => host.querySelector('.debug-panel')).toBeNull();
+  } finally {
+    root.unmount();
+    host.remove();
+    target.remove();
+  }
+});
