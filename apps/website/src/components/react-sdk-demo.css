@@ -1,115 +1,284 @@
-.react-sdk-demo {
-  display: grid;
-  gap: 20px;
-}
-.react-sdk-persistence,
-.react-sdk-volume {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 18px;
-  background: var(--paper);
-}
-.react-sdk-persistence {
-  display: grid;
-  gap: 8px;
-}
-.react-sdk-persistence span,
-.react-sdk-note,
-.react-sdk-transport,
-.react-sdk-current {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-.react-sdk-volumes {
+.react-inbox {
   display: grid;
   gap: 18px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.react-sdk-volume {
-  display: grid;
-  gap: 12px;
-}
-.react-sdk-volume header {
+.react-inbox-heading {
   display: flex;
-  gap: 12px;
   justify-content: space-between;
-  align-items: flex-start;
+  gap: 24px;
+  align-items: start;
 }
-.react-sdk-volume h2 {
-  margin: 4px 0;
+.react-inbox-heading h2 {
+  margin: 4px 0 8px;
 }
-.react-sdk-volume code {
-  font-size: 12px;
-  word-break: break-all;
-}
-.react-sdk-state {
-  font-size: 12px;
-  text-align: right;
+.react-inbox-heading p {
+  margin: 0;
   color: var(--muted);
+  line-height: 1.5;
 }
-.state-ready {
-  color: var(--accent);
-}
-.state-error,
-.state-closed {
-  color: #c2410c;
-}
-.react-sdk-status {
-  min-height: 42px;
-  margin: 0;
-  line-height: 1.45;
-}
-.react-sdk-error {
-  margin: 0;
-  color: #b91c1c;
-}
-.react-sdk-volume textarea {
-  width: 100%;
-  min-height: 120px;
-  resize: vertical;
-  padding: 10px;
-  font: inherit;
+.react-inbox-open,
+.react-inbox-add,
+.react-inbox-file-actions button {
   border: 1px solid var(--line);
   border-radius: 6px;
-}
-.react-sdk-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.react-sdk-actions button,
-.react-sdk-persistence button {
   padding: 8px 11px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   background: var(--paper);
   color: inherit;
   font: inherit;
   cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
 }
-.react-sdk-actions button:focus-visible,
-.react-sdk-persistence button:focus-visible,
-.react-sdk-volume textarea:focus-visible {
+.react-inbox-dropzone {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 150px;
+  padding: 20px;
+  border: 1px dashed var(--muted);
+  border-radius: 12px;
+  text-align: center;
+}
+.react-inbox-add {
+  position: relative;
+  overflow: hidden;
+}
+.react-inbox-add input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.react-inbox-status,
+.react-inbox-error {
+  min-height: 22px;
+  margin: 0;
+  color: var(--muted);
+}
+.react-inbox-error {
+  color: #b91c1c;
+}
+.react-inbox-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.3fr);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.react-inbox-files {
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  border-right: 1px solid var(--line);
+}
+.react-inbox-files button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.react-inbox-files button:hover,
+.react-inbox-files button.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.react-inbox-files strong,
+.react-inbox-files small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.react-inbox-files small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+.react-inbox-thumbnail,
+.react-inbox-file-icon {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--line) 65%, transparent);
+  object-fit: cover;
+}
+.react-inbox-file-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 10px;
+}
+.react-inbox-preview {
+  min-width: 0;
+  padding: 12px;
+}
+.react-inbox-file-actions {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.react-inbox-file-actions form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+.react-inbox-file-actions input {
+  min-width: 0;
+  flex: 1;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+.react-inbox-danger {
+  color: #b91c1c !important;
+}
+.react-inbox-empty {
+  margin: 12px;
+  color: var(--muted);
+}
+.react-inbox-diagnostics {
+  color: var(--muted);
+  font-size: 13px;
+}
+.react-inbox-diagnostics p {
+  margin: 8px 0 0;
+}
+.react-inbox button:focus-visible,
+.react-inbox a:focus-visible,
+.react-inbox input:focus-visible,
+.react-inbox-add:focus-within {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-.react-sdk-actions button:disabled,
-.react-sdk-persistence button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.react-demo-switcher,
+.react-todos-actions,
+.react-todos-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-.react-sdk-actions .react-sdk-danger {
-  color: #b91c1c;
+.react-demo-switcher {
+  margin-bottom: 18px;
+}
+.react-demo-switcher button,
+.react-todos button,
+.react-todos input,
+.react-todos textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 11px;
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+}
+.react-demo-switcher button,
+.react-todos button {
+  cursor: pointer;
+}
+.react-demo-switcher button[aria-pressed='true'],
+.react-todos aside button.selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.react-todos-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.react-todos-layout aside {
+  padding: 8px;
+  border-right: 1px solid var(--line);
+}
+.react-todos-new,
+.react-todos-layout aside button {
+  width: 100%;
+  text-align: left;
+}
+.react-todos-layout aside ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.react-todos-layout aside li + li {
+  margin-top: 4px;
+}
+.react-todos-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+.react-todos-editor > label,
+.react-todos-task {
+  display: grid;
+  gap: 6px;
+}
+.react-todos-editor textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.react-todos-editor fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.react-todos-task {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.react-todos-task input {
+  margin: 0;
+}
+.react-todos-add {
+  align-items: end;
+}
+.react-todos-add input {
+  flex: 1;
+  min-width: 160px;
+}
+.react-todos-markdown {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--line) 28%, transparent);
+  white-space: pre-wrap;
+}
+.react-todos button:focus-visible,
+.react-todos input:focus-visible,
+.react-todos textarea:focus-visible,
+.react-demo-switcher button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 @media (max-width: 760px) {
-  .react-sdk-volumes {
+  .react-inbox-heading,
+  .react-inbox-layout,
+  .react-todos-layout {
+    display: grid;
     grid-template-columns: 1fr;
   }
-  .react-sdk-volume header {
-    display: grid;
+  .react-inbox-files {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
-  .react-sdk-state {
-    text-align: left;
+  .react-todos-layout aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 }

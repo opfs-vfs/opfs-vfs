@@ -1,157 +1,201 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-const route = '/demos/react/?transport=dedicated';
-const notesName = 'Dedicated notes';
+const route = '/demos/react/';
 
 test.beforeEach(({ browserName }) => {
   test.skip(browserName === 'webkit', 'WebKit OPFS requires a persistent browser context');
 });
 
-test('the default demo uses separate auto volumes and reports the selected transport', async ({ page }) => {
-  await page.goto('/demos/react/');
-  const notes = page
-    .locator('.react-sdk-volume')
-    .filter({ has: page.getByRole('heading', { name: 'Auto notes', exact: true }) });
-  await expect(notes.getByText(/^Auto notes: ready/)).toBeVisible({ timeout: 30_000 });
-  await expect(notes.getByText(/^Transport: requested auto; selected (dedicated|shared-worker)/)).toBeVisible();
-});
-
-test('the second client updates the note and releases it during cleanup', async ({ page }) => {
+async function openInbox(page: Page) {
   await page.goto(route);
-  const notes = page.locator('.react-sdk-volume').filter({ has: page.getByRole('heading', { name: notesName }) });
-  await expect(notes.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-  await notes.getByRole('button', { name: 'Update from second client' }).click();
-  await expect(notes.getByRole('status')).toContainText('A compatible second client synchronized', { timeout: 30_000 });
-  await expect(notes.getByText(/Current file:.*Updated by the compatible second client/)).toBeVisible();
-  await notes.getByRole('button', { name: 'Close and delete this volume' }).click();
-  await expect(notes.getByRole('status')).toContainText('Closed and removed this demo volume');
+  await expect(page.getByLabel('Add files')).toBeEnabled({ timeout: 30_000 });
+}
+
+test('adds, previews, renames, deletes, and keeps local files after reload', async ({ page }, testInfo) => {
+  await openInbox(page);
+  const name = `inbox-${testInfo.testId}.txt`;
+  await page.getByLabel('Add files').setInputFiles({
+    name,
+    mimeType: 'text/plain',
+    buffer: Buffer.from('hello inbox'),
+  });
+  const files = page.getByRole('list', { name: 'Inbox files' });
+  await expect(files.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByText('hello inbox', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(files.getByText(name, { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  const renamed = `renamed-${testInfo.testId}.txt`;
+  await page.getByLabel('Rename').fill(renamed);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(files.getByText(renamed, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(files.getByText(renamed, { exact: true })).toHaveCount(0);
 });
 
-test('unmounting the demo releases its second client', async ({ page }) => {
-  await page.goto(route);
-  const notes = page.locator('.react-sdk-volume').filter({ has: page.getByRole('heading', { name: notesName }) });
-  await expect(notes.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-  await notes.getByRole('button', { name: 'Update from second client' }).click();
-  await expect(notes.getByRole('status')).toContainText('A compatible second client synchronized');
-  const secondClientLocks = () =>
-    page.evaluate(
-      async () =>
-        (await navigator.locks.query()).held?.filter((lock) =>
-          lock.name?.startsWith('opfs-vfs-client-opfs-vfs-react-dedicated-notes.bin-'),
-        ).length ?? 0,
-    );
-  await expect.poll(secondClientLocks).toBeGreaterThan(0);
-  await page
-    .locator('astro-island[component-url*="ReactSdkDemo"]')
-    .evaluate((island) => island.dispatchEvent(new Event('astro:unmount')));
-  await expect.poll(secondClientLocks).toBe(0);
-});
-
-test('the diagnostic query enables payload-free traces without changing the forced dedicated demo', async ({
+test('shows another tab additions and renames through live React subscriptions', async ({
   page,
   context,
-}) => {
-  const ordinaryTraces: string[] = [];
-  page.on('console', (message) => {
-    if (message.text().startsWith('[opfs-vfs:diag] ')) ordinaryTraces.push(message.text());
-  });
-  await page.goto(route);
-  await expect(page.getByText('Diagnostics are active.')).toHaveCount(0);
-  await expect(page.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-  expect(ordinaryTraces).toEqual([]);
-
-  const diagnostic = await context.newPage();
-  const traces: string[] = [];
-  diagnostic.on('console', (message) => {
-    if (message.text().startsWith('[opfs-vfs:diag] ')) traces.push(message.text());
-  });
+}, testInfo) => {
+  await openInbox(page);
+  const second = await context.newPage();
   try {
-    await diagnostic.goto(`${route}&opfsDebug=1`);
-    await expect(diagnostic.getByText('Diagnostics are active.')).toBeVisible();
-    await expect(diagnostic.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-    await expect.poll(() => traces.length).toBeGreaterThan(0);
-    const records = traces.map((line) => JSON.parse(line.slice('[opfs-vfs:diag] '.length)) as Record<string, unknown>);
-    expect(records).toEqual(expect.arrayContaining([expect.objectContaining({ event: 'client-created' })]));
-    expect(JSON.stringify(records)).not.toContain('opfs-vfs-react-dedicated-notes.bin');
+    await openInbox(second);
+    const name = `shared-${testInfo.testId}.txt`;
+    await page.getByLabel('Add files').setInputFiles({
+      name,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('from the first tab'),
+    });
+    const secondFiles = second.getByRole('list', { name: 'Inbox files' });
+    await expect(secondFiles.getByText(name, { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    const renamed = `shared-renamed-${testInfo.testId}.txt`;
+    await second.getByLabel('Rename').fill(renamed);
+    await second.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('list', { name: 'Inbox files' }).getByText(renamed, { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
   } finally {
-    await diagnostic.close();
+    await second.close();
   }
 });
 
-test('a dirty follower draft survives explicit owner close until reload', async ({ page, context }) => {
-  await page.goto(route);
-  const owner = page
-    .locator('.react-sdk-volume')
-    .filter({ has: page.getByRole('heading', { name: notesName, exact: true }) });
-  await expect(owner.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-  const followerPage = await context.newPage();
-  await followerPage.goto(route);
-  const follower = followerPage
-    .locator('.react-sdk-volume')
-    .filter({ has: followerPage.getByRole('heading', { name: notesName, exact: true }) });
-  await expect(follower.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-  const draft = follower.getByRole('textbox', { name: 'Draft' });
-  await draft.fill('saved before takeover');
-  await follower.getByRole('button', { name: 'Save and sync' }).click();
-  await expect(follower.getByRole('status')).toContainText('Saved and synchronized');
-  await draft.fill('draft survives takeover');
-  await owner.getByRole('button', { name: 'Close this volume' }).click();
-  await expect(follower.getByRole('alert')).toContainText('Reload before saving', { timeout: 30_000 });
-  await expect(draft).toHaveValue('draft survives takeover');
-  await follower.getByRole('button', { name: 'Reload current file (discard draft)' }).click();
-  await expect(follower.getByRole('status')).toContainText('Reloaded the current file');
-  await expect(draft).not.toHaveValue('draft survives takeover');
-  await expect(follower.getByRole('button', { name: 'Save and sync' })).toBeEnabled();
-  await followerPage.close();
+test('drops image files, preserves duplicate names, and rejects files above the inbox limit', async ({
+  page,
+}, testInfo) => {
+  await openInbox(page);
+  const name = `image-${testInfo.testId}.png`;
+  const png = Array.from(
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNk+M/wHwAF/gL+3MxZegAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  );
+  await page.locator('.react-inbox-dropzone').evaluate(
+    (element, file) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array(file.bytes)], file.name, { type: 'image/png' }));
+      element.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: transfer }));
+    },
+    { name, bytes: png },
+  );
+
+  const files = page.getByRole('list', { name: 'Inbox files' });
+  const row = files.locator('li').filter({ hasText: name });
+  await expect(row).toBeVisible();
+  await row.getByText(name, { exact: true }).click();
+  const thumbnail = row.locator('img.react-inbox-thumbnail');
+  await expect(thumbnail).toHaveJSProperty('naturalWidth', 1);
+
+  await page.getByLabel('Add files').setInputFiles({ name, mimeType: 'image/png', buffer: Buffer.from(png) });
+  await expect(files.getByText(`${name.slice(0, -4)} (2).png`, { exact: true })).toBeVisible();
+
+  await page.getByLabel('Add files').evaluate((input) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([new ArrayBuffer(16 * 1024 * 1024 + 1)], 'too-large.bin'));
+    Object.defineProperty(input, 'files', { value: transfer.files, configurable: true });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(page.getByRole('status')).toContainText('too-large.bin is larger than the 16 MiB inbox limit.');
+  await expect(files.getByText('too-large.bin', { exact: true })).toHaveCount(0);
 });
 
-test('the React SDK demo observes a second page and exposes a queued conflict accessibly', async ({
-  page,
-  context,
-}) => {
+async function openTodos(page: Page) {
   await page.goto(route);
-  const notes = page
-    .locator('.react-sdk-volume')
-    .filter({ has: page.getByRole('heading', { name: notesName, exact: true }) });
-  await expect(notes.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Todo lists' }).click();
+  await expect(page.getByRole('button', { name: 'New list' })).toBeEnabled({ timeout: 30_000 });
+}
 
-  const editor = notes.getByRole('textbox', { name: 'Draft' });
-  await editor.fill('first version');
-  await notes.getByRole('button', { name: 'Save and sync' }).click();
-  await expect(notes.getByRole('status')).toContainText('Saved and synchronized');
-  await expect(notes.getByText(/Explorer:.*note\.txt/)).toBeVisible();
+test('debounces metadata into saved Markdown and keeps numbered lists after reload', async ({ page }) => {
+  await openTodos(page);
+  await page.getByRole('button', { name: 'New list' }).click();
+  await expect(page.getByLabel('Title')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Todo list files' }).getByText('list-001.md')).toBeVisible();
+  await page.getByLabel('Title').fill('Earlier title');
+  await page.waitForTimeout(250);
+  await expect(page.getByLabel('Saved Markdown')).not.toContainText('Earlier title');
+  await page.getByLabel('Title').fill('Launch plan');
+  await page.getByLabel('Description').fill(`First line
+Second line`);
+  const markdown = page.getByLabel('Saved Markdown');
+  await expect(markdown).toContainText('title: "Launch plan"');
+  await expect(markdown).toContainText('description: "First line\\nSecond line"');
+  await page.getByLabel('Add task').fill('Ship it');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByLabel('Ship it').check();
+  await expect(page.getByRole('status')).toContainText('List saved locally.');
+  await expect(markdown).toContainText('- [x] Ship it');
 
+  await page.getByRole('button', { name: 'New list' }).click();
+  await expect(page.getByRole('list', { name: 'Todo list files' }).getByText('list-002.md')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Todo list files' }).getByRole('button')).toHaveCount(2);
+  await page.reload();
+  await expect(page.getByRole('list', { name: 'Todo list files' }).getByRole('button')).toHaveCount(2, {
+    timeout: 30_000,
+  });
+});
+
+test('keeps an autosave-blocked draft when another tab saves first', async ({ page, context }) => {
+  await openTodos(page);
+  await page.getByRole('button', { name: 'New list' }).click();
+  await expect(page.getByLabel('Title')).toBeVisible();
   const second = await context.newPage();
-  await second.goto(route);
-  const secondNotes = second
-    .locator('.react-sdk-volume')
-    .filter({ has: second.getByRole('heading', { name: notesName, exact: true }) });
-  await expect(secondNotes.getByText(/^Dedicated notes: ready/)).toBeVisible({ timeout: 30_000 });
-  await secondNotes.getByRole('textbox', { name: 'Draft' }).fill('second page update');
-  await secondNotes.getByRole('button', { name: 'Save and sync' }).click();
-  await expect(secondNotes.getByRole('status')).toContainText('Saved and synchronized');
-  await expect(secondNotes.getByText(/Current file:.*second page update/)).toBeVisible();
-  await expect(notes.getByText(/Current file:.*second page update/)).toBeVisible();
+  try {
+    await openTodos(second);
+    await expect(second.getByLabel('Title')).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel('Title').fill('Local draft');
+    await second.getByLabel('Title').fill('Saved elsewhere');
+    await second.getByLabel('Add task').fill('Commit remote title');
+    await second.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(second.getByLabel('Saved Markdown')).toContainText('Saved elsewhere');
+    await expect(page.getByRole('status')).toContainText('newer saved version');
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Local draft');
+    await page.getByRole('button', { name: 'Reload saved' }).click();
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Saved elsewhere');
+  } finally {
+    await second.close();
+  }
+});
 
-  await editor.fill('editor draft');
-  await notes.getByRole('button', { name: 'Queue conflict-aware save' }).click();
-  await secondNotes.getByRole('textbox', { name: 'Draft' }).fill('later second page update');
-  await secondNotes.getByRole('button', { name: 'Save and sync' }).click();
-  await expect(notes.getByText(/Current file:.*later second page update/)).toBeVisible();
-  await notes.getByRole('button', { name: 'Run queued save' }).click();
-  await expect(notes.getByRole('status')).toContainText('did not reach a confirmed synchronized state');
-  await notes.getByRole('button', { name: 'Reload current file (discard draft)' }).click();
-  await expect(notes.getByRole('status')).toContainText('Reloaded the current file');
-  await expect(notes.getByRole('textbox', { name: 'Draft' })).toHaveValue('later second page update');
+test('deletes a clean list in every tab without reviving a pending draft', async ({ page, context }) => {
+  await openTodos(page);
+  await page.getByRole('button', { name: 'New list' }).click();
+  const second = await context.newPage();
+  try {
+    await openTodos(second);
+    await expect(second.getByText('list-001.md', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await page.getByLabel('Title', { exact: true }).fill('Pending title');
+    await expect(page.getByRole('button', { name: 'Delete list' })).toBeDisabled();
+    second.once('dialog', (dialog) => dialog.accept());
+    await second.getByRole('button', { name: 'Delete list' }).click();
+    await expect(second.getByRole('list', { name: 'Todo list files' }).getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('status')).toContainText('changed outside the editor');
+    await page.getByRole('button', { name: 'Discard draft' }).click();
+    await expect(page.getByRole('list', { name: 'Todo list files' }).getByRole('button')).toHaveCount(0);
+  } finally {
+    await second.close();
+  }
+});
 
-  await notes.getByRole('textbox', { name: 'Draft' }).fill('write before injected sync failure');
-  await notes.getByRole('button', { name: 'Simulate sync failure' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(notes.getByRole('status')).toContainText('Demo-only injected sync failure');
-  await expect(notes.getByText(/Current file:.*write before injected sync failure/)).toBeVisible();
-  await expect(notes.getByRole('status')).not.toContainText('Saved and synchronized');
-
-  await second.close();
-  await notes.getByRole('button', { name: 'Close and delete this volume' }).click();
-  await expect(notes.getByRole('status')).toContainText('Closed and removed');
+test('opens devtools with recognizable volumes from both React examples', async ({ page }) => {
+  await openInbox(page);
+  await openTodos(page);
+  await page.getByRole('button', { name: 'New list', exact: true }).click();
+  await expect(page.getByLabel('Title')).toBeVisible();
+  await page.getByRole('button', { name: 'Open devtools', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' });
+  await expect(panel).toBeVisible();
+  await panel.getByRole('combobox', { name: 'Active volume' }).click();
+  const options = page.getByRole('listbox');
+  await expect(options.getByText('demo-file-inbox.bin', { exact: true })).toBeVisible();
+  await options.getByText('demo-todo-list.bin', { exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Enable writes', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close volume explorer', exact: true }).click();
+  await page.getByRole('button', { name: 'Open OPFS VFS Volume Explorer', exact: true }).click();
+  await expect(panel).toBeVisible();
 });
