@@ -1,0 +1,14 @@
+---
+import MobileOwnerProbe from '../../components/MobileOwnerProbe';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+---
+<SiteLayout noindex title="Mobile ownership probe · OPFS VFS" description="An isolated, disposable SharedWorker ownership capability probe.">
+  <section class="page-head">
+    <div>
+      <p class="kicker">Experiment / mobile ownership</p>
+      <h1>Disposable ownership coordinator probe</h1>
+      <p>This isolated capability gate checks whether a SharedWorker can create the nested dedicated worker required by the existing owner path. It does not change the React SDK demo or product transport.</p>
+    </div>
+  </section>
+  <MobileOwnerProbe client:only="react" />
+</SiteLayout>

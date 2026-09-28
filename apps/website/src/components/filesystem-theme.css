@@ -1,0 +1,19 @@
+.filesystem-demo .explorer-actions {
+  width: 100%;
+  min-height: 56px;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 8px 12px;
+  justify-content: flex-start;
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+}
+.filesystem-demo .explorer-actions button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+.filesystem-demo .explorer-actions svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}

@@ -1,0 +1,54 @@
+# Manual performance evidence for the worker-client benchmark (docs/REACT-SDK-ACCEPTANCE.md).
+# React/browser correctness is the separate public react-sdk-correctness.yml matrix.
+name: SDK performance acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: Extra benchmark driver arguments, for example --runs 1 --ops 100
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: acceptance (${{ matrix.browser }})
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      BROWSER: ${{ matrix.browser }}
+      DRIVER_ARGS: ${{ inputs.args }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - run: pnpm install --frozen-lockfile
+      - name: Install browser
+        run: pnpm --filter @opfs-vfs/opfs-vfs exec playwright install --with-deps "$BROWSER"
+      - name: Worker-client benchmark
+        run: |
+          # DRIVER_ARGS is intentionally word-split into separate flags. The fixed flags come last so an
+          # input cannot override the engine or the uploaded output directory (the last value wins).
+          # shellcheck disable=SC2086
+          pnpm --filter @opfs-vfs/opfs-vfs benchmark:worker-client $DRIVER_ARGS --label ci --browser "$BROWSER" \
+            --out "$GITHUB_WORKSPACE/acceptance-results/$BROWSER"
+      - name: Upload results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sdk-acceptance-${{ matrix.browser }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: acceptance-results/
+          if-no-files-found: warn
+          retention-days: 90

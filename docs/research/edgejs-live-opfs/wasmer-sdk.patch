@@ -1,0 +1,686 @@
+diff --git a/js/bindgen/Cargo.toml b/js/bindgen/Cargo.toml
+index 1c00342..823cb3d 100644
+--- a/js/bindgen/Cargo.toml
++++ b/js/bindgen/Cargo.toml
+@@ -27,6 +27,7 @@ serde_bytes = "0.11"
+ serde-wasm-bindgen = "0.6"
+ tokio = { version = "1.49", default-features = false, features = ["io-util", "sync"] }
+ tracing = { version = "0.1", features = ["release_max_level_debug"] }
++virtual-fs = { version = "=0.704.0", default-features = false }
+ virtual-net = { version = "=0.704.0", default-features = false }
+ virtual-mio = { version = "=0.704.0", default-features = false }
+ wasm-bindgen = "0.2.120"
+diff --git a/js/bindgen/src/lib.rs b/js/bindgen/src/lib.rs
+index 8f74820..36131c8 100644
+--- a/js/bindgen/src/lib.rs
++++ b/js/bindgen/src/lib.rs
+@@ -10,6 +10,7 @@
+ 
+ mod browser_http;
+ mod node_network;
++mod sync_fs;
+ mod package_cache;
+ mod task_manager;
+ mod tasks;
+@@ -309,6 +310,13 @@ impl JsSandboxBuilder {
+         Ok(())
+     }
+ 
++    #[wasm_bindgen(js_name = mountSync)]
++    pub fn mount_sync(&mut self, path: String, bridge_id: u32) -> Result<(), JsValue> {
++        let builder = self.take()?.mount_sync(path, Arc::new(sync_fs::SyncFileSystem(bridge_id)));
++        self.inner = Some(builder);
++        Ok(())
++    }
++
+     /// Configure guest networking from a stable mode string.
+     pub fn network(&mut self, mode: String) -> Result<(), JsValue> {
+         let builder = self.take()?;
+diff --git a/js/bindgen/src/tasks/worker_handle.rs b/js/bindgen/src/tasks/worker_handle.rs
+index 61fc3de..6799736 100644
+--- a/js/bindgen/src/tasks/worker_handle.rs
++++ b/js/bindgen/src/tasks/worker_handle.rs
+@@ -357,6 +357,12 @@ fn handle_capi_delete(data: &JsValue, sender: &Scheduler, worker_id: u32) -> boo
+ /// thread while a WASIX process blocks inside a worker.
+ fn handle_host_rpc(data: &JsValue) -> bool {
+     let global = js_sys::global();
++    if let Ok(handler) = js_sys::Reflect::get(&global, &JsValue::from_str("__wasmerHandleFileSystemRpc")) {
++        if let Some(handler) = handler.dyn_ref::<js_sys::Function>() {
++            if handler.call1(&global, data).ok().and_then(|v| v.as_bool()) == Some(true) { return true; }
++        }
++    }
++
+     let Ok(handler) = js_sys::Reflect::get(&global, &JsValue::from_str("__wasmerHandleNetworkRpc"))
+     else {
+         return false;
+diff --git a/js/scripts/build-wasm.mjs b/js/scripts/build-wasm.mjs
+index 19d210e..5cbfb7a 100644
+--- a/js/scripts/build-wasm.mjs
++++ b/js/scripts/build-wasm.mjs
+@@ -61,7 +61,7 @@ const rustflags = [
+ run(
+   "cargo",
+   [
+-    "+nightly",
++    "+nightly-2026-09-17",
+     "build",
+     "-Z",
+     "build-std=std,panic_abort",
+diff --git a/js/src/browser-worker.ts b/js/src/browser-worker.ts
+index 6b09aad..09e0acc 100644
+--- a/js/src/browser-worker.ts
++++ b/js/src/browser-worker.ts
+@@ -1,3 +1,4 @@
++import { installSyncFsWorker } from "./sync-fs.js";
+ import type { NodeNetworkMethod } from "./node-network.js";
+ import {
+   NETWORK_RPC_CONTROL_BYTES,
+@@ -24,6 +25,7 @@ interface InitMessage {
+ 
+ Error.stackTraceLimit = 50;
+ installNetworkProxy();
++installSyncFsWorker();
+ installCapiObjectBridge((message) => globalThis.postMessage(message));
+ let runtimeMemory: WebAssembly.Memory | undefined;
+ globalThis.addEventListener("error", (event) => {
+diff --git a/js/src/index.ts b/js/src/index.ts
+index db81e3d..3854d60 100644
+--- a/js/src/index.ts
++++ b/js/src/index.ts
+@@ -1,3 +1,9 @@
++import {
++  registerSyncFileSystem,
++  unregisterSyncFileSystems,
++  type SyncFileSystem,
++} from "./sync-fs.js";
++export type { SyncFileSystem, SyncFileMetadata, SyncOpenOptions } from "./sync-fs.js";
+ import init, {
+   setSDKUrl,
+   setWorkerUrl,
+@@ -79,6 +85,8 @@ export type NetworkPolicy =
+     };
+ 
+ export interface SandboxOptions {
++  /** Live synchronous filesystems. Callbacks stay in this context. */
++  syncMounts?: readonly { path: string; fs: SyncFileSystem }[];
+   packages?: readonly PackageSource[];
+   files?: Readonly<Record<string, FileContents>>;
+   env?: Readonly<Record<string, string>>;
+@@ -308,6 +316,7 @@ export class Wasmer {
+   readonly sandboxes: Sandboxes;
+   readonly #options: WasmerOptions;
+   #core: Promise<WasmerCore> | undefined;
++  readonly #syncMounts = new Map<Sandbox, number[]>();
+ 
+   constructor(options: WasmerOptions = {}) {
+     this.#options = {
+@@ -476,11 +485,25 @@ export class Wasmer {
+     } else {
+       builder.network(network.mode);
+     }
++    const syncBridges: number[] = [];
+     try {
++      for (const mount of options.syncMounts ?? []) {
++        const id = registerSyncFileSystem(mount.fs);
++        syncBridges.push(id);
++        builder.mountSync(mount.path, id);
++      }
+       const core = await rethrow(builder.start());
+-      return new Sandbox(this, core, options.shell, networkBridge);
++      const sandbox = new Sandbox(this, core, options.shell, networkBridge, () => {
++        this.#syncMounts.delete(sandbox);
++        unregisterSyncFileSystems(syncBridges);
++      });
++      if (syncBridges.length) this.#syncMounts.set(sandbox, syncBridges);
++      return sandbox;
+     } catch (error) {
+-      networkBridge?.close();
++      const errors = [error];
++      try { networkBridge?.close(); } catch (cleanupError) { errors.push(cleanupError); }
++      try { unregisterSyncFileSystems(syncBridges); } catch (cleanupError) { errors.push(cleanupError); }
++      if (errors.length > 1) throw new AggregateError(errors, "sandbox start and cleanup failed");
+       throw error;
+     }
+   }
+@@ -490,6 +513,9 @@ export class Wasmer {
+     if (!this.#core) return;
+     const client = await this.#core;
+     await this.closeCore(client);
++    const ids = [...this.#syncMounts.values()].flat();
++    this.#syncMounts.clear();
++    unregisterSyncFileSystems(ids);
+   }
+ 
+   /** @deprecated Use {@link Wasmer.close}. */
+@@ -626,6 +652,7 @@ export class Sandbox {
+     core: SandboxCore,
+     shell?: CommandSelector,
+     networkBridge?: NetworkBridge,
++    private readonly closeSyncMounts?: () => void,
+   ) {
+     this.#core = core;
+     this.fs = new SandboxFileSystem(core);
+@@ -711,6 +738,7 @@ export class Sandbox {
+     try {
+       await this.ports.close();
+       await rethrow(this.#core.close());
++      this.closeSyncMounts?.();
+     } finally {
+       this.#networkBridge?.close();
+     }
+diff --git a/rust/src/command.rs b/rust/src/command.rs
+index 944f244..0d3d0bd 100644
+--- a/rust/src/command.rs
++++ b/rust/src/command.rs
+@@ -332,6 +332,9 @@ impl Command {
+             .with_stdin(guest_stdin)
+             .with_stdout(guest_stdout)
+             .with_stderr(guest_stderr);
++        for (path, fs) in &self.sandbox.inner.sync_mounts {
++            runner.with_mount(path.to_string_lossy().into_owned(), Arc::clone(fs));
++        }
+         #[cfg(feature = "sys")]
+         for mount in &self.sandbox.inner.mounts {
+             runner.with_mount(
+diff --git a/rust/src/sandbox.rs b/rust/src/sandbox.rs
+index ff30b5d..8c312dc 100644
+--- a/rust/src/sandbox.rs
++++ b/rust/src/sandbox.rs
+@@ -38,6 +38,7 @@ pub struct SandboxBuilder {
+     files: Vec<(PathBuf, Vec<u8>)>,
+     env: BTreeMap<String, String>,
+     mounts: Vec<MountSpec>,
++    sync_mounts: Vec<(PathBuf, Arc<dyn virtual_fs::FileSystem + Send + Sync>)>,
+     network: NetworkPolicy,
+     network_provider: Option<DynVirtualNetworking>,
+ }
+@@ -73,6 +74,7 @@ impl SandboxBuilder {
+             files: Vec::new(),
+             env: BTreeMap::new(),
+             mounts: Vec::new(),
++            sync_mounts: Vec::new(),
+             network: NetworkPolicy::Disabled,
+             network_provider: None,
+         }
+@@ -134,6 +136,13 @@ impl SandboxBuilder {
+         self
+     }
+ 
++    /// Mount a synchronous filesystem without the async provider bridge.
++    #[must_use]
++    pub fn mount_sync(mut self, path: impl Into<PathBuf>, fs: Arc<dyn virtual_fs::FileSystem + Send + Sync>) -> Self {
++        self.sync_mounts.push((path.into(), fs));
++        self
++    }
++
+     /// Configure guest networking.
+     ///
+     /// Networking is disabled by default. [`NetworkPolicy::Host`] selects the
+@@ -203,6 +212,13 @@ impl SandboxBuilder {
+             mounts.push(mount);
+         }
+ 
++        let mut paths: std::collections::HashSet<PathBuf> = mounts.iter().map(|m| m.guest_path.clone()).collect();
++        for (path, _) in &self.sync_mounts {
++            validate_mount_path(path)?;
++            if !paths.insert(path.clone()) {
++                return Err(Error::InvalidGuestPath { path: path.clone(), message: "a filesystem is already mounted at this path".into() });
++            }
++        }
+         let networking = self.network_provider.unwrap_or_else(|| match self.network {
+             NetworkPolicy::Disabled => {
+                 Arc::new(UnsupportedVirtualNetworking::default()) as DynVirtualNetworking
+@@ -219,6 +235,7 @@ impl SandboxBuilder {
+                 fs,
+                 env: self.env,
+                 mounts,
++                sync_mounts: self.sync_mounts,
+                 networking,
+                 runtime,
+                 processes: Mutex::new(Vec::new()),
+@@ -251,6 +268,7 @@ pub(crate) struct SandboxInner {
+     pub(crate) fs: SandboxFileSystem,
+     pub(crate) env: BTreeMap<String, String>,
+     pub(crate) mounts: Vec<MountSpec>,
++    pub(crate) sync_mounts: Vec<(PathBuf, Arc<dyn virtual_fs::FileSystem + Send + Sync>)>,
+     pub(crate) networking: DynVirtualNetworking,
+     pub(crate) runtime: Arc<dyn Runtime + Send + Sync>,
+     processes: Mutex<Vec<Weak<ProcessControl>>>,
+@@ -285,7 +303,8 @@ impl std::fmt::Debug for Sandbox {
+ }
+ 
+ fn validate_mount_path(path: &Path) -> Result<()> {
+-    if !path.is_absolute() {
++    let text = path.to_str().unwrap_or("");
++    if !text.starts_with('/') || text.contains('\\') || text.contains('\0') || (text != "/" && text[1..].split('/').any(|part| part.is_empty() || part == "." || part == "..")) {
+         return Err(Error::InvalidGuestPath {
+             path: path.to_owned(),
+             message: "mount paths must be absolute".to_owned(),
+diff --git a/js/bindgen/src/sync_fs.rs b/js/bindgen/src/sync_fs.rs
+new file mode 100644
+--- /dev/null
++++ b/js/bindgen/src/sync_fs.rs
+@@ -0,0 +1,137 @@
++//! Synchronous host callbacks. Only numeric IDs cross Wasm worker boundaries.
++use std::{io::{self, SeekFrom}, path::{Path, PathBuf}, pin::Pin, task::{Context, Poll}};
++use js_sys::{Array, Uint8Array};
++use serde::Deserialize;
++use virtual_fs::{AsyncRead, AsyncWrite, AsyncSeek, FileOpener, FileSystem, VirtualFile, FsError, Result, Metadata};
++use wasm_bindgen::prelude::*;
++
++#[wasm_bindgen]
++extern "C" {
++    #[wasm_bindgen(js_namespace = globalThis, js_name = __wasmerSyncFsCall, catch)]
++    fn host_call(id: u32, method: &str, args: &Array) -> std::result::Result<JsValue, JsValue>;
++}
++fn error(value: JsValue) -> FsError {
++    let code = js_sys::Reflect::get(&value, &"code".into()).ok().and_then(|v| v.as_string());
++    match code.as_deref() {
++        Some("EBADF") => FsError::InvalidFd,
++        Some("ENOSPC") => FsError::StorageFull,
++        Some("ETIMEDOUT") => FsError::TimedOut,
++        Some("ENOENT") => FsError::EntryNotFound,
++        Some("EEXIST") => FsError::AlreadyExists,
++        Some("EACCES" | "EPERM") => FsError::PermissionDenied,
++        Some("ENOTDIR") => FsError::BaseNotDirectory,
++        Some("EISDIR") => FsError::NotAFile,
++        Some("ENOTEMPTY") => FsError::DirectoryNotEmpty,
++        Some("EINVAL") => FsError::InvalidInput,
++        Some("ENOSYS" | "ENOTSUP") => FsError::Unsupported,
++        _ => FsError::IOError,
++    }
++}
++fn call(id: u32, method: &str, args: &[JsValue]) -> Result<JsValue> {
++    let array = Array::new();
++    for arg in args { array.push(arg); }
++    host_call(id, method, &array).map_err(error)
++}
++fn number(v: JsValue) -> Result<u64> {
++    v.as_f64().filter(|n| n.is_finite() && *n >= 0.0 && *n <= 9007199254740991.0 && n.fract() == 0.0).map(|n| n as u64).ok_or(FsError::InvalidInput)
++}
++fn path(p: &Path) -> Result<JsValue> {
++    let s = p.to_str().ok_or(FsError::InvalidInput)?;
++    if s.contains('\0') || s.contains('\\') || s.split('/').any(|x| x == "..") { return Err(FsError::InvalidInput); }
++    Ok(s.into())
++}
++#[derive(Deserialize)]
++struct Meta { kind: String, size: u64, #[serde(default)] accessed: f64, #[serde(default)] modified: f64, #[serde(default)] created: f64 }
++impl Meta {
++    fn convert(self) -> Result<Metadata> {
++        Ok(Metadata { ft: match self.kind.as_str() { "file" => virtual_fs::FileType::new_file(), "directory" => virtual_fs::FileType::new_dir(), _ => return Err(FsError::Unsupported) }, len: self.size, accessed: (self.accessed * 1e6) as u64, modified: (self.modified * 1e6) as u64, created: (self.created * 1e6) as u64 })
++    }
++}
++fn meta(value: JsValue) -> Result<Metadata> { serde_wasm_bindgen::from_value::<Meta>(value).map_err(|_| FsError::InvalidInput)?.convert() }
++#[derive(Debug)]
++pub struct SyncFileSystem(pub u32);
++impl FileOpener for SyncFileSystem {
++    fn open(&self, p: &Path, c: &virtual_fs::OpenOptionsConfig) -> Result<Box<dyn VirtualFile + Send + Sync>> {
++        let opts = js_sys::Object::new();
++        for (key, value) in [("read",c.read),("write",c.write),("append",c.append),("create",c.create),("createNew",c.create_new),("truncate",c.truncate)] {
++            js_sys::Reflect::set(&opts, &key.into(), &value.into()).map_err(error)?;
++        }
++        let fd = number(call(self.0,"open",&[path(p)?,opts.into()])?)?;
++        Ok(Box::new(SyncFile { id:self.0, fd, position:0, closed:false }))
++    }
++}
++impl FileSystem for SyncFileSystem {
++    fn readlink(&self, _: &Path) -> Result<PathBuf> { Err(FsError::Unsupported) }
++    fn metadata(&self, p: &Path) -> Result<Metadata> { meta(call(self.0,"metadata",&[path(p)?])?) }
++    fn symlink_metadata(&self, p: &Path) -> Result<Metadata> { self.metadata(p) }
++    fn read_dir(&self, p: &Path) -> Result<virtual_fs::ReadDir> {
++        #[derive(Deserialize)] struct Entry { name:String, #[serde(flatten)] meta:Meta }
++        let entries: Vec<Entry> = serde_wasm_bindgen::from_value(call(self.0,"readDir",&[path(p)?])?).map_err(|_| FsError::InvalidInput)?;
++        let mut result = Vec::new();
++        for e in entries {
++            if e.name.is_empty() || e.name == "." || e.name == ".." || e.name.contains('/') || e.name.contains('\\') { return Err(FsError::InvalidInput); }
++            result.push(virtual_fs::DirEntry { path:p.join(e.name), metadata:Ok(e.meta.convert()?) });
++        }
++        Ok(virtual_fs::ReadDir::new(result))
++    }
++    fn create_dir(&self, p: &Path) -> Result<()> { call(self.0,"createDir",&[path(p)?]).map(|_|()) }
++    fn remove_dir(&self, p: &Path) -> Result<()> { call(self.0,"removeDir",&[path(p)?]).map(|_|()) }
++    fn remove_file(&self, p: &Path) -> Result<()> { call(self.0,"removeFile",&[path(p)?]).map(|_|()) }
++    fn rename<'a>(&'a self, from: &'a Path, to: &'a Path) -> futures::future::BoxFuture<'a,Result<()>> { Box::pin(async move { call(self.0,"rename",&[path(from)?,path(to)?]).map(|_|()) }) }
++    fn new_open_options(&self) -> virtual_fs::OpenOptions<'_> { virtual_fs::OpenOptions::new(self) }
++}
++#[derive(Debug)]
++struct SyncFile { id:u32, fd:u64, position:u64, closed:bool }
++impl SyncFile {
++    fn call(&self, method:&str, args:&[JsValue]) -> Result<JsValue> {
++        if self.closed { return Err(FsError::IOError); }
++        let mut all = vec![JsValue::from_f64(self.fd as f64)]; all.extend_from_slice(args);
++        call(self.id,method,&all)
++    }
++    fn stat(&self) -> Result<Metadata> { meta(self.call("fstat",&[])?) }
++    fn close(&mut self) -> Result<()> {
++        if self.closed { return Ok(()); }
++        let result=self.call("close",&[]).map(|_|()); self.closed=true; result
++    }
++}
++impl Drop for SyncFile { fn drop(&mut self) { let _=self.close(); } }
++impl AsyncRead for SyncFile {
++    fn poll_read(mut self:Pin<&mut Self>, _: &mut Context<'_>, b:&mut tokio::io::ReadBuf<'_>) -> Poll<io::Result<()>> {
++        let result=(|| {
++            let n=b.remaining().min(65536);
++            let value=self.call("read",&[(n as u32).into()])?;
++            if !value.is_instance_of::<Uint8Array>() { return Err(FsError::InvalidInput); }
++            let bytes=Uint8Array::new(&value).to_vec();
++            if bytes.len()>n { return Err(FsError::InvalidInput); }
++            b.put_slice(&bytes); self.position+=bytes.len() as u64; Ok(())
++        })(); Poll::Ready(result.map_err(io::Error::from))
++    }
++}
++impl AsyncWrite for SyncFile {
++    fn poll_write(mut self:Pin<&mut Self>, _: &mut Context<'_>, b:&[u8]) -> Poll<io::Result<usize>> {
++        let result=(|| { let b=&b[..b.len().min(65536)]; let n=number(self.call("write",&[Uint8Array::from(b).into()])?)? as usize;
++            if n>b.len() { return Err(FsError::InvalidInput); } self.position+=n as u64; Ok(n) })();
++        Poll::Ready(result.map_err(io::Error::from))
++    }
++    fn poll_flush(self:Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> { Poll::Ready(self.call("flush",&[]).map(|_|()).map_err(io::Error::from)) }
++    fn poll_shutdown(mut self:Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> { Poll::Ready(self.close().map_err(io::Error::from)) }
++}
++impl AsyncSeek for SyncFile {
++    fn start_seek(mut self:Pin<&mut Self>, pos:SeekFrom) -> io::Result<()> {
++        let (offset,whence)=match pos { SeekFrom::Start(n)=>(n as f64,0), SeekFrom::Current(n)=>(n as f64,1), SeekFrom::End(n)=>(n as f64,2) };
++        if offset.abs()>9007199254740991.0 { return Err(io::ErrorKind::InvalidInput.into()); }
++        self.position=number(self.call("seek",&[offset.into(),whence.into()])?).map_err(io::Error::from)?; Ok(())
++    }
++    fn poll_complete(self:Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<u64>> { Poll::Ready(Ok(self.position)) }
++}
++impl VirtualFile for SyncFile {
++    fn last_accessed(&self)->u64 { self.stat().map(|m|m.accessed).unwrap_or(0) }
++    fn last_modified(&self)->u64 { self.stat().map(|m|m.modified).unwrap_or(0) }
++    fn created_time(&self)->u64 { self.stat().map(|m|m.created).unwrap_or(0) }
++    // The runtime trait cannot report a metadata error from these scalar accessors.
++    fn size(&self)->u64 { self.stat().map(|m|m.len).unwrap_or(0) }
++    fn set_len(&mut self,n:u64)->Result<()> { self.call("setLen",&[(n as f64).into()]).map(|_|()) }
++    fn unlink(&mut self)->Result<()> { self.call("unlink",&[]).map(|_|()) }
++    fn poll_read_ready(self:Pin<&mut Self>, _: &mut Context<'_>)->Poll<io::Result<usize>> { Poll::Ready(self.stat().map(|m|m.len.saturating_sub(self.position) as usize).map_err(io::Error::from)) }
++    fn poll_write_ready(self:Pin<&mut Self>, _: &mut Context<'_>)->Poll<io::Result<usize>> { Poll::Ready(Ok(65536)) }
++}
+diff --git a/js/src/sync-fs.ts b/js/src/sync-fs.ts
+new file mode 100644
+--- /dev/null
++++ b/js/src/sync-fs.ts
+@@ -0,0 +1,281 @@
++export interface SyncFileMetadata {
++  kind: "file" | "directory";
++  size: number;
++  /** Milliseconds since the Unix epoch. */
++  accessed?: number;
++  modified?: number;
++  created?: number;
++}
++
++export interface SyncOpenOptions {
++  read: boolean;
++  write: boolean;
++  append: boolean;
++  truncate: boolean;
++  create: boolean;
++  createNew: boolean;
++}
++
++/**
++ * Callbacks run synchronously in the owner context. They must not reenter
++ * Wasmer or wait for Wasmer locks. Throw errors with POSIX `code`, e.g. ENOENT.
++ * A callback running after the 30-second timeout has an uncertain outcome:
++ * the bridge fails closed and the operation must not be retried.
++ */
++export interface SyncFileSystem {
++  metadata(path: string): SyncFileMetadata;
++  readDir(path: string): readonly (SyncFileMetadata & { name: string })[];
++  createDir(path: string): void;
++  removeDir(path: string): void;
++  removeFile(path: string): void;
++  /** Unlink the open file itself, or throw ENOTSUP if unsupported. */
++  unlink(fd: number): void;
++  rename(from: string, to: string): void;
++  open(path: string, options: SyncOpenOptions): number;
++  read(fd: number, length: number): Uint8Array;
++  write(fd: number, bytes: Uint8Array): number;
++  seek(fd: number, offset: number, whence: 0 | 1 | 2): number;
++  fstat(fd: number): SyncFileMetadata;
++  setLen(fd: number, length: number): void;
++  flush(fd: number): void;
++  close(fd: number): void;
++}
++
++const HEADER_BYTES = 16;
++// ponytail: directory listings cap at 4 MiB; paginate the contract if needed.
++const PAYLOAD_BYTES = 4 * 1024 * 1024;
++const IO_BYTES = 64 * 1024;
++const WAIT_MS = 30_000;
++const bridges = new Map<number, {
++  fs: SyncFileSystem;
++  descriptors: Set<number>;
++  failed: boolean;
++  busy: boolean;
++}>();
++let nextBridge = 1;
++
++function failure(message: string, code = "EIO"): Error & { code: string } {
++  return Object.assign(new Error(message), { code });
++}
++
++function errorInfo(error: unknown): { message: string; code: string } {
++  try {
++    const value = error as { message?: unknown; code?: unknown } | null;
++    return {
++      message: typeof value?.message === "string" ? value.message : String(error),
++      code: typeof value?.code === "string" && /^E[A-Z0-9]{1,63}$/.test(value.code) ? value.code : "EIO",
++    };
++  } catch {
++    return { message: "filesystem callback failed", code: "EIO" };
++  }
++}
++
++function integer(value: unknown, maximum = Number.MAX_SAFE_INTEGER): number {
++  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > maximum) {
++    throw failure("invalid filesystem integer", "EINVAL");
++  }
++  return value;
++}
++
++function path(value: unknown): string {
++  if (typeof value !== "string" || !value.startsWith("/") || value.includes("\0") || value.split("/").includes("..")) {
++    throw failure("invalid filesystem path", "EINVAL");
++  }
++  return value;
++}
++
++function metadata(value: unknown): SyncFileMetadata {
++  const result = value as SyncFileMetadata | null;
++  if (!result || (result.kind !== "file" && result.kind !== "directory")) throw failure("invalid filesystem metadata");
++  integer(result.size);
++  for (const time of [result.accessed, result.modified, result.created]) {
++    if (time !== undefined) integer(time);
++  }
++  return result;
++}
++
++function synchronous(value: unknown): unknown {
++  if (value !== null && (typeof value === "object" || typeof value === "function") && "then" in value && typeof value.then === "function") {
++    void Promise.resolve(value).catch(() => undefined);
++    throw failure("filesystem callbacks must be synchronous");
++  }
++  return value;
++}
++
++export function registerSyncFileSystem(fs: SyncFileSystem): number {
++  if (!fs || typeof fs !== "object") throw new TypeError("sync mount requires a filesystem");
++  const id = nextBridge++;
++  bridges.set(id, { fs, descriptors: new Set(), failed: false, busy: false });
++  const scope = globalThis as Record<string, unknown>;
++  scope.__wasmerSyncFsCall = callOwner;
++  scope.__wasmerHandleFileSystemRpc = handleRpc;
++  return id;
++}
++
++/** Call only after guest execution has stopped. Attempts every leaked close. */
++export function unregisterSyncFileSystems(ids: readonly number[]): void {
++  const errors: unknown[] = [];
++  for (const id of ids) {
++    const bridge = bridges.get(id);
++    if (!bridge) continue;
++    bridges.delete(id);
++    for (const fd of bridge.descriptors) {
++      try { synchronous(bridge.fs.close(fd)); } catch (error) { errors.push(error); }
++    }
++  }
++  if (errors.length) throw new AggregateError(errors, "failed to close mounted filesystem descriptors");
++}
++
++function callOwner(id: number, method: string, args: unknown[]): unknown {
++  const bridge = bridges.get(integer(id));
++  if (!bridge) throw failure("filesystem bridge is closed", "EBADF");
++  if (bridge.failed) throw failure("filesystem bridge failed; operation outcome may be uncertain", "EIO");
++  if (bridge.busy) throw failure("filesystem callback reentered its bridge", "EDEADLK");
++  if (!Array.isArray(args)) throw failure("invalid filesystem arguments", "EINVAL");
++  const fs = bridge.fs;
++  const fd = () => {
++    const descriptor = integer(args[0]);
++    if (!bridge.descriptors.has(descriptor)) throw failure("unknown filesystem descriptor", "EBADF");
++    return descriptor;
++  };
++  const invoke = (work: () => unknown) => {
++    const value = work();
++    try { return synchronous(value); } catch (error) { bridge.failed = true; throw error; }
++  };
++  bridge.busy = true;
++  try {
++    switch (method) {
++      case "metadata": return metadata(invoke(() => fs.metadata(path(args[0]))));
++      case "readDir": {
++        const entries = invoke(() => fs.readDir(path(args[0])));
++        if (!Array.isArray(entries)) throw failure("invalid filesystem directory listing");
++        for (const entry of entries) {
++          metadata(entry);
++          if (typeof entry.name !== "string" || !entry.name || entry.name === "." || entry.name === ".." || /[/\0]/.test(entry.name)) throw failure("invalid filesystem directory entry");
++        }
++        return entries;
++      }
++      case "createDir": return invoke(() => fs.createDir(path(args[0])));
++      case "removeDir": return invoke(() => fs.removeDir(path(args[0])));
++      case "removeFile": return invoke(() => fs.removeFile(path(args[0])));
++      case "rename": return invoke(() => fs.rename(path(args[0]), path(args[1])));
++      case "open": {
++        const options = args[1] as SyncOpenOptions | null;
++        if (!options || ["read", "write", "append", "truncate", "create", "createNew"].some(key => typeof options[key as keyof SyncOpenOptions] !== "boolean")) throw failure("invalid filesystem open options", "EINVAL");
++        const descriptor = integer(invoke(() => fs.open(path(args[0]), options)));
++        if (bridge.descriptors.has(descriptor)) throw failure("filesystem reused an open descriptor");
++        bridge.descriptors.add(descriptor);
++        return descriptor;
++      }
++      case "read": {
++        const length = integer(args[1], IO_BYTES);
++        const bytes = invoke(() => fs.read(fd(), length));
++        if (!(bytes instanceof Uint8Array) || bytes.byteLength > length) throw failure("invalid filesystem read result");
++        return bytes;
++      }
++      case "write": {
++        const bytes = args[1];
++        if (!(bytes instanceof Uint8Array) || bytes.byteLength > IO_BYTES) throw failure("invalid filesystem write", "EINVAL");
++        return integer(invoke(() => fs.write(fd(), bytes)), bytes.byteLength);
++      }
++      case "seek": {
++        const offset = args[1];
++        const whence = integer(args[2], 2) as 0 | 1 | 2;
++        if (typeof offset !== "number" || !Number.isSafeInteger(offset)) throw failure("invalid filesystem offset", "EINVAL");
++        return integer(invoke(() => fs.seek(fd(), offset, whence)));
++      }
++      case "unlink": return invoke(() => fs.unlink(fd()));
++      case "fstat": return metadata(invoke(() => fs.fstat(fd())));
++      case "setLen": return invoke(() => fs.setLen(fd(), integer(args[1])));
++      case "flush": return invoke(() => fs.flush(fd()));
++      case "close": {
++        const descriptor = fd();
++        invoke(() => fs.close(descriptor));
++        bridge.descriptors.delete(descriptor);
++        return undefined;
++      }
++      default: throw failure(`unsupported filesystem operation ${method}`, "ENOSYS");
++    }
++  } finally { bridge.busy = false; }
++}
++
++function handleRpc(value: unknown): boolean {
++  if (!value || typeof value !== "object" || !("type" in value)) return false;
++  const request = value as { type: string; bridgeId: number; method: string; args: unknown[]; response: SharedArrayBuffer };
++  if (request.type === "wasmer-fs-failed") {
++    const bridge = bridges.get(request.bridgeId);
++    if (bridge) bridge.failed = true;
++    return true;
++  }
++  if (request.type !== "wasmer-fs-rpc") return false;
++  // Recognized malformed messages must not reach Rust's other handlers.
++  if (!(request.response instanceof SharedArrayBuffer) || request.response.byteLength !== HEADER_BYTES + PAYLOAD_BYTES) return true;
++  const control = new Int32Array(request.response, 0, 4);
++  if (Atomics.compareExchange(control, 0, 0, 1) !== 0) return true;
++  let kind: number;
++  let bytes: Uint8Array;
++  try {
++    const result = callOwner(request.bridgeId, request.method, request.args);
++    kind = result instanceof Uint8Array ? 2 : result === undefined ? 3 : 1;
++    bytes = result instanceof Uint8Array ? result : new TextEncoder().encode(JSON.stringify(result) ?? "");
++    if (bytes.length > PAYLOAD_BYTES) throw failure("filesystem response exceeds 4 MiB", "EOVERFLOW");
++  } catch (error) {
++    kind = 4;
++    const info = errorInfo(error);
++    info.message = info.message.slice(0, 4096);
++    bytes = new TextEncoder().encode(JSON.stringify(info));
++  }
++  new Uint8Array(request.response, HEADER_BYTES, bytes.length).set(bytes);
++  Atomics.store(control, 1, kind);
++  Atomics.store(control, 2, bytes.length);
++  // Completion and timeout compete for running -> done/cancelled. If timeout
++  // wins, disable this registry entry before handling any later operation.
++  if (Atomics.compareExchange(control, 0, 1, 2) === 3) {
++    const bridge = bridges.get(request.bridgeId);
++    if (bridge) bridge.failed = true;
++  }
++  Atomics.notify(control, 0);
++  return true;
++}
++
++/** Install before wasm initialization in each guest worker. */
++export function installSyncFsWorker(): void {
++  const failed = new Set<number>();
++  (globalThis as Record<string, unknown>).__wasmerSyncFsCall = (bridgeId: number, method: string, args: unknown[]) => {
++    if (failed.has(bridgeId)) throw failure("filesystem bridge failed", "EIO");
++    if (method === "read") integer(args[1], IO_BYTES);
++    if (method === "write" && (!(args[1] instanceof Uint8Array) || args[1].byteLength > IO_BYTES)) throw failure("invalid filesystem write", "EINVAL");
++    const response = new SharedArrayBuffer(HEADER_BYTES + PAYLOAD_BYTES);
++    const control = new Int32Array(response, 0, 4);
++    globalThis.postMessage({ type: "wasmer-fs-rpc", bridgeId, method, args, response });
++    const deadline = performance.now() + WAIT_MS;
++    while (Atomics.load(control, 0) !== 2) {
++      const remaining = deadline - performance.now();
++      if (remaining <= 0) {
++        let state = Atomics.compareExchange(control, 0, 0, 3);
++        if (state === 1) state = Atomics.compareExchange(control, 0, 1, 3);
++        if (state === 2) break;
++        if (state === 1) {
++          // Owner may have changed the filesystem. Never retry this operation.
++          failed.add(bridgeId);
++          globalThis.postMessage({ type: "wasmer-fs-failed", bridgeId });
++        }
++        throw failure(state === 1 ? "filesystem callback timed out; outcome uncertain, bridge disabled" : "filesystem request timed out before execution", "ETIMEDOUT");
++      }
++      const state = Atomics.load(control, 0);
++      if (state !== 2) Atomics.wait(control, 0, state, remaining);
++    }
++    const length = integer(Atomics.load(control, 2), PAYLOAD_BYTES);
++    const bytes = new Uint8Array(response, HEADER_BYTES, length).slice();
++    switch (Atomics.load(control, 1)) {
++      case 1: return JSON.parse(new TextDecoder().decode(bytes));
++      case 2: return bytes;
++      case 3: return undefined;
++      case 4: {
++        const error = errorInfo(JSON.parse(new TextDecoder().decode(bytes)));
++        throw failure(error.message, error.code);
++      }
++      default: throw failure("invalid filesystem response");
++    }
++  };
++}

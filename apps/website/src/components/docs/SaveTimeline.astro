@@ -1,0 +1,42 @@
+<details class="save-walkthrough">
+  <summary>Walk through a save</summary>
+  <p class="intro">With the default disk buffer and balanced durability. Illustrative steps, not measured timings.</p>
+  <ol>
+    <li>
+      <div class="step-title">Write returns <span>May still be pending</span></div>
+      <p>Your application can read the updated file. The write returning does not establish an explicit save boundary.</p>
+    </li>
+    <li>
+      <div class="step-title">Synchronize successfully <span>Save boundary</span></div>
+      <p>Call <code>syncSync()</code> in the worker, or await <code>volume.sync()</code> through the worker client. This synchronizes the volume's pending data and metadata.</p>
+      <p class="failure">If synchronization fails, report the error. Do not show the work as saved.</p>
+    </li>
+    <li>
+      <div class="step-title">Close and reopen <span>Resume locally</span></div>
+      <p>Successfully await <code>closeVfs()</code>. Reopen the same volume in the same browser and origin, then await <code>ready</code> before reading the saved files.</p>
+    </li>
+  </ol>
+  <p class="footnote">New writes after synchronization need another save boundary. Local storage can still be cleared or evicted. Export important work as a backup.</p>
+</details>
+
+<style>
+  .save-walkthrough { margin: 1.5rem 0; padding: 1.25rem; border: 1px solid var(--sl-color-hairline); border-radius: .25rem; }
+  summary { cursor: pointer; color: var(--sl-color-text-accent); font-weight: 600; }
+  summary:focus-visible { outline: 2px solid var(--sl-color-text-accent); outline-offset: .35rem; }
+  .intro, .footnote { font-size: .85rem; line-height: 1.6; color: var(--sl-color-gray-2); }
+  ol { list-style: none; counter-reset: save-step; padding: 0; margin: 1.5rem 0; }
+  li { position: relative; counter-increment: save-step; margin: 0; padding: 0 0 1.5rem 2.4rem; border-left: 1px solid var(--sl-color-hairline); margin-left: .75rem; }
+  li:last-child { padding-bottom: 0; border-color: transparent; }
+  li::before { content: counter(save-step); position: absolute; left: -.8rem; top: 0; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border: 1px solid var(--sl-color-text-accent); border-radius: 50%; background: var(--sl-color-bg); color: var(--sl-color-text-accent); font: .8rem var(--sl-font-mono); }
+  .step-title { display: flex; flex-wrap: wrap; gap: .3rem .75rem; align-items: baseline; font-weight: 600; line-height: 1.5; }
+  .step-title span { font-size: .75rem; font-weight: 400; color: var(--sl-color-text-accent); }
+  li p { margin: .5rem 0 0; font-size: .9rem; line-height: 1.65; }
+  .failure { border-left: 2px solid var(--sl-color-orange); padding-left: .75rem; }
+  @media (prefers-reduced-motion: no-preference) {
+    details[open] li { animation: reveal-step .35s both; }
+    details[open] li:nth-child(2) { animation-delay: .15s; }
+    details[open] li:nth-child(3) { animation-delay: .3s; }
+    @keyframes reveal-step { from { opacity: 0; transform: translateY(.35rem); } to { opacity: 1; transform: translateY(0); } }
+  }
+  @media (max-width: 40rem) { .save-walkthrough { padding: 1rem; } li { padding-left: 1.7rem; } }
+</style>

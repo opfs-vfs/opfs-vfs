@@ -1,0 +1,65 @@
+---
+title: Persistence and recovery
+description: Choose save points, understand recovery, and switch buffer modes without discarding recoverable changes.
+---
+
+import BufferingDiagram from '../../../../components/docs/BufferingDiagram.astro';
+import SaveTimeline from '../../../../components/docs/SaveTimeline.astro';
+
+A write can finish before its changes reach persistent storage. Synchronize important changes and wait for success before telling a user their work is saved.
+
+Persistence is local to this browser and origin. It does not upload files or copy them to another device.
+
+## Where do writes go?
+
+The buffer mode controls how the VFS accesses file contents. Both modes use OPFS storage. A memory buffer is **not** a temporary, memory-only filesystem.
+
+<BufferingDiagram />
+
+## Default settings
+
+Direct mounts and worker clients default to `bufferMode: 'disk'` and `localDurabilityMode: 'balanced'`. Disk mode avoids a full RAM copy of file contents. Balanced mode schedules synchronization about 150 ms after the first dirty change, but a busy or suspended worker can delay it. Continue using explicit `fsync` or volume synchronization at meaningful save points.
+
+For memory caching with explicitly managed synchronization, select `{ bufferMode: 'memory', localDurabilityMode: 'relaxed' }`. Both buffer modes persist to OPFS. The PGlite adapter's separate `relaxedDurability` option is unchanged. See [storage modes explained](/benchmarks/storage/) for the tradeoffs.
+
+## When are changes synchronized?
+
+Buffering chooses the data path. Local durability chooses when the VFS requests a flush of pending changes.
+
+| Local durability    | What triggers synchronization?                                                                                  | What to remember                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `relaxed`           | Explicit synchronization or an orderly close.                                                                   | Your application chooses save points.                                                 |
+| `balanced`, default | A timer scheduled about 150 ms after the first dirty change, plus explicit synchronization or an orderly close. | Worker scheduling or suspension can delay the timer. It is not a maximum loss window. |
+| `strict`            | Also flushes appended memory-mode recovery-log records immediately.                                             | It does **not** flush every disk-buffered write. Keep explicit save points.           |
+
+<SaveTimeline />
+
+For a direct `OpfsVfs` mount in a dedicated worker, call `vfs.syncSync()` to synchronize the volume. `vfs.fsyncSync(fd)` currently uses the same volume-wide synchronization after validating the file descriptor.
+
+With an initialized worker client, await the asynchronous call:
+
+```ts
+import type { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
+
+// Call after your writes finish. Rejection means the save failed.
+async function save(volume: OpfsVfsWorker): Promise<void> {
+  await volume.sync();
+  // Only now tell the user these changes have been saved locally.
+}
+```
+
+Await `closeVfs()` when finished with the volume. Closing a file descriptor alone is not a substitute for synchronizing the volume. Browser shutdown may interrupt work, so do not rely on a page-close handler as your only save point.
+
+## If a session is interrupted
+
+On the next mount, the VFS checks the volume and attempts recovery before `ready` resolves. A recovery log, also called a write-ahead log or WAL, records changes that may need to be replayed. Recovery cannot promise to restore every unsynchronized write.
+
+The VFS exposes local persistence status, including dirty pages, pending WAL bytes, state, and last error. The default recovery policy salvages recoverable WAL damage; `recoveryMode: 'fail-stop'` lets an application decide instead. Do not automatically delete a volume after a mount error.
+
+Synchronization does not protect against clearing site data or browser storage eviction. Offer an export or backup for important files.
+
+## Switching from memory to disk buffering
+
+A cleanly closed volume can reopen using disk buffering. If a previous session left a nonempty memory recovery log, a disk mount rejects it with `EBUSY` to avoid discarding recoverable changes.
+
+Reopen that volume with `bufferMode: 'memory'`, await `ready`, and successfully await `closeVfs()`. Then reopen it with the disk default. Do not delete recovery logs or reset the volume to bypass the error.

@@ -1,0 +1,86 @@
+---
+title: React SDK API reference
+description: Public React SDK props, hooks, results, ownership, and rendering boundaries.
+---
+
+This preview API runs in a browser client component. Server rendering may render its static checking/pending snapshots, but it does not allocate a worker, lock, `SharedArrayBuffer`, or browser storage. Hydration opens managed volumes after commit.
+
+## Provider and lookup
+
+```ts
+type VolumeName = string | typeof DEFAULT_VOLUME;
+
+type ManagedVolumeProviderProps = {
+  fileName: string;
+  worker?: () => Worker;
+  plugins?: readonly VfsPluginRequest[];
+  options?: ManagedOptions;
+  transport?: 'auto' | 'dedicated' | 'shared-worker';
+  sharedWorker?: (fileName: string) => SharedWorker;
+  name?: VolumeName;
+  persistentStorage?: 'manual' | 'request-on-mount';
+  onError?: (error: VolumeError) => void;
+  children: ReactNode | ((volume: VolumeResult) => ReactNode);
+};
+
+type BorrowedVolumeProviderProps = {
+  client: OpfsVfsWorkerClient;
+  name?: VolumeName;
+  persistentStorage?: 'manual' | 'request-on-mount';
+  onError?: (error: VolumeError) => void;
+  children: ReactNode | ((volume: VolumeResult) => ReactNode);
+};
+```
+
+`DEFAULT_VOLUME` is a unique symbol for the unnamed provider. A named volume requires a nonempty string; it is a lookup identity, not a filename. `fileName` remains the basename ending in `.bin` that owns the physical volume. Lookup hooks walk outward through nested providers and throw a configuration error when that named or default provider is absent.
+
+Managed `options` are the supported worker options: `openMode`, `forceLeader`, `claimIfAvailable`, `initTimeout`, `debug`, `bufferMode`, `localDurabilityMode`, `noatime`, `recoveryMode`, `sabSize`, `debugWal`, and the declared file/path/byte limits. Provider validation rejects unknown keys and incompatible plugin/open-mode combinations.
+
+`transport` defaults to `'auto'`. Without `worker`, React uses its built-in subscriptions worker and selects compatible shared transport before dedicated. `VolumeResult.transport` reports the selected path; `fallbackReason` identifies why auto selected dedicated. The capability probe and selection happen only while opening: auto does not migrate a live dedicated client. It falls back only when the page `SharedWorker` API is unavailable, the compatible application factory is missing, or the shared-scope sync-access probe fails; a shared bootstrap error or timeout stays an error. Auto also retains dedicated transport when a compatible dedicated owner already holds the volume, avoiding split ownership. Set `'dedicated'` or `'shared-worker'` to override auto. Shared override with a module-level `sharedWorker` factory returns a fresh `SharedWorker` and port for every call; use one stable module URL and a name derived from the `.bin` basename. A custom `worker` without `sharedWorker` stays dedicated under auto and reports the missing compatible shared-worker factory. Missing or unsupported forced shared transport reports its lifecycle error and never creates a dedicated fallback. The shared host's plugin registrations are fixed in its module. Page requests only validate the profile they need.
+
+```tsx
+function Borrowed({ client }: { client: OpfsVfsWorkerClient }) {
+  return <VolumeProvider client={client}>{(volume) => <p>{volume.status}</p>}</VolumeProvider>;
+}
+```
+
+Create the caller-owned client asynchronously outside render, after browser commit or from a user action, then pass it as `client`. The caller must close and dispose it. A borrowed provider never closes it. A managed result has `ownership: 'managed'` and `close(): Promise<void>`; a borrowed result has `ownership: 'borrowed'`. Unmount alone retains a managed compatible client, including its worker cost, so explicitly await `close()` at the application's lifecycle boundary.
+
+## Lifecycle and commands
+
+```ts
+const volume = useVolume(name?);       // VolumeResult
+const fs = useVolumeClient(name?);     // GenerationClient | null
+```
+
+`VolumeResult` exposes `status`, `error`, `missingCapabilities`, `role`, `generation`, `persistence`, `transport`, `fallbackReason`, and `isClosing`. Status is `pending`, `ready`, `recovering`, `unsupported`, `error`, or `closed`. `fs` is generation-pinned and exists only while that generation is ready. Its path commands are asynchronous: `readFileBuffer`, `writeFileBuffer`, directory/stat/link operations, and `sync`; a SharedWorker host has no synchronous SAB API. It deliberately excludes volume lifecycle commands. Managed `close()` closes compatible aliases in this page, not other pages. Use a caller-owned raw `createSharedWorkerFollower`, await `ready`, then await `shutdownSharedVfs()` for intentional global shutdown; optionally delete only after success. Coordinate all pages because shutdown plus deletion is not atomic.
+
+The first shared attach sets options and plugin payloads. Later attaches compare only the filename, protocol/capabilities, and plugin ID, contract version, and compatibility key—not arbitrary options or credentials. Use one application configuration and one shared host per volume. Do not deliberately mix dedicated and shared transport; auto can retain a positively identified compatible dedicated owner, while explicit or incompatible mixed routes fail safely. `VFS_ATTACHMENT_LOST` is terminal for a shared client; recreate it, reread state, and verify a possibly applied write. See [SharedWorker usage and limitations](/docs/react/#sharedworker-ownership-and-limits).
+
+Capture the handle and source value at the action dispatch boundary. A command issued through an old handle refuses a replacement generation. Core direct worker, follower relay, and worker-hosted SAB paths all observe mutations through the subscriptions plugin; render a normalized `VolumeError` and its `outcome` instead of guessing whether a sent command changed storage.
+
+## Resource hooks and components
+
+```ts
+useFolder(path, { volume?, enabled? })
+useFile(path, { volume?, enabled? })
+useFileContent(path, { volume?, enabled?, format?: 'bytes' | 'text', limit?: number })
+
+<Folder path="/">{(result) => /* render */}</Folder>
+<File path="/note.txt">{(result) => /* render */}</File>
+<FileContent path="/note.txt" format="text">{(result) => /* render */}</FileContent>
+```
+
+Every result has `status`, `data`, `error`, `isRefreshing`, `isStale`, and `refresh()`. `useFileContent` returns `Uint8Array | null` by default or `string | null` with `format: 'text'`; `limit` is 0 through 16 MiB. Shared byte results are read-only snapshots for all consumers: copy bytes before mutation. Resource cache sharing is per installed SDK copy and client, so resolve exactly one copy of `@opfs-vfs/react` and React in an application bundle.
+
+## Browser persistence
+
+```ts
+const { status, error, request } = usePersistentStorage();
+```
+
+Status is `checking`, `requesting`, `granted`, `not-granted`, `unsupported`, or `error`. It only reflects `navigator.storage.persisted()`/`persist()` and never proves VFS durability. `request()` deduplicates active checks/prompts and is suitable for a user gesture. `persistentStorage="request-on-mount"` provides one automatic page opportunity.
+
+## Community and premium workers
+
+The public package and its application workers import no encryption or premium package. A private application that has access to its encryption plugin must prepare and validate its plugin request, then use that exact request in the page provider and matching private worker before opening a volume. Its artifact and credential checks are private integration work; the community SDK does not provide a fallback or simulate encrypted readiness.

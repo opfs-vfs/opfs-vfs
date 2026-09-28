@@ -1,0 +1,11 @@
+.git
+.vercel
+.scratch
+**/node_modules
+/apps/*/dist
+/packages/*/dist
+**/.astro
+**/public/ai-assets
+**/test-results
+**/playwright-report
+**/.env*

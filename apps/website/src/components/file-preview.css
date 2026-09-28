@@ -1,0 +1,50 @@
+.filesystem-demo .preview-content {
+  --bg: var(--panel);
+  --text: var(--ink);
+  --raised: var(--soft);
+}
+.preview-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.preview-actions {
+  min-height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.preview-actions span {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-mode {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.15rem;
+  border-radius: 0.55rem;
+  background: var(--soft);
+}
+.preview-mode button[aria-pressed='true'] {
+  color: var(--primary-fg);
+  border-color: var(--primary-bg);
+  background: var(--primary-bg);
+}
+.markdown-preview {
+  overflow: auto;
+  padding: 1.2rem 1.5rem;
+  line-height: 1.65;
+}
+.markdown-preview pre {
+  overflow: auto;
+  padding: 0.75rem;
+  color: var(--ink);
+  background: var(--soft);
+  border-radius: 8px;
+}

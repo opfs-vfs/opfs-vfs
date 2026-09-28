@@ -1,0 +1,32 @@
+---
+import disk from '../../public/benchmarks/results/2026-09-24/iphone-17-pro/filesystem-disk.json';
+import memory from '../../public/benchmarks/results/2026-09-24/iphone-17-pro/filesystem-memory.json';
+import { median } from '../lib/benchmark';
+import BenchmarkResultTable from './BenchmarkResultTable.astro';
+const phases = ['mountMs', 'create', 'write', 'read', 'rename', 'delete', 'flush', 'reopen'] as const;
+const rows = phases.map((phase) => ({ label: phase === 'mountMs' ? 'Mount' : phase, values: [disk, memory].map((report) => {
+  const values = report.samples.filter((sample) => sample.status === 'ok').map((sample) => phase === 'mountMs' ? sample.mountMs : sample.timings[phase]);
+  return values.length ? { median: median(values)!, min: Math.min(...values), max: Math.max(...values), n: values.length } : null;
+}) }));
+---
+<section class="iphone-results" aria-labelledby="iphone-heading">
+  <p class="kicker">iPhone benchmark · standalone run</p>
+  <h2 id="iphone-heading">iPhone 17 Pro · Safari</h2>
+  <p>SQL and filesystem benchmarks on iOS 26.6.1 and Safari 26.6.1. Each timing is the median of three successful runs, with observed minimum and maximum values.</p>
+  <p>This standalone run uses a different collection protocol from the Mac results. No excluded full-workload warm-up sample is recorded, and the exact source commit is unavailable. Device and OS details were carried over from the owner's previous run at their request.</p>
+  <p>AHP completed the SQL suite and transaction runs successfully on this device. A separate user-reported Mac Safari attempt stalled with <code>UnknownError: Invalid platform file handle</code>; this was not part of the measured Mac collection. See the <a href="/benchmarks/storage/#compatibility">browser compatibility and handle usage notes</a>. The Mac Safari AHP entries were omitted by protocol, not recorded failures. All four backends completed three successful runs. IndexedDB cleanup succeeded in this replacement collection.</p>
+  <p>The memory-buffer SQL export supplies the VFS memory-buffer result. Its repeated AHP, IndexedDB and memory-only samples remain in the raw export; their displayed SQL values come from the original disk-buffer collection. The memory-buffer transaction export supplies the VFS memory-buffer transaction result using the same selection rule.</p>
+  <BenchmarkResultTable caption="iPhone filesystem lifecycle (ms) · 100 files, 1 KiB each · three runs" columns={['OPFS VFS · disk buffer', 'OPFS VFS · memory buffer']} rows={rows} />
+  <p>This filesystem workload uses 100 files, compared with 1,000 in the Mac collections. Each run verified 50 surviving files after deleting half. These timings are not a like-for-like device comparison.</p>
+  <details><summary>iPhone data and methodology</summary>
+    <p>PGlite 0.5.4 with an unreleased OPFS VFS build. The export does not identify the exact source commit. Disk and memory buffering, balanced VFS durability and <code>relaxedDurability: false</code>. The SQL suite verified that dropped tables were absent after reopening; transactions verified 10,000 retained rows. These checks do not establish crash durability. Power mode and other collection conditions were not recorded.</p>
+    <p><a href="/benchmarks/results/2026-09-24/iphone-17-pro/safari.json" download>SQL disk JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/sql-memory.json" download>SQL memory-buffer JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/transactions-disk.json" download>Transactions disk JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/transactions-memory.json" download>Transactions memory-buffer JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/filesystem-disk.json" download>Filesystem disk JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/filesystem-memory.json" download>Filesystem memory JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/README.md">Collection notes and checksum</a></p>
+  </details>
+</section>
+<style>
+.iphone-results { margin: 3rem 0; padding-top: 2rem; border-top: 1px solid var(--line); }
+h2 { font-size: clamp(1.8rem, 3.5vw, 2.65rem); margin: .6rem 0; }
+p { max-width: 80ch; line-height: 1.65; color: var(--muted); }
+summary { cursor: pointer; padding: .75rem 0; font-weight: 600; }
+a { color: var(--accent); }
+</style>

@@ -1,0 +1,170 @@
+---
+const integrations = [
+  {
+    name: 'just-bash',
+    category: 'Bash shell',
+    status: 'Available',
+    description: 'Use familiar shell commands, pipes, and scripts through a POSIX-style filesystem interface. Build document workspaces and AI tools around persistent files.',
+    href: '/demos/filesystem/',
+    action: 'Try the shell',
+    guide: '/docs/integrations/just-bash/',
+  },
+  {
+    name: 'PGlite',
+    logo: '/brand/pglite.svg',
+    accent: '#F6F95C',
+    category: 'Database',
+    status: 'Available',
+    description: 'Postgres in the browser, with a persistent filesystem. Run queries and keep your database across sessions.',
+    href: '/demos/pglite/',
+    action: 'Try the SQL playground',
+    guide: '/docs/integrations/pglite/',
+  },
+  {
+    name: 'EdgeJS',
+    logo: '/brand/edgejs-dark.svg',
+    accent: '#5D5AC0',
+    darkLogo: '/brand/edgejs-light.svg',
+    wordmark: true,
+    category: 'Runtime',
+    status: 'Experimental',
+    description: 'Run JavaScript with node:fs against live, persistent OPFS VFS files in the EdgeJS Wasm runtime.',
+    href: '/demos/edgejs/',
+    action: 'Try the JavaScript playground',
+    guide: '/docs/integrations/edgejs/',
+  },
+  {
+    name: 'DuckDB',
+    logo: '/brand/duckdb-light.svg',
+    accent: '#FFF100',
+    darkLogo: '/brand/duckdb-dark.svg',
+    category: 'Database',
+    status: 'Experimental',
+    description: 'Run analytics on database files stored in OPFS VFS. Reopen saved tables across sessions.',
+    note: 'Requires a patched DuckDB-Wasm build',
+    href: '/demos/duckdb/',
+    action: 'Try the SQL playground',
+    guide: '/docs/integrations/duckdb/',
+  },
+  {
+    name: 'SurrealDB',
+    logo: '/brand/surrealdb.svg',
+    accent: '#FF00A0',
+    category: 'Database',
+    status: 'Planned',
+    description: 'A planned adapter to connect SurrealDB to persistent storage through OPFS VFS.',
+    note: 'Deferred pending changes across upstream projects',
+  },
+  {
+    name: 'Browser model skill',
+    category: 'AI tools',
+    status: 'Planned',
+    description: 'A reusable filesystem skill for models running in the browser, with tools to find, read, and write workspace files.',
+    href: '/demos/ai/',
+    action: 'Related AI demo',
+  },
+  {
+    name: 'OPFS VFS Volume Explorer',
+    category: 'Developer tools',
+    status: 'Available',
+    description: 'Browse and edit files, preview documents, run a shell, and import or export volumes. Also a debugging tool for your running app.',
+    href: '/demos/devtools/',
+    action: 'Try Volume Explorer',
+    guide: '/docs/guides/devtools/',
+  },
+];
+const groups = [
+  { status: 'Available', id: 'available-adapters', description: 'Ready to use, with demos and integration guides.' },
+  { status: 'Experimental', id: 'experimental-adapters', description: 'Adapters in development.' },
+  { status: 'Planned', id: 'planned-adapters', description: 'On the roadmap. Not available yet.' },
+];
+---
+<section id="adapters" class="adapters" aria-labelledby="adapters-heading">
+  <header class="adapters-heading">
+    <div>
+      <p class="kicker">Adapters &amp; tools</p>
+      <h2 id="adapters-heading">Shells. Databases.<br />File tools.</h2>
+    </div>
+    <p class="adapters-intro">Start with ready-to-use adapters for databases and shell workflows, plus a Volume Explorer to inspect your application's files. Reuse the storage integration and developer tools across different applications.</p>
+  </header>
+  {groups.map(group => (
+    <section class="integration-group" data-status={group.status} aria-labelledby={group.id}>
+      <header class="integration-group-heading">
+        <h3 id={group.id}>{group.status}</h3>
+        <p>{group.description}</p>
+      </header>
+      <div class="integrations">
+        {integrations.filter(item => item.status === group.status).map(item => (
+          <article class="integration" style={item.accent ? `--integration-accent: ${item.accent}` : undefined} aria-label={item.name}>
+            <div class="integration-identity">
+              <h4 class:list={{ 'vendor-wordmark': item.wordmark }}>
+                {item.logo && <span class="vendor-logo" aria-hidden="true">
+                  <img class:list={{ 'logo-on-light': item.darkLogo }} src={item.logo} alt="" width={item.wordmark ? 140 : 42} height="42" loading="lazy" />
+                  {item.darkLogo && <img class="logo-on-dark" src={item.darkLogo} alt="" width={item.wordmark ? 140 : 42} height="42" loading="lazy" />}
+                </span>}
+                <span class:list={{ 'wordmark-label': item.wordmark }}>{item.name}</span>
+              </h4>
+              <span class="integration-category">{item.category}</span>
+            </div>
+            <p class="integration-description">{item.description}</p>
+            <div class="integration-actions">
+              {item.href && <a href={item.href}>{item.action} <span aria-hidden="true">↗</span></a>}
+              {item.guide && <a class="integration-guide" href={item.guide}>Integration guide <span aria-hidden="true">→</span></a>}
+              {item.note && <span class="development-note"><span aria-hidden="true">◌</span> {item.note}</span>}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  ))}
+</section>
+<style>
+  .adapters { scroll-margin-top: 32px; padding: 42px 0 64px; border-top: 1px solid var(--line); }
+  .adapters-heading { display: flex; justify-content: space-between; align-items: end; gap: 32px; margin-bottom: 30px; }
+  .adapters-heading .kicker { margin: 0 0 14px; }
+  .adapters-heading h2 { margin: 0; font-size: clamp(36px, 4.4vw, 58px); line-height: 1.04; }
+  .adapters-intro { max-width: 365px; margin: 0 0 2px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+  .integration-group + .integration-group { margin-top: 36px; }
+  .integration-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .integration-group-heading h3 { margin: 0; font-size: 20px; line-height: 1.4; }
+  .integration-group-heading p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .integration { --integration-accent: #8ddcb1; position: relative; min-width: 0; padding: 28px 0 28px 22px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: 32px; border-bottom: 1px solid var(--line); }
+  .integration::before { content: ''; position: absolute; top: 29px; left: 0; width: 3px; height: 28px; background: var(--integration-accent); }
+  .integration-identity { min-width: 0; }
+  .integration-category { display: block; margin-top: 9px; color: var(--muted); font: 11px/1.4 ui-monospace, monospace; }
+  .integration h4 { display: flex; align-items: center; gap: 12px; font-size: 24px; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+  .vendor-logo { flex: none; display: inline-flex; align-items: center; }
+  .vendor-logo img { display: block; width: 42px; height: 42px; object-fit: contain; }
+  .vendor-wordmark .vendor-logo img { width: 140px; height: 42px; }
+  .vendor-logo .logo-on-dark { display: none; }
+  :global([data-theme='dark']) .vendor-logo .logo-on-light { display: none; }
+  :global([data-theme='dark']) .vendor-logo .logo-on-dark { display: block; }
+  .wordmark-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .integration-description { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+  .integration-actions { display: flex; flex-direction: column; align-items: start; gap: 4px; font-size: 12px; line-height: 1.5; }
+  .integration-actions a { color: var(--ink); text-decoration: none; font-weight: 600; padding: 5px 0; }
+  .integration-actions a:hover { text-decoration: underline; text-underline-offset: 4px; }
+  .integration-actions a:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+  .integration-actions .integration-guide { color: var(--muted); }
+  .development-note { color: var(--muted); padding: 5px 0; }
+  .development-note > span { margin-right: 5px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .integration { transition: background-color 180ms ease; }
+  }
+  @media (hover: hover) {
+    .integration:hover { background: color-mix(in srgb, var(--integration-accent) 5%, transparent); }
+  }
+  @media (max-width: 1000px) {
+    .integration { gap: 22px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); }
+    .adapters-intro { max-width: 300px; }
+  }
+  @media (max-width: 700px) {
+    .adapters { padding: 32px 0 42px; }
+    .adapters-heading { align-items: start; flex-direction: column; gap: 20px; }
+    .adapters-intro { max-width: 100%; }
+    .integration { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .integration-actions { flex-direction: row; flex-wrap: wrap; gap: 0 24px; }
+    .integration-actions a { min-height: 44px; display: inline-flex; align-items: center; gap: 5px; }
+    .development-note { flex-basis: 100%; }
+  }
+</style>

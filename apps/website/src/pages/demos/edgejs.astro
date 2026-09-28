@@ -1,0 +1,8 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import EdgeJSDemo from '../../components/EdgeJSDemo';
+---
+<SiteLayout title="EdgeJS demo · OPFS VFS" description="Run JavaScript with node:fs and reopen saved files using the experimental EdgeJS integration.">
+  <section class="page-head"><div><p class="kicker">Demo / EdgeJS / experimental</p><h1>Run JavaScript against saved files</h1><p>Use node:fs to read and write files in the browser. Run the counter, reload, and run it again. This experimental demo needs a compatible Chromium browser and downloads its runtime on first use.</p></div><a class="button" href="/docs/integrations/edgejs/">EdgeJS guide →</a></section>
+  <EdgeJSDemo client:only="react" />
+</SiteLayout>

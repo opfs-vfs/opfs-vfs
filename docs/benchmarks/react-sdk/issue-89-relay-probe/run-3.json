@@ -1,0 +1,39 @@
+{
+  "roles": [
+    "leader",
+    "follower",
+    "follower"
+  ],
+  "browser": "147.0.7727.15",
+  "reads": 12,
+  "readerMs": [
+    27.140000104904175,
+    18.125,
+    15.754999995231628,
+    15.120000004768372,
+    13.464999914169312,
+    14.070000052452087,
+    14.34500002861023,
+    12.674999952316284,
+    13.195000052452087,
+    15.979999899864197,
+    13.850000023841858,
+    13.629999995231628
+  ],
+  "wallMs": 694,
+  "idleBaselineLongTasksMs": [],
+  "idleLongTasksMs": [],
+  "idleBroadcastResponses": 12,
+  "idleHeapBefore": {
+    "usedSize": 1968136,
+    "totalSize": 2539520,
+    "embedderHeapUsedSize": 340288,
+    "backingStorageSize": 1564003
+  },
+  "idleHeapAfter": {
+    "usedSize": 2000092,
+    "totalSize": 3325952,
+    "embedderHeapUsedSize": 600424,
+    "backingStorageSize": 35118435
+  }
+}

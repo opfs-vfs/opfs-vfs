@@ -1,0 +1,48 @@
+{
+  "name": "@opfs-vfs/file-preview",
+  "version": "0.1.0",
+  "description": "Shared React file previews and virtualized text editor.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "files": [
+    "dist",
+    "LICENSE.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/preview-policy.test.ts",
+    "build": "vite build && tsc -p tsconfig.lib.json"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.5",
+    "@codemirror/view": "6.43.12",
+    "@lezer/highlight": "1.2.3",
+    "pdfjs-dist": "5.4.530",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "25.5.0",
+    "@types/react": "19.2.14",
+    "react": "19.2.4",
+    "typescript": "6.0.3",
+    "vite": "8.2.2"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

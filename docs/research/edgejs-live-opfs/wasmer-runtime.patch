@@ -1,0 +1,61 @@
+diff --git a/lib/wasix/src/fs/mod.rs b/lib/wasix/src/fs/mod.rs
+index ba8a8b96a..7fb6e3f86 100644
+--- a/lib/wasix/src/fs/mod.rs
++++ b/lib/wasix/src/fs/mod.rs
+@@ -1439,8 +1439,7 @@ impl WasiFs {
+                                 let metadata = self
+                                     .root_fs
+                                     .symlink_metadata(&entry_path_buf)
+-                                    .ok()
+-                                    .ok_or(Errno::Noent)?;
++                                    .map_err(fs_error_into_wasi_err)?;
+                                 let file_type = metadata.file_type();
+                                 if file_type.is_dir() {
+                                     // load DIR
+@@ -1476,8 +1475,7 @@ impl WasiFs {
+                                     let link_value = self
+                                         .root_fs
+                                         .readlink(&entry_path_buf)
+-                                        .ok()
+-                                        .ok_or(Errno::Noent)?;
++                                        .map_err(fs_error_into_wasi_err)?;
+                                     debug!("attempting to decompose path {:?}", link_value);
+                                     ComponentResolution::BackingSymlink {
+                                         file: entry_path_buf,
+@@ -1834,8 +1832,20 @@ impl WasiFs {
+ 
+     pub fn filestat_fd(&self, fd: WasiFd) -> Result<Filestat, Errno> {
+         let inode = self.get_fd_inode(fd)?;
+-        let guard = inode.stat.read().unwrap();
+-        Ok(*guard.deref())
++        Ok(self.filestat_inode(&inode))
++    }
++
++    pub(crate) fn filestat_inode(&self, inode: &InodeGuard) -> Filestat {
++        let mut stat = *inode.stat.read().unwrap();
++        let guard = inode.read();
++        if let Kind::File { handle: Some(handle), .. } = guard.deref() {
++            let handle = handle.read().unwrap();
++            stat.st_size = handle.size();
++            stat.st_atim = handle.last_accessed();
++            stat.st_mtim = handle.last_modified();
++            stat.st_ctim = handle.created_time();
++        }
++        stat
+     }
+ 
+     pub fn fdstat(&self, fd: WasiFd) -> Result<Fdstat, Errno> {
+diff --git a/lib/wasix/src/syscalls/wasi/fd_filestat_get.rs b/lib/wasix/src/syscalls/wasi/fd_filestat_get.rs
+index b1974c3e1..9e6456329 100644
+--- a/lib/wasix/src/syscalls/wasi/fd_filestat_get.rs
++++ b/lib/wasix/src/syscalls/wasi/fd_filestat_get.rs
+@@ -55,8 +55,7 @@ pub(crate) fn fd_filestat_get_internal(
+         return Err(Errno::Access);
+     }
+ 
+-    let guard = fd_entry.inode.stat.read().unwrap();
+-    Ok(*guard.deref())
++    Ok(state.fs.filestat_inode(&fd_entry.inode))
+ }
+ 
+ /// ### `fd_filestat_get_old()`

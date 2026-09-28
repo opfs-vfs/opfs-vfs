@@ -1,0 +1,3064 @@
+{
+  "schemaVersion": 1,
+  "kind": "opfs-vfs-benchmark-collection",
+  "protocol": "mac-browser-v1",
+  "id": "4d358f4a-9c1d-4777-a187-508b06f3c1a7",
+  "startedAt": "2026-09-23T19:48:43.223Z",
+  "status": "complete",
+  "interrupted": false,
+  "eligibleForReview": true,
+  "environment": {
+    "machine": "Mac Studio 2022 · M1 Max · 64 GB",
+    "macOS": "26.5.2",
+    "browser": "safari",
+    "browserVersion": "26.5.2 (21624.2.5.11.8)",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5.2 Safari/605.1.15",
+    "profile": "regular-clean",
+    "notes": "AC power; no low-power mode setting exposed by pmset; about 58 GiB free; regular OPFS benchmarks profile, no extensions.",
+    "hardwareConcurrency": 8,
+    "crossOriginIsolated": true
+  },
+  "versions": {
+    "sourceCommit": "34ba9b3970c33a57508383778d405f2e1b0d8967+dirty",
+    "opfsVfs": "1.0.1",
+    "pglite": "0.5.4"
+  },
+  "workloads": {
+    "speedtest": "pglite-speedtest16-ae182ff8-v1",
+    "source": "https://github.com/electric-sql/pglite/tree/ae182ff8bd5ba4acb887d6c925d607a1498aa0b5/packages/benchmark/src",
+    "transactions": "pglite-sql-v2",
+    "filesystem": "small-files-v1",
+    "payloadBytes": 1024
+  },
+  "skipped": [
+    {
+      "backend": "opfs-ahp",
+      "reason": "Omitted on Safari by collection protocol."
+    }
+  ],
+  "jobs": [
+    {
+      "id": "pglite-speedtest-opfs-vfs-disk",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "opfs-vfs"
+        ],
+        "workload": "pglite-speedtest",
+        "rows": null,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "pglite-speedtest-opfs-vfs-memory",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "opfs-vfs"
+        ],
+        "workload": "pglite-speedtest",
+        "rows": null,
+        "repetitions": 1,
+        "bufferMode": "memory",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "pglite-speedtest-idb",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "idb"
+        ],
+        "workload": "pglite-speedtest",
+        "rows": null,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "pglite-speedtest-memory",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "memory"
+        ],
+        "workload": "pglite-speedtest",
+        "rows": null,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "transactions-opfs-vfs-disk",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "opfs-vfs"
+        ],
+        "workload": "transactions",
+        "rows": 10000,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "transactions-opfs-vfs-memory",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "opfs-vfs"
+        ],
+        "workload": "transactions",
+        "rows": 10000,
+        "repetitions": 1,
+        "bufferMode": "memory",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "transactions-idb",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "idb"
+        ],
+        "workload": "transactions",
+        "rows": 10000,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "transactions-memory",
+      "suite": "sql",
+      "config": {
+        "backends": [
+          "memory"
+        ],
+        "workload": "transactions",
+        "rows": 10000,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced",
+        "relaxedDurability": false
+      }
+    },
+    {
+      "id": "filesystem-disk",
+      "suite": "filesystem",
+      "config": {
+        "files": 1000,
+        "repetitions": 1,
+        "bufferMode": "disk",
+        "durability": "balanced"
+      }
+    },
+    {
+      "id": "filesystem-memory",
+      "suite": "filesystem",
+      "config": {
+        "files": 1000,
+        "repetitions": 1,
+        "bufferMode": "memory",
+        "durability": "balanced"
+      }
+    }
+  ],
+  "entries": [
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-disk",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:48:43.227Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 829.9200000000001,
+          "workloadMs": 3298.2000000000007,
+          "persistenceMs": 0,
+          "reopenMs": 61.460000000000036,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 21.059999999999945
+            },
+            {
+              "id": 2,
+              "durationMs": 240.20000000000005
+            },
+            {
+              "id": 3,
+              "durationMs": 300.32000000000016
+            },
+            {
+              "id": 4,
+              "durationMs": 154.25999999999976
+            },
+            {
+              "id": 5,
+              "durationMs": 375.25999999999976
+            },
+            {
+              "id": 6,
+              "durationMs": 28.38000000000011
+            },
+            {
+              "id": 7,
+              "durationMs": 196.05999999999995
+            },
+            {
+              "id": 8,
+              "durationMs": 80.29999999999973
+            },
+            {
+              "id": 9,
+              "durationMs": 661.1999999999998
+            },
+            {
+              "id": 10,
+              "durationMs": 891.3599999999997
+            },
+            {
+              "id": 11,
+              "durationMs": 111.0600000000004
+            },
+            {
+              "id": 12,
+              "durationMs": 11.739999999999782
+            },
+            {
+              "id": 13,
+              "durationMs": 14.480000000000473
+            },
+            {
+              "id": 14,
+              "durationMs": 99.61999999999989
+            },
+            {
+              "id": 15,
+              "durationMs": 105.26000000000113
+            },
+            {
+              "id": 16,
+              "durationMs": 7.640000000000327
+            }
+          ]
+        }
+      ],
+      "preparationMs": 1080.1800000000003,
+      "finishedAt": "2026-09-23T19:48:48.658Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-memory",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:48:48.658Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1206.44,
+          "workloadMs": 3552.4199999999996,
+          "persistenceMs": 0.019999999999527063,
+          "reopenMs": 76.34000000000015,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 28.7800000000002
+            },
+            {
+              "id": 2,
+              "durationMs": 256.8600000000001
+            },
+            {
+              "id": 3,
+              "durationMs": 346.97999999999956
+            },
+            {
+              "id": 4,
+              "durationMs": 152.5999999999999
+            },
+            {
+              "id": 5,
+              "durationMs": 366.6199999999999
+            },
+            {
+              "id": 6,
+              "durationMs": 120.07999999999947
+            },
+            {
+              "id": 7,
+              "durationMs": 178.40000000000055
+            },
+            {
+              "id": 8,
+              "durationMs": 84.53999999999996
+            },
+            {
+              "id": 9,
+              "durationMs": 636.2599999999998
+            },
+            {
+              "id": 10,
+              "durationMs": 869.4399999999996
+            },
+            {
+              "id": 11,
+              "durationMs": 159
+            },
+            {
+              "id": 12,
+              "durationMs": 12.920000000000073
+            },
+            {
+              "id": 13,
+              "durationMs": 20.900000000000546
+            },
+            {
+              "id": 14,
+              "durationMs": 193.1800000000003
+            },
+            {
+              "id": 15,
+              "durationMs": 120.53999999999996
+            },
+            {
+              "id": 16,
+              "durationMs": 5.319999999999709
+            }
+          ]
+        }
+      ],
+      "preparationMs": 870.1600000000001,
+      "finishedAt": "2026-09-23T19:48:54.491Z"
+    },
+    {
+      "jobId": "pglite-speedtest-idb",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:48:54.491Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 986.0800000000003,
+          "workloadMs": 4902.339999999999,
+          "persistenceMs": 82.09999999999945,
+          "reopenMs": 789.2200000000012,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 120.27999999999975
+            },
+            {
+              "id": 2,
+              "durationMs": 331.84000000000015
+            },
+            {
+              "id": 3,
+              "durationMs": 409.17999999999984
+            },
+            {
+              "id": 4,
+              "durationMs": 197.60000000000036
+            },
+            {
+              "id": 5,
+              "durationMs": 420.5
+            },
+            {
+              "id": 6,
+              "durationMs": 209.53999999999996
+            },
+            {
+              "id": 7,
+              "durationMs": 226.34000000000015
+            },
+            {
+              "id": 8,
+              "durationMs": 199.51999999999998
+            },
+            {
+              "id": 9,
+              "durationMs": 673.8999999999996
+            },
+            {
+              "id": 10,
+              "durationMs": 857.340000000001
+            },
+            {
+              "id": 11,
+              "durationMs": 255.17999999999938
+            },
+            {
+              "id": 12,
+              "durationMs": 145.7599999999993
+            },
+            {
+              "id": 13,
+              "durationMs": 146.8199999999997
+            },
+            {
+              "id": 14,
+              "durationMs": 305.1399999999994
+            },
+            {
+              "id": 15,
+              "durationMs": 257.65999999999985
+            },
+            {
+              "id": 16,
+              "durationMs": 145.7400000000007
+            }
+          ]
+        }
+      ],
+      "preparationMs": 866.2800000000001,
+      "finishedAt": "2026-09-23T19:49:02.723Z"
+    },
+    {
+      "jobId": "pglite-speedtest-memory",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:02.723Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 551.6199999999999,
+          "workloadMs": 2835.4399999999996,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 23.3599999999999
+            },
+            {
+              "id": 2,
+              "durationMs": 234.58000000000015
+            },
+            {
+              "id": 3,
+              "durationMs": 285.74
+            },
+            {
+              "id": 4,
+              "durationMs": 155.15999999999985
+            },
+            {
+              "id": 5,
+              "durationMs": 370.1199999999999
+            },
+            {
+              "id": 6,
+              "durationMs": 31.659999999999854
+            },
+            {
+              "id": 7,
+              "durationMs": 173.79999999999973
+            },
+            {
+              "id": 8,
+              "durationMs": 81.90000000000009
+            },
+            {
+              "id": 9,
+              "durationMs": 511.7199999999998
+            },
+            {
+              "id": 10,
+              "durationMs": 673.9600000000005
+            },
+            {
+              "id": 11,
+              "durationMs": 86.14000000000033
+            },
+            {
+              "id": 12,
+              "durationMs": 11.139999999999418
+            },
+            {
+              "id": 13,
+              "durationMs": 13.100000000000364
+            },
+            {
+              "id": 14,
+              "durationMs": 80.0600000000004
+            },
+            {
+              "id": 15,
+              "durationMs": 100
+            },
+            {
+              "id": 16,
+              "durationMs": 2.9999999999990905
+            }
+          ]
+        }
+      ],
+      "preparationMs": 872.66,
+      "finishedAt": "2026-09-23T19:49:07.080Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-disk",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:07.080Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 824.9399999999999,
+          "workloadMs": 27.200000000000045,
+          "persistenceMs": 0,
+          "reopenMs": 55.54000000000019,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 860.46,
+      "finishedAt": "2026-09-23T19:49:08.897Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-memory",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:08.897Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1989.2600000000002,
+          "workloadMs": 40.460000000000036,
+          "persistenceMs": 0,
+          "reopenMs": 67.64000000000033,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 841.42,
+      "finishedAt": "2026-09-23T19:49:11.886Z"
+    },
+    {
+      "jobId": "transactions-idb",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:11.886Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 956.66,
+          "workloadMs": 170.20000000000005,
+          "persistenceMs": 42.28000000000043,
+          "reopenMs": 253.22000000000025,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 864.5800000000002,
+      "finishedAt": "2026-09-23T19:49:14.344Z"
+    },
+    {
+      "jobId": "transactions-memory",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:14.344Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 558.8599999999999,
+          "workloadMs": 23.7800000000002,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 865.7400000000001,
+      "finishedAt": "2026-09-23T19:49:15.822Z"
+    },
+    {
+      "jobId": "filesystem-disk",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:15.822Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 5.660000000000002,
+          "timings": {
+            "create": 4.140000000000004,
+            "write": 18.440000000000005,
+            "read": 12.020000000000003,
+            "rename": 7.619999999999997,
+            "delete": 2.019999999999996,
+            "flush": 3.440000000000005,
+            "reopen": 5.019999999999996
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:49:15.903Z"
+    },
+    {
+      "jobId": "filesystem-memory",
+      "round": 0,
+      "warmup": true,
+      "startedAt": "2026-09-23T19:49:15.903Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 5.600000000000001,
+          "timings": {
+            "create": 15.320000000000004,
+            "write": 15.099999999999994,
+            "read": 7.939999999999998,
+            "rename": 22.060000000000002,
+            "delete": 5.939999999999998,
+            "flush": 9.939999999999984,
+            "reopen": 7.019999999999996
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:49:16.010Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-memory",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:16.010Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1177.2999999999997,
+          "workloadMs": 3546.7800000000007,
+          "persistenceMs": 0.020000000000436557,
+          "reopenMs": 78.31999999999971,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 24.480000000000018
+            },
+            {
+              "id": 2,
+              "durationMs": 261.0999999999999
+            },
+            {
+              "id": 3,
+              "durationMs": 344.96000000000004
+            },
+            {
+              "id": 4,
+              "durationMs": 157.5999999999999
+            },
+            {
+              "id": 5,
+              "durationMs": 365.9200000000001
+            },
+            {
+              "id": 6,
+              "durationMs": 101.81999999999971
+            },
+            {
+              "id": 7,
+              "durationMs": 178.1199999999999
+            },
+            {
+              "id": 8,
+              "durationMs": 80.63999999999987
+            },
+            {
+              "id": 9,
+              "durationMs": 636.5199999999995
+            },
+            {
+              "id": 10,
+              "durationMs": 886.6800000000003
+            },
+            {
+              "id": 11,
+              "durationMs": 155.04000000000087
+            },
+            {
+              "id": 12,
+              "durationMs": 13.44000000000051
+            },
+            {
+              "id": 13,
+              "durationMs": 20.159999999999854
+            },
+            {
+              "id": 14,
+              "durationMs": 193.7400000000007
+            },
+            {
+              "id": 15,
+              "durationMs": 121.53999999999996
+            },
+            {
+              "id": 16,
+              "durationMs": 5.019999999999527
+            }
+          ]
+        }
+      ],
+      "preparationMs": 858.46,
+      "finishedAt": "2026-09-23T19:49:21.799Z"
+    },
+    {
+      "jobId": "pglite-speedtest-idb",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:21.799Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 896.78,
+          "workloadMs": 4867.759999999999,
+          "persistenceMs": 81.1200000000008,
+          "reopenMs": 791.8000000000002,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 136.20000000000005
+            },
+            {
+              "id": 2,
+              "durationMs": 327.9399999999998
+            },
+            {
+              "id": 3,
+              "durationMs": 392.52000000000044
+            },
+            {
+              "id": 4,
+              "durationMs": 197.29999999999973
+            },
+            {
+              "id": 5,
+              "durationMs": 411.3199999999997
+            },
+            {
+              "id": 6,
+              "durationMs": 188.95999999999958
+            },
+            {
+              "id": 7,
+              "durationMs": 229.32000000000016
+            },
+            {
+              "id": 8,
+              "durationMs": 193.1199999999999
+            },
+            {
+              "id": 9,
+              "durationMs": 651.98
+            },
+            {
+              "id": 10,
+              "durationMs": 888.6799999999994
+            },
+            {
+              "id": 11,
+              "durationMs": 252.17999999999938
+            },
+            {
+              "id": 12,
+              "durationMs": 148.35999999999967
+            },
+            {
+              "id": 13,
+              "durationMs": 146.78000000000065
+            },
+            {
+              "id": 14,
+              "durationMs": 304.119999999999
+            },
+            {
+              "id": 15,
+              "durationMs": 251.5600000000013
+            },
+            {
+              "id": 16,
+              "durationMs": 147.42000000000098
+            }
+          ]
+        }
+      ],
+      "preparationMs": 865.5400000000001,
+      "finishedAt": "2026-09-23T19:49:29.909Z"
+    },
+    {
+      "jobId": "pglite-speedtest-memory",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:29.909Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 544.28,
+          "workloadMs": 2785.4999999999977,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 26.919999999999845
+            },
+            {
+              "id": 2,
+              "durationMs": 229.46000000000004
+            },
+            {
+              "id": 3,
+              "durationMs": 283.32000000000016
+            },
+            {
+              "id": 4,
+              "durationMs": 149.67999999999984
+            },
+            {
+              "id": 5,
+              "durationMs": 365.9200000000001
+            },
+            {
+              "id": 6,
+              "durationMs": 31.679999999999836
+            },
+            {
+              "id": 7,
+              "durationMs": 170.72000000000025
+            },
+            {
+              "id": 8,
+              "durationMs": 78.40000000000009
+            },
+            {
+              "id": 9,
+              "durationMs": 505.9199999999996
+            },
+            {
+              "id": 10,
+              "durationMs": 651.1599999999999
+            },
+            {
+              "id": 11,
+              "durationMs": 85.19999999999982
+            },
+            {
+              "id": 12,
+              "durationMs": 10.600000000000364
+            },
+            {
+              "id": 13,
+              "durationMs": 13.079999999999927
+            },
+            {
+              "id": 14,
+              "durationMs": 80.31999999999925
+            },
+            {
+              "id": 15,
+              "durationMs": 100.33999999999924
+            },
+            {
+              "id": 16,
+              "durationMs": 2.7799999999997453
+            }
+          ]
+        }
+      ],
+      "preparationMs": 870.3000000000002,
+      "finishedAt": "2026-09-23T19:49:34.206Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-disk",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:34.206Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 761.42,
+          "workloadMs": 27.460000000000036,
+          "persistenceMs": 0.020000000000209184,
+          "reopenMs": 65.5,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 852.0200000000001,
+      "finishedAt": "2026-09-23T19:49:35.957Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-memory",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:35.957Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1169.52,
+          "workloadMs": 35.5,
+          "persistenceMs": 0.01999999999998181,
+          "reopenMs": 74.68000000000029,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 864.4800000000001,
+      "finishedAt": "2026-09-23T19:49:38.153Z"
+    },
+    {
+      "jobId": "transactions-idb",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:38.153Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 901.8000000000001,
+          "workloadMs": 188.1199999999999,
+          "persistenceMs": 43.56000000000017,
+          "reopenMs": 272.84000000000015,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 845.22,
+      "finishedAt": "2026-09-23T19:49:40.577Z"
+    },
+    {
+      "jobId": "transactions-memory",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:40.577Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 543.1,
+          "workloadMs": 24.74000000000001,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 867.0000000000001,
+      "finishedAt": "2026-09-23T19:49:42.038Z"
+    },
+    {
+      "jobId": "filesystem-disk",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:42.039Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 7.140000000000001,
+          "timings": {
+            "create": 4.400000000000002,
+            "write": 14.34,
+            "read": 10.880000000000003,
+            "rename": 7.680000000000007,
+            "delete": 2.1400000000000006,
+            "flush": 3.8400000000000034,
+            "reopen": 5.040000000000013
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:49:42.114Z"
+    },
+    {
+      "jobId": "filesystem-memory",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:42.114Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 6.2,
+          "timings": {
+            "create": 15.200000000000001,
+            "write": 15.760000000000002,
+            "read": 8.019999999999996,
+            "rename": 21.040000000000006,
+            "delete": 5.799999999999997,
+            "flush": 11.200000000000003,
+            "reopen": 7.400000000000006
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:49:42.221Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-disk",
+      "round": 1,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:42.221Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 754.6000000000001,
+          "workloadMs": 3329.1000000000004,
+          "persistenceMs": 0,
+          "reopenMs": 61.52000000000044,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 20.519999999999982
+            },
+            {
+              "id": 2,
+              "durationMs": 242.96000000000004
+            },
+            {
+              "id": 3,
+              "durationMs": 302.1600000000001
+            },
+            {
+              "id": 4,
+              "durationMs": 155.6600000000003
+            },
+            {
+              "id": 5,
+              "durationMs": 369.5
+            },
+            {
+              "id": 6,
+              "durationMs": 28.920000000000073
+            },
+            {
+              "id": 7,
+              "durationMs": 191.19999999999982
+            },
+            {
+              "id": 8,
+              "durationMs": 86.01999999999998
+            },
+            {
+              "id": 9,
+              "durationMs": 676.5999999999999
+            },
+            {
+              "id": 10,
+              "durationMs": 907.96
+            },
+            {
+              "id": 11,
+              "durationMs": 104.77999999999975
+            },
+            {
+              "id": 12,
+              "durationMs": 11.220000000000255
+            },
+            {
+              "id": 13,
+              "durationMs": 14.61999999999989
+            },
+            {
+              "id": 14,
+              "durationMs": 104.79999999999927
+            },
+            {
+              "id": 15,
+              "durationMs": 108.14000000000033
+            },
+            {
+              "id": 16,
+              "durationMs": 4.040000000000873
+            }
+          ]
+        }
+      ],
+      "preparationMs": 863.62,
+      "finishedAt": "2026-09-23T19:49:47.348Z"
+    },
+    {
+      "jobId": "pglite-speedtest-idb",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:47.348Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 896.02,
+          "workloadMs": 4869.22,
+          "persistenceMs": 85.59999999999945,
+          "reopenMs": 769.0199999999995,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 132.10000000000014
+            },
+            {
+              "id": 2,
+              "durationMs": 340.2600000000002
+            },
+            {
+              "id": 3,
+              "durationMs": 396.1999999999998
+            },
+            {
+              "id": 4,
+              "durationMs": 199.24000000000024
+            },
+            {
+              "id": 5,
+              "durationMs": 416.3000000000002
+            },
+            {
+              "id": 6,
+              "durationMs": 187.55999999999995
+            },
+            {
+              "id": 7,
+              "durationMs": 228.57999999999993
+            },
+            {
+              "id": 8,
+              "durationMs": 191.9399999999996
+            },
+            {
+              "id": 9,
+              "durationMs": 648.7399999999998
+            },
+            {
+              "id": 10,
+              "durationMs": 874.4400000000005
+            },
+            {
+              "id": 11,
+              "durationMs": 254.15999999999985
+            },
+            {
+              "id": 12,
+              "durationMs": 146.71999999999935
+            },
+            {
+              "id": 13,
+              "durationMs": 147.73999999999978
+            },
+            {
+              "id": 14,
+              "durationMs": 303.10000000000036
+            },
+            {
+              "id": 15,
+              "durationMs": 256.2399999999998
+            },
+            {
+              "id": 16,
+              "durationMs": 145.90000000000055
+            }
+          ]
+        }
+      ],
+      "preparationMs": 896.38,
+      "finishedAt": "2026-09-23T19:49:55.470Z"
+    },
+    {
+      "jobId": "pglite-speedtest-memory",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:55.470Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 546.2800000000001,
+          "workloadMs": 2827.0000000000027,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 26.16000000000031
+            },
+            {
+              "id": 2,
+              "durationMs": 227.81999999999994
+            },
+            {
+              "id": 3,
+              "durationMs": 285.34000000000015
+            },
+            {
+              "id": 4,
+              "durationMs": 154.98000000000002
+            },
+            {
+              "id": 5,
+              "durationMs": 370.9200000000005
+            },
+            {
+              "id": 6,
+              "durationMs": 32.03999999999951
+            },
+            {
+              "id": 7,
+              "durationMs": 176.96000000000004
+            },
+            {
+              "id": 8,
+              "durationMs": 81.7199999999998
+            },
+            {
+              "id": 9,
+              "durationMs": 507.9800000000005
+            },
+            {
+              "id": 10,
+              "durationMs": 669.7000000000003
+            },
+            {
+              "id": 11,
+              "durationMs": 89.76000000000067
+            },
+            {
+              "id": 12,
+              "durationMs": 10.519999999999982
+            },
+            {
+              "id": 13,
+              "durationMs": 13.280000000000655
+            },
+            {
+              "id": 14,
+              "durationMs": 78
+            },
+            {
+              "id": 15,
+              "durationMs": 99
+            },
+            {
+              "id": 16,
+              "durationMs": 2.8200000000006185
+            }
+          ]
+        }
+      ],
+      "preparationMs": 869.74,
+      "finishedAt": "2026-09-23T19:49:59.813Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-disk",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:49:59.813Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 758.62,
+          "workloadMs": 27.200000000000045,
+          "persistenceMs": 0,
+          "reopenMs": 57.320000000000164,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 856.1400000000001,
+      "finishedAt": "2026-09-23T19:50:01.568Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-memory",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:01.569Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1194.5000000000002,
+          "workloadMs": 36.88000000000011,
+          "persistenceMs": 0.019999999999527063,
+          "reopenMs": 70.25999999999976,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 867.1800000000001,
+      "finishedAt": "2026-09-23T19:50:03.784Z"
+    },
+    {
+      "jobId": "transactions-idb",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:03.784Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 906,
+          "workloadMs": 184.20000000000005,
+          "persistenceMs": 42.379999999999654,
+          "reopenMs": 257.15999999999985,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 881.4000000000001,
+      "finishedAt": "2026-09-23T19:50:06.224Z"
+    },
+    {
+      "jobId": "transactions-memory",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:06.224Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 549.2400000000001,
+          "workloadMs": 23.90000000000009,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 871.2400000000001,
+      "finishedAt": "2026-09-23T19:50:07.696Z"
+    },
+    {
+      "jobId": "filesystem-disk",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:07.696Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 7.039999999999999,
+          "timings": {
+            "create": 3.9599999999999973,
+            "write": 15.420000000000005,
+            "read": 10.959999999999994,
+            "rename": 7.479999999999997,
+            "delete": 1.9400000000000048,
+            "flush": 3.8800000000000026,
+            "reopen": 6.440000000000005
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:50:07.773Z"
+    },
+    {
+      "jobId": "filesystem-memory",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:07.773Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 5.879999999999999,
+          "timings": {
+            "create": 16.28,
+            "write": 15.240000000000006,
+            "read": 9.219999999999999,
+            "rename": 21.82,
+            "delete": 5.97999999999999,
+            "flush": 10.480000000000004,
+            "reopen": 7.000000000000014
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:50:07.881Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-disk",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:07.881Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 757.8000000000001,
+          "workloadMs": 3355.6399999999976,
+          "persistenceMs": 0,
+          "reopenMs": 63,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 23.559999999999945
+            },
+            {
+              "id": 2,
+              "durationMs": 245.87999999999988
+            },
+            {
+              "id": 3,
+              "durationMs": 307.3599999999999
+            },
+            {
+              "id": 4,
+              "durationMs": 149.74000000000024
+            },
+            {
+              "id": 5,
+              "durationMs": 363.8399999999997
+            },
+            {
+              "id": 6,
+              "durationMs": 29.340000000000146
+            },
+            {
+              "id": 7,
+              "durationMs": 195.35999999999967
+            },
+            {
+              "id": 8,
+              "durationMs": 83.53999999999996
+            },
+            {
+              "id": 9,
+              "durationMs": 689.0799999999999
+            },
+            {
+              "id": 10,
+              "durationMs": 913.4600000000005
+            },
+            {
+              "id": 11,
+              "durationMs": 107.8199999999988
+            },
+            {
+              "id": 12,
+              "durationMs": 11.199999999999818
+            },
+            {
+              "id": 13,
+              "durationMs": 14.459999999999127
+            },
+            {
+              "id": 14,
+              "durationMs": 105.92000000000007
+            },
+            {
+              "id": 15,
+              "durationMs": 110.88000000000011
+            },
+            {
+              "id": 16,
+              "durationMs": 4.199999999999818
+            }
+          ]
+        }
+      ],
+      "preparationMs": 862.3000000000001,
+      "finishedAt": "2026-09-23T19:50:13.043Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-memory",
+      "round": 2,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:13.043Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1213.56,
+          "workloadMs": 3587.4799999999977,
+          "persistenceMs": 0,
+          "reopenMs": 77,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 26.539999999999964
+            },
+            {
+              "id": 2,
+              "durationMs": 260.77999999999975
+            },
+            {
+              "id": 3,
+              "durationMs": 343.4200000000001
+            },
+            {
+              "id": 4,
+              "durationMs": 161.65999999999985
+            },
+            {
+              "id": 5,
+              "durationMs": 368.99999999999955
+            },
+            {
+              "id": 6,
+              "durationMs": 105.30000000000018
+            },
+            {
+              "id": 7,
+              "durationMs": 178.24000000000024
+            },
+            {
+              "id": 8,
+              "durationMs": 81.20000000000027
+            },
+            {
+              "id": 9,
+              "durationMs": 640.5799999999995
+            },
+            {
+              "id": 10,
+              "durationMs": 886.7399999999989
+            },
+            {
+              "id": 11,
+              "durationMs": 158.67999999999938
+            },
+            {
+              "id": 12,
+              "durationMs": 13.5600000000004
+            },
+            {
+              "id": 13,
+              "durationMs": 20.73999999999978
+            },
+            {
+              "id": 14,
+              "durationMs": 215
+            },
+            {
+              "id": 15,
+              "durationMs": 120.89999999999964
+            },
+            {
+              "id": 16,
+              "durationMs": 5.140000000000327
+            }
+          ]
+        }
+      ],
+      "preparationMs": 907.5200000000001,
+      "finishedAt": "2026-09-23T19:50:18.957Z"
+    },
+    {
+      "jobId": "pglite-speedtest-memory",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:18.957Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 549.9,
+          "workloadMs": 2817.6600000000026,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 25.960000000000036
+            },
+            {
+              "id": 2,
+              "durationMs": 233.62000000000012
+            },
+            {
+              "id": 3,
+              "durationMs": 285.34000000000015
+            },
+            {
+              "id": 4,
+              "durationMs": 149.51999999999975
+            },
+            {
+              "id": 5,
+              "durationMs": 362.3199999999997
+            },
+            {
+              "id": 6,
+              "durationMs": 31.539999999999964
+            },
+            {
+              "id": 7,
+              "durationMs": 176.80000000000018
+            },
+            {
+              "id": 8,
+              "durationMs": 80.46000000000004
+            },
+            {
+              "id": 9,
+              "durationMs": 512.9200000000001
+            },
+            {
+              "id": 10,
+              "durationMs": 669.9400000000005
+            },
+            {
+              "id": 11,
+              "durationMs": 84.41999999999962
+            },
+            {
+              "id": 12,
+              "durationMs": 10.540000000000873
+            },
+            {
+              "id": 13,
+              "durationMs": 12.960000000000946
+            },
+            {
+              "id": 14,
+              "durationMs": 78.48000000000047
+            },
+            {
+              "id": 15,
+              "durationMs": 100.28000000000065
+            },
+            {
+              "id": 16,
+              "durationMs": 2.5599999999994907
+            }
+          ]
+        }
+      ],
+      "preparationMs": 873.4000000000001,
+      "finishedAt": "2026-09-23T19:50:23.297Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-disk",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:23.297Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 755.3199999999999,
+          "workloadMs": 27.980000000000246,
+          "persistenceMs": 0,
+          "reopenMs": 60.7199999999998,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 868.8400000000001,
+      "finishedAt": "2026-09-23T19:50:25.057Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-memory",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:25.057Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1243.7800000000002,
+          "workloadMs": 35.26000000000022,
+          "persistenceMs": 0,
+          "reopenMs": 66.39999999999964,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 858.7200000000001,
+      "finishedAt": "2026-09-23T19:50:27.308Z"
+    },
+    {
+      "jobId": "transactions-idb",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:27.308Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 915.46,
+          "workloadMs": 177.24,
+          "persistenceMs": 41.57999999999993,
+          "reopenMs": 262.62000000000035,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 870.58,
+      "finishedAt": "2026-09-23T19:50:29.744Z"
+    },
+    {
+      "jobId": "transactions-memory",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:29.744Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 550.54,
+          "workloadMs": 24.340000000000146,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 851.7200000000001,
+      "finishedAt": "2026-09-23T19:50:31.199Z"
+    },
+    {
+      "jobId": "filesystem-disk",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:31.199Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 7.2,
+          "timings": {
+            "create": 4.020000000000001,
+            "write": 14.260000000000002,
+            "read": 10.940000000000005,
+            "rename": 7.739999999999995,
+            "delete": 1.8599999999999994,
+            "flush": 3.5799999999999983,
+            "reopen": 5.18
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:50:31.273Z"
+    },
+    {
+      "jobId": "filesystem-memory",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:31.273Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 5.840000000000001,
+          "timings": {
+            "create": 16.44,
+            "write": 15.100000000000001,
+            "read": 8.18,
+            "rename": 22.460000000000008,
+            "delete": 6.159999999999997,
+            "flush": 10.86,
+            "reopen": 5.5
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:50:31.379Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-disk",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:31.379Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 772.5400000000001,
+          "workloadMs": 3313.600000000003,
+          "persistenceMs": 0.020000000000436557,
+          "reopenMs": 61.64000000000033,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 22.339999999999918
+            },
+            {
+              "id": 2,
+              "durationMs": 236.5
+            },
+            {
+              "id": 3,
+              "durationMs": 298.81999999999994
+            },
+            {
+              "id": 4,
+              "durationMs": 150.98000000000002
+            },
+            {
+              "id": 5,
+              "durationMs": 365.0999999999999
+            },
+            {
+              "id": 6,
+              "durationMs": 29.600000000000364
+            },
+            {
+              "id": 7,
+              "durationMs": 196.51999999999998
+            },
+            {
+              "id": 8,
+              "durationMs": 82.60000000000036
+            },
+            {
+              "id": 9,
+              "durationMs": 665.6199999999999
+            },
+            {
+              "id": 10,
+              "durationMs": 908.52
+            },
+            {
+              "id": 11,
+              "durationMs": 104.98000000000047
+            },
+            {
+              "id": 12,
+              "durationMs": 11.020000000000437
+            },
+            {
+              "id": 13,
+              "durationMs": 14.5
+            },
+            {
+              "id": 14,
+              "durationMs": 113.14000000000124
+            },
+            {
+              "id": 15,
+              "durationMs": 109.26000000000022
+            },
+            {
+              "id": 16,
+              "durationMs": 4.100000000000364
+            }
+          ]
+        }
+      ],
+      "preparationMs": 878.1400000000001,
+      "finishedAt": "2026-09-23T19:50:36.526Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-memory",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:36.526Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1176.7599999999998,
+          "workloadMs": 3549.279999999997,
+          "persistenceMs": 0.020000000000436557,
+          "reopenMs": 83.02000000000044,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 23.860000000000127
+            },
+            {
+              "id": 2,
+              "durationMs": 273.6600000000003
+            },
+            {
+              "id": 3,
+              "durationMs": 341.5799999999999
+            },
+            {
+              "id": 4,
+              "durationMs": 156.0999999999999
+            },
+            {
+              "id": 5,
+              "durationMs": 363.9199999999996
+            },
+            {
+              "id": 6,
+              "durationMs": 96.73999999999933
+            },
+            {
+              "id": 7,
+              "durationMs": 180
+            },
+            {
+              "id": 8,
+              "durationMs": 78.72000000000025
+            },
+            {
+              "id": 9,
+              "durationMs": 642.9999999999995
+            },
+            {
+              "id": 10,
+              "durationMs": 869.0999999999995
+            },
+            {
+              "id": 11,
+              "durationMs": 156.5600000000004
+            },
+            {
+              "id": 12,
+              "durationMs": 13.239999999999782
+            },
+            {
+              "id": 13,
+              "durationMs": 20.719999999999345
+            },
+            {
+              "id": 14,
+              "durationMs": 208.4399999999987
+            },
+            {
+              "id": 15,
+              "durationMs": 118.4399999999996
+            },
+            {
+              "id": 16,
+              "durationMs": 5.200000000000728
+            }
+          ]
+        }
+      ],
+      "preparationMs": 873.62,
+      "finishedAt": "2026-09-23T19:50:42.336Z"
+    },
+    {
+      "jobId": "pglite-speedtest-idb",
+      "round": 3,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:42.336Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 925.92,
+          "workloadMs": 4861.500000000002,
+          "persistenceMs": 78.52000000000044,
+          "reopenMs": 767.3800000000001,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 134.22000000000003
+            },
+            {
+              "id": 2,
+              "durationMs": 330.68000000000006
+            },
+            {
+              "id": 3,
+              "durationMs": 396.7800000000002
+            },
+            {
+              "id": 4,
+              "durationMs": 201.0999999999999
+            },
+            {
+              "id": 5,
+              "durationMs": 419.4400000000005
+            },
+            {
+              "id": 6,
+              "durationMs": 191.53999999999996
+            },
+            {
+              "id": 7,
+              "durationMs": 227
+            },
+            {
+              "id": 8,
+              "durationMs": 195.6600000000003
+            },
+            {
+              "id": 9,
+              "durationMs": 648.3800000000001
+            },
+            {
+              "id": 10,
+              "durationMs": 878.9799999999996
+            },
+            {
+              "id": 11,
+              "durationMs": 251.5
+            },
+            {
+              "id": 12,
+              "durationMs": 143.6800000000003
+            },
+            {
+              "id": 13,
+              "durationMs": 144.4400000000005
+            },
+            {
+              "id": 14,
+              "durationMs": 299.35999999999876
+            },
+            {
+              "id": 15,
+              "durationMs": 253.32000000000062
+            },
+            {
+              "id": 16,
+              "durationMs": 145.42000000000098
+            }
+          ]
+        }
+      ],
+      "preparationMs": 883.6600000000001,
+      "finishedAt": "2026-09-23T19:50:50.451Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-disk",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:50.451Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 756.3199999999999,
+          "workloadMs": 26.74000000000001,
+          "persistenceMs": 0.020000000000209184,
+          "reopenMs": 54.50000000000023,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 849.58,
+      "finishedAt": "2026-09-23T19:50:52.196Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-memory",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:52.196Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1167.5200000000002,
+          "workloadMs": 36.20000000000027,
+          "persistenceMs": 0,
+          "reopenMs": 78.86000000000013,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 855.8200000000002,
+      "finishedAt": "2026-09-23T19:50:54.381Z"
+    },
+    {
+      "jobId": "transactions-idb",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:54.381Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 955.84,
+          "workloadMs": 192.46000000000004,
+          "persistenceMs": 44.07999999999993,
+          "reopenMs": 290.4200000000001,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 855.6800000000001,
+      "finishedAt": "2026-09-23T19:50:56.890Z"
+    },
+    {
+      "jobId": "transactions-memory",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:56.890Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 560.38,
+          "workloadMs": 23.399999999999864,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 867.28,
+      "finishedAt": "2026-09-23T19:50:58.370Z"
+    },
+    {
+      "jobId": "filesystem-disk",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:58.371Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 14.700000000000003,
+          "timings": {
+            "create": 4,
+            "write": 15.660000000000004,
+            "read": 10.499999999999993,
+            "rename": 8.820000000000007,
+            "delete": 1.8999999999999986,
+            "flush": 3.519999999999996,
+            "reopen": 6.260000000000005
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:50:58.455Z"
+    },
+    {
+      "jobId": "filesystem-memory",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:58.455Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 9.340000000000002,
+          "timings": {
+            "create": 23.460000000000008,
+            "write": 16.059999999999995,
+            "read": 9.019999999999996,
+            "rename": 21.75999999999999,
+            "delete": 6.340000000000003,
+            "flush": 10.459999999999994,
+            "reopen": 6.340000000000003
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:50:58.576Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-disk",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:50:58.576Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 846.6200000000002,
+          "workloadMs": 3371.8200000000015,
+          "persistenceMs": 0.020000000000436557,
+          "reopenMs": 62.4399999999996,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 21.960000000000036
+            },
+            {
+              "id": 2,
+              "durationMs": 242.80000000000018
+            },
+            {
+              "id": 3,
+              "durationMs": 306.4200000000003
+            },
+            {
+              "id": 4,
+              "durationMs": 151.58000000000038
+            },
+            {
+              "id": 5,
+              "durationMs": 377.5800000000004
+            },
+            {
+              "id": 6,
+              "durationMs": 29.920000000000073
+            },
+            {
+              "id": 7,
+              "durationMs": 195.13999999999987
+            },
+            {
+              "id": 8,
+              "durationMs": 83.42000000000053
+            },
+            {
+              "id": 9,
+              "durationMs": 691.6400000000003
+            },
+            {
+              "id": 10,
+              "durationMs": 921.9800000000005
+            },
+            {
+              "id": 11,
+              "durationMs": 108.13999999999942
+            },
+            {
+              "id": 12,
+              "durationMs": 11.159999999999854
+            },
+            {
+              "id": 13,
+              "durationMs": 14.319999999999709
+            },
+            {
+              "id": 14,
+              "durationMs": 104.01999999999953
+            },
+            {
+              "id": 15,
+              "durationMs": 107.38000000000011
+            },
+            {
+              "id": 16,
+              "durationMs": 4.360000000000582
+            }
+          ]
+        }
+      ],
+      "preparationMs": 870.96,
+      "finishedAt": "2026-09-23T19:51:03.848Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-memory",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:03.848Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1380.94,
+          "workloadMs": 3573.5200000000013,
+          "persistenceMs": 0.03999999999996362,
+          "reopenMs": 75.75999999999931,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 24.799999999999727
+            },
+            {
+              "id": 2,
+              "durationMs": 263.3800000000001
+            },
+            {
+              "id": 3,
+              "durationMs": 374.5
+            },
+            {
+              "id": 4,
+              "durationMs": 150.44000000000005
+            },
+            {
+              "id": 5,
+              "durationMs": 363.4600000000005
+            },
+            {
+              "id": 6,
+              "durationMs": 154.20000000000027
+            },
+            {
+              "id": 7,
+              "durationMs": 177.94000000000005
+            },
+            {
+              "id": 8,
+              "durationMs": 77.46000000000004
+            },
+            {
+              "id": 9,
+              "durationMs": 617.0000000000005
+            },
+            {
+              "id": 10,
+              "durationMs": 864.3000000000002
+            },
+            {
+              "id": 11,
+              "durationMs": 153.8800000000001
+            },
+            {
+              "id": 12,
+              "durationMs": 13.0600000000004
+            },
+            {
+              "id": 13,
+              "durationMs": 20.38000000000011
+            },
+            {
+              "id": 14,
+              "durationMs": 192.84000000000015
+            },
+            {
+              "id": 15,
+              "durationMs": 120.63999999999942
+            },
+            {
+              "id": 16,
+              "durationMs": 5.239999999999782
+            }
+          ]
+        }
+      ],
+      "preparationMs": 894.2400000000001,
+      "finishedAt": "2026-09-23T19:51:09.893Z"
+    },
+    {
+      "jobId": "pglite-speedtest-idb",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:09.893Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 908.5600000000001,
+          "workloadMs": 4775.9400000000005,
+          "persistenceMs": 80.46000000000095,
+          "reopenMs": 777.6399999999994,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 130.70000000000005
+            },
+            {
+              "id": 2,
+              "durationMs": 335.4399999999998
+            },
+            {
+              "id": 3,
+              "durationMs": 395.5600000000004
+            },
+            {
+              "id": 4,
+              "durationMs": 196.96000000000004
+            },
+            {
+              "id": 5,
+              "durationMs": 409.59999999999945
+            },
+            {
+              "id": 6,
+              "durationMs": 188.5
+            },
+            {
+              "id": 7,
+              "durationMs": 224.19999999999982
+            },
+            {
+              "id": 8,
+              "durationMs": 187.53999999999996
+            },
+            {
+              "id": 9,
+              "durationMs": 641.7400000000002
+            },
+            {
+              "id": 10,
+              "durationMs": 851.5999999999995
+            },
+            {
+              "id": 11,
+              "durationMs": 246.46000000000095
+            },
+            {
+              "id": 12,
+              "durationMs": 140.34000000000015
+            },
+            {
+              "id": 13,
+              "durationMs": 139.80000000000018
+            },
+            {
+              "id": 14,
+              "durationMs": 295.0199999999995
+            },
+            {
+              "id": 15,
+              "durationMs": 248.19999999999982
+            },
+            {
+              "id": 16,
+              "durationMs": 144.28000000000065
+            }
+          ]
+        }
+      ],
+      "preparationMs": 873.2800000000001,
+      "finishedAt": "2026-09-23T19:51:17.910Z"
+    },
+    {
+      "jobId": "pglite-speedtest-memory",
+      "round": 4,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:17.910Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 545.36,
+          "workloadMs": 2844.4799999999987,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 25.800000000000182
+            },
+            {
+              "id": 2,
+              "durationMs": 235.51999999999975
+            },
+            {
+              "id": 3,
+              "durationMs": 286.53999999999996
+            },
+            {
+              "id": 4,
+              "durationMs": 150.1800000000003
+            },
+            {
+              "id": 5,
+              "durationMs": 364.00000000000045
+            },
+            {
+              "id": 6,
+              "durationMs": 31.0600000000004
+            },
+            {
+              "id": 7,
+              "durationMs": 175.17999999999984
+            },
+            {
+              "id": 8,
+              "durationMs": 79.75999999999976
+            },
+            {
+              "id": 9,
+              "durationMs": 518.8599999999997
+            },
+            {
+              "id": 10,
+              "durationMs": 686
+            },
+            {
+              "id": 11,
+              "durationMs": 85.79999999999973
+            },
+            {
+              "id": 12,
+              "durationMs": 10.379999999999654
+            },
+            {
+              "id": 13,
+              "durationMs": 13.979999999998654
+            },
+            {
+              "id": 14,
+              "durationMs": 77.23999999999978
+            },
+            {
+              "id": 15,
+              "durationMs": 101.11999999999989
+            },
+            {
+              "id": 16,
+              "durationMs": 3.0600000000004
+            }
+          ]
+        }
+      ],
+      "preparationMs": 856.96,
+      "finishedAt": "2026-09-23T19:51:22.254Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-memory",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:22.254Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1207.02,
+          "workloadMs": 38.90000000000009,
+          "persistenceMs": 0.01999999999998181,
+          "reopenMs": 77.76000000000022,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 849.36,
+      "finishedAt": "2026-09-23T19:51:24.478Z"
+    },
+    {
+      "jobId": "transactions-idb",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:24.478Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 901.8599999999999,
+          "workloadMs": 177.28000000000043,
+          "persistenceMs": 42.8599999999999,
+          "reopenMs": 253.84000000000015,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 902.08,
+      "finishedAt": "2026-09-23T19:51:26.920Z"
+    },
+    {
+      "jobId": "transactions-memory",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:26.920Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 555.7399999999998,
+          "workloadMs": 23.600000000000136,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 872.28,
+      "finishedAt": "2026-09-23T19:51:28.399Z"
+    },
+    {
+      "jobId": "filesystem-disk",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:28.399Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 7.240000000000002,
+          "timings": {
+            "create": 3.9800000000000004,
+            "write": 14.320000000000004,
+            "read": 11.180000000000007,
+            "rename": 8.18,
+            "delete": 1.980000000000004,
+            "flush": 3.6000000000000014,
+            "reopen": 6.160000000000004
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:51:28.474Z"
+    },
+    {
+      "jobId": "filesystem-memory",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:28.474Z",
+      "samples": [
+        {
+          "repetition": 1,
+          "mountMs": 5.72,
+          "timings": {
+            "create": 15.940000000000003,
+            "write": 14.459999999999994,
+            "read": 7.919999999999995,
+            "rename": 22.680000000000007,
+            "delete": 6.1200000000000045,
+            "flush": 10.320000000000007,
+            "reopen": 5.719999999999999
+          },
+          "status": "ok",
+          "verifiedFiles": 500
+        }
+      ],
+      "finishedAt": "2026-09-23T19:51:28.580Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-disk",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:28.580Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 756.5000000000001,
+          "workloadMs": 3309.2199999999993,
+          "persistenceMs": 0.019999999999527063,
+          "reopenMs": 58.599999999999454,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 23.09999999999991
+            },
+            {
+              "id": 2,
+              "durationMs": 241
+            },
+            {
+              "id": 3,
+              "durationMs": 299.18000000000006
+            },
+            {
+              "id": 4,
+              "durationMs": 150.92000000000007
+            },
+            {
+              "id": 5,
+              "durationMs": 367.4200000000001
+            },
+            {
+              "id": 6,
+              "durationMs": 29.960000000000036
+            },
+            {
+              "id": 7,
+              "durationMs": 192.41999999999962
+            },
+            {
+              "id": 8,
+              "durationMs": 77.80000000000018
+            },
+            {
+              "id": 9,
+              "durationMs": 675.7399999999998
+            },
+            {
+              "id": 10,
+              "durationMs": 907.96
+            },
+            {
+              "id": 11,
+              "durationMs": 105.45999999999913
+            },
+            {
+              "id": 12,
+              "durationMs": 11.219999999999345
+            },
+            {
+              "id": 13,
+              "durationMs": 14.340000000001055
+            },
+            {
+              "id": 14,
+              "durationMs": 100.03999999999996
+            },
+            {
+              "id": 15,
+              "durationMs": 107.85999999999967
+            },
+            {
+              "id": 16,
+              "durationMs": 4.800000000000182
+            }
+          ]
+        }
+      ],
+      "preparationMs": 858,
+      "finishedAt": "2026-09-23T19:51:33.681Z"
+    },
+    {
+      "jobId": "pglite-speedtest-opfs-vfs-memory",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:33.681Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 1181.4200000000003,
+          "workloadMs": 3539.86,
+          "persistenceMs": 0.020000000000436557,
+          "reopenMs": 74.13999999999942,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 25.259999999999764
+            },
+            {
+              "id": 2,
+              "durationMs": 259.6599999999994
+            },
+            {
+              "id": 3,
+              "durationMs": 340.05999999999995
+            },
+            {
+              "id": 4,
+              "durationMs": 154.6199999999999
+            },
+            {
+              "id": 5,
+              "durationMs": 367.3000000000002
+            },
+            {
+              "id": 6,
+              "durationMs": 102.80000000000018
+            },
+            {
+              "id": 7,
+              "durationMs": 184
+            },
+            {
+              "id": 8,
+              "durationMs": 81.10000000000036
+            },
+            {
+              "id": 9,
+              "durationMs": 636.6800000000003
+            },
+            {
+              "id": 10,
+              "durationMs": 883.6000000000004
+            },
+            {
+              "id": 11,
+              "durationMs": 151.96000000000004
+            },
+            {
+              "id": 12,
+              "durationMs": 13.239999999999782
+            },
+            {
+              "id": 13,
+              "durationMs": 20.860000000000582
+            },
+            {
+              "id": 14,
+              "durationMs": 192.35999999999967
+            },
+            {
+              "id": 15,
+              "durationMs": 121.23999999999978
+            },
+            {
+              "id": 16,
+              "durationMs": 5.119999999999891
+            }
+          ]
+        }
+      ],
+      "preparationMs": 888.3800000000001,
+      "finishedAt": "2026-09-23T19:51:39.496Z"
+    },
+    {
+      "jobId": "pglite-speedtest-idb",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:39.496Z",
+      "samples": [
+        {
+          "backend": "idb",
+          "repetition": 1,
+          "initMs": 911.66,
+          "workloadMs": 4905.320000000001,
+          "persistenceMs": 79.46000000000004,
+          "reopenMs": 770.159999999999,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 129.75999999999976
+            },
+            {
+              "id": 2,
+              "durationMs": 337.89999999999986
+            },
+            {
+              "id": 3,
+              "durationMs": 405.52000000000044
+            },
+            {
+              "id": 4,
+              "durationMs": 201.3199999999997
+            },
+            {
+              "id": 5,
+              "durationMs": 416.96000000000004
+            },
+            {
+              "id": 6,
+              "durationMs": 180.75999999999976
+            },
+            {
+              "id": 7,
+              "durationMs": 230.20000000000027
+            },
+            {
+              "id": 8,
+              "durationMs": 196.9000000000001
+            },
+            {
+              "id": 9,
+              "durationMs": 680.4600000000005
+            },
+            {
+              "id": 10,
+              "durationMs": 901.1599999999999
+            },
+            {
+              "id": 11,
+              "durationMs": 252.92000000000098
+            },
+            {
+              "id": 12,
+              "durationMs": 137.96000000000004
+            },
+            {
+              "id": 13,
+              "durationMs": 138.46000000000004
+            },
+            {
+              "id": 14,
+              "durationMs": 297.59999999999945
+            },
+            {
+              "id": 15,
+              "durationMs": 254.78000000000065
+            },
+            {
+              "id": 16,
+              "durationMs": 142.65999999999985
+            }
+          ]
+        }
+      ],
+      "preparationMs": 880.6,
+      "finishedAt": "2026-09-23T19:51:47.641Z"
+    },
+    {
+      "jobId": "pglite-speedtest-memory",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:47.641Z",
+      "samples": [
+        {
+          "backend": "memory",
+          "repetition": 1,
+          "initMs": 549.8,
+          "workloadMs": 2807.14,
+          "persistenceMs": null,
+          "reopenMs": null,
+          "expectedRows": 0,
+          "actualRows": 0,
+          "status": "ok",
+          "stages": [
+            {
+              "id": 1,
+              "durationMs": 26
+            },
+            {
+              "id": 2,
+              "durationMs": 237.98000000000002
+            },
+            {
+              "id": 3,
+              "durationMs": 281.98000000000025
+            },
+            {
+              "id": 4,
+              "durationMs": 154.3399999999997
+            },
+            {
+              "id": 5,
+              "durationMs": 367.2199999999998
+            },
+            {
+              "id": 6,
+              "durationMs": 31.539999999999964
+            },
+            {
+              "id": 7,
+              "durationMs": 170.6199999999999
+            },
+            {
+              "id": 8,
+              "durationMs": 82.65999999999985
+            },
+            {
+              "id": 9,
+              "durationMs": 494.52
+            },
+            {
+              "id": 10,
+              "durationMs": 668.9000000000001
+            },
+            {
+              "id": 11,
+              "durationMs": 84.02000000000044
+            },
+            {
+              "id": 12,
+              "durationMs": 10.620000000000346
+            },
+            {
+              "id": 13,
+              "durationMs": 13.079999999999018
+            },
+            {
+              "id": 14,
+              "durationMs": 79.15999999999985
+            },
+            {
+              "id": 15,
+              "durationMs": 101.84000000000015
+            },
+            {
+              "id": 16,
+              "durationMs": 2.660000000000764
+            }
+          ]
+        }
+      ],
+      "preparationMs": 879.5600000000001,
+      "finishedAt": "2026-09-23T19:51:51.982Z"
+    },
+    {
+      "jobId": "transactions-opfs-vfs-disk",
+      "round": 5,
+      "warmup": false,
+      "startedAt": "2026-09-23T19:51:51.982Z",
+      "samples": [
+        {
+          "backend": "opfs-vfs",
+          "repetition": 1,
+          "initMs": 749.6000000000001,
+          "workloadMs": 27.37999999999988,
+          "persistenceMs": 0.020000000000209184,
+          "reopenMs": 56.539999999999964,
+          "expectedRows": 10000,
+          "actualRows": 10000,
+          "status": "ok"
+        }
+      ],
+      "preparationMs": 860.3000000000001,
+      "finishedAt": "2026-09-23T19:51:53.723Z"
+    }
+  ],
+  "finishedAt": "2026-09-23T19:51:53.723Z"
+}

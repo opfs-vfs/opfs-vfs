@@ -1,0 +1,219 @@
+<section id="plugins" class="plugins" aria-labelledby="plugins-heading">
+  <header class="plugins-header">
+    <div><p class="kicker">Plugins</p><h2 id="plugins-heading">Add capabilities with plugins.</h2><p>Use file subscriptions to refresh your UI when files change. Add encrypted local storage when files need protection. Build a custom plugin for different storage or change behavior.</p></div>
+    <button class="motion-control" type="button" hidden>Pause illustrations</button>
+  </header>
+  <div class="plugin-grid">
+    <article class="plugin-card" aria-labelledby="subscriptions-heading">
+      <div class="plugin-art">
+        <svg class="subscription-art" viewBox="0 0 480 280" role="img" aria-labelledby="subscriptions-art-title subscriptions-art-desc">
+          <title id="subscriptions-art-title">File changes notify subscribed components across tabs.</title>
+          <desc id="subscriptions-art-desc">Two tabs on the same origin subscribe to the same volume. Creating, editing, or deleting task.txt notifies both tabs. Each application rereads the file and updates its todo component.</desc>
+          <rect x="13" y="25" width="454" height="221" rx="12" fill="none" stroke="#afbea6" stroke-dasharray="4 5" />
+          <text x="240" y="16" text-anchor="middle" fill="#537e57" font-family="ui-monospace, monospace" font-size="11">Same origin · same volume</text>
+          <g stroke="#214c3a" stroke-width="2" stroke-linejoin="round">
+            <g fill="#a8b99b">
+              <path d="M40 60v25c0 10 36 10 36 0V60" />
+              <ellipse cx="58" cy="60" rx="18" ry="7" fill="#dce1d0" />
+              <path d="M40 72c0 10 36 10 36 0" fill="none" />
+            </g>
+            <g class="file-node plugin-motion">
+              <rect x="38" y="126" width="156" height="75" rx="6" fill="#e1e6d6" />
+              <path d="M50 137h11l5 5v15H50Z" fill="#fafaf2" />
+              <path d="M61 137v5h5" fill="none" />
+              <path d="M50 165h132" stroke="#a8b99b" stroke-width="1" />
+              <g fill="#214c3a" stroke="none" font-family="ui-monospace, monospace" font-size="13">
+                <text x="76" y="151">task.txt</text>
+                <text class="file-before plugin-motion" x="50" y="186">Buy milk</text>
+                <text class="file-after changed-text plugin-motion" x="50" y="186">Buy oat milk</text>
+              </g>
+            </g>
+            <path d="M200 164h28v-62h32m-6-5 6 5-6 5M228 164v46h32m-6-5 6 5-6 5" fill="none" stroke="#afbea6" />
+            <g class="event-path plugin-motion" fill="none" stroke="#315f40" stroke-width="3" stroke-dasharray="7 160">
+              <path d="M200 164h28v-62h32" /><path d="M200 164h28v46h32" />
+            </g>
+            {[1, 2].map((tab) => (
+              <g class:list={['subscribed-tab', { 'second-tab': tab === 2 }]} transform={`translate(0 ${(tab - 1) * 108})`}>
+                <rect x="270" y="41" width="187" height="91" rx="7" fill="#a8b99b" />
+                <rect x="266" y="37" width="187" height="91" rx="7" fill="#fafaf2" />
+                <path d="M273 37h173a7 7 0 0 1 7 7v16H266V44a7 7 0 0 1 7-7Z" fill="#214c3a" />
+                <circle cx="279" cy="49" r="2" fill="#f4f4eb" stroke="none" />
+                <g stroke="none" font-family="ui-sans-serif, system-ui, sans-serif">
+                  <text x="291" y="53" font-size="12" fill="#f4f4eb">Tab {tab}</text>
+                  <text x="280" y="79" font-size="12" fill="#214c3a">Todo component</text>
+                  <text x="444" y="53" font-size="10" fill="#d3e3c9" text-anchor="end">subscribed</text>
+                </g>
+                <g class="todo-row plugin-motion">
+                  <rect x="280" y="88" width="160" height="29" rx="4" fill="#d3e3c9" stroke="#94b18e" stroke-width="1" />
+                  <rect x="290" y="97" width="11" height="11" rx="2" fill="#fafaf2" stroke="#537e57" stroke-width="1.5" />
+                  <g fill="#214c3a" stroke="none" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">
+                    <text class="todo-before plugin-motion" x="309" y="107">Buy milk</text>
+                    <text class="todo-after changed-text plugin-motion" x="309" y="107">Buy oat milk</text>
+                  </g>
+                </g>
+              </g>
+            ))}
+          </g>
+          <g fill="#214c3a" font-family="ui-sans-serif, system-ui, sans-serif">
+            <text x="88" y="70" font-size="15" font-weight="600">OPFS VFS</text>
+            <text x="88" y="88" font-size="12" fill="#537e57">Shared volume</text>
+            <text x="39" y="116" font-size="12">/todos</text>
+            <g font-size="13" text-anchor="middle">
+              <text class="phase-label phase-create plugin-motion" x="240" y="266">Create file → Notify both tabs</text>
+              <text class="phase-label phase-update plugin-motion" x="240" y="266">Update file → Notify both tabs</text>
+              <text class="phase-label phase-delete plugin-motion" x="240" y="266">Delete file → Notify both tabs</text>
+              <text class="static-caption" x="240" y="266">One volume → Change events across tabs</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="plugin-copy">
+        <p class="plugin-status"><span class="available-dot" aria-hidden="true"></span>Available <span aria-hidden="true">·</span> Community</p>
+        <h3 id="subscriptions-heading">File subscriptions plugin</h3>
+        <p>Receive file change events across tabs using the same volume and origin. Reread affected paths to refresh your UI.</p>
+        <a href="/docs/plugins/subscriptions/">Use subscriptions <span aria-hidden="true">→</span></a>
+      </div>
+    </article>
+    <article class="plugin-card" aria-labelledby="encryption-heading">
+      <div class="plugin-art">
+        <svg viewBox="0 0 480 280" role="img" aria-labelledby="encryption-art-title">
+          <title id="encryption-art-title">Passkey authentication protects an encrypted local volume.</title>
+          <ellipse cx="239" cy="245" rx="158" ry="13" fill="#dce1d0" />
+          <g stroke="#214c3a" stroke-width="2.5" stroke-linejoin="round">
+            <path d="m109 194 140-45 124 52v23l-143 38-121-44Z" fill="#73947b" />
+            <path d="m109 194 140-45 124 52-143 38Z" fill="#c1ceb4" />
+            <path d="m109 174 140-45 124 52v23l-143 38-121-44Z" fill="#8da88a" />
+            <path d="m109 174 140-45 124 52-143 38Z" fill="#e1e6d6" />
+            <path d="m109 153 140-45 124 52v23l-143 38-121-44Z" fill="#a8b99b" />
+            <path d="m109 153 140-45 124 52-143 38Z" fill="#fafaf2" />
+            <path d="m259 185 78-22m-78 43 78-22m-78 43 78-22" stroke="#45694e" stroke-width="3" stroke-linecap="round" />
+            <path d="m147 87 72-14 23 19v66l-95 19Z" fill="#fafaf2" />
+            <path d="m219 73 1 23 22-4" fill="#dce1d0" />
+            <path d="m163 112 43-8m-43 24 58-11m-58 28 44-9" stroke="#a8b99b" stroke-width="4" stroke-linecap="round" />
+            <path d="M260 61q30 20 61 17v55q-5 36-61 56-55-20-61-56V78q31 3 61-17Z" fill="#214c3a" />
+            <path d="M260 74q23 14 48 15v44q-4 28-48 44-43-16-48-44V89q25-1 48-15Z" fill="#315f45" stroke="#91b48b" stroke-width="1.5" />
+            <path d="M245 118v-13a15 15 0 0 1 30 0v13" fill="none" stroke="#e7ecdd" stroke-width="5" stroke-linecap="round" />
+            <rect x="237" y="116" width="46" height="36" rx="7" fill="#d3dfbf" stroke="none" />
+            <path d="M260 130v10" stroke-width="4" stroke-linecap="round" />
+            <g transform="translate(349 73)">
+              <circle r="28" fill="#fafaf2" />
+              <g class="biometric-scan plugin-motion" fill="none" stroke-width="2" stroke-linecap="round">
+                <path d="M-17 4V0a17 17 0 0 1 34 0v4" />
+                <path d="M-12 11V0a12 12 0 0 1 24 0v6c0 5-1 9-3 13" />
+                <path d="M-7 17V0a7 7 0 0 1 14 0v6c0 6-1 11-4 16" />
+                <path d="M-2 20V0a2 2 0 0 1 4 0v6c0 6-1 11-3 15" />
+              </g>
+            </g>
+            <path class="lock-glint plugin-motion" d="M333 108v14m-7-7h14" stroke="#73947b" stroke-width="2" stroke-linecap="round" />
+          </g>
+        </svg>
+      </div>
+      <div class="plugin-copy">
+        <p class="plugin-status"><span class="available-dot" aria-hidden="true"></span>Available <span aria-hidden="true">·</span> Premium</p>
+        <h3 id="encryption-heading">Encryption plugin</h3>
+        <p>Protect files stored on the device with encrypted volumes and passkey-based access. Available under separate premium terms.</p>
+        <a href="/docs/plugins/#encryption">About encryption <span aria-hidden="true">→</span></a>
+      </div>
+    </article>
+  </div>
+  <aside class="sync-plan" aria-labelledby="cloud-sync-heading">
+    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 27a8 8 0 0 1-1-16 11 11 0 0 1 21-2 9 9 0 0 1 3 18" /><path d="M17 39V23m-5 5 5-5 5 5m9-6v17m-5-5 5 5 5-5" /></svg>
+    <div><p class="plugin-status">Planned <span aria-hidden="true">·</span> Premium</p><h3 id="cloud-sync-heading">Cloud sync plugin</h3><p>A planned plugin to sync a local OPFS VFS volume with backend cloud storage.</p></div>
+    <a href="/docs/plugins/#cloud-sync">See what's planned <span aria-hidden="true">→</span></a>
+  </aside>
+</section>
+
+<script>
+  const plugins = document.querySelector<HTMLElement>('#plugins');
+  const control = plugins?.querySelector<HTMLButtonElement>('.motion-control');
+  if (plugins && control) {
+    let paused = false;
+    let visible = false;
+    const update = () => { plugins.dataset.playing = String(visible && !paused); };
+    control.hidden = false;
+    control.addEventListener('click', () => {
+      paused = !paused;
+      control.textContent = paused ? 'Play illustrations' : 'Pause illustrations';
+      update();
+    });
+    new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      update();
+    }).observe(plugins);
+  }
+</script>
+<style>
+  .plugins { margin-top: 88px; scroll-margin-top: 32px; }
+  .plugins-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+  .plugins-header .kicker { margin: 0; }
+  .plugins-header h2 { font-size: clamp(32px, 4vw, 48px); line-height: 1.1; margin: 16px 0; }
+  .plugins-header p:not(.kicker) { max-width: 570px; color: var(--muted); line-height: 1.65; margin: 0; }
+  .motion-control { flex-shrink: 0; background: none; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; padding: 9px 12px; cursor: pointer; }
+  .motion-control:hover { color: var(--ink); border-color: var(--accent); }
+  .plugin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .plugin-card { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; }
+  .plugin-art { background: #f4f4eb; border-bottom: 1px solid var(--line); padding: 16px 14px 0; }
+  .plugin-art svg { display: block; width: 100%; height: auto; }
+  .plugin-copy { flex: 1; display: flex; flex-direction: column; align-items: start; padding: clamp(22px, 3vw, 34px); }
+  .plugin-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font: 11px/1.5 ui-monospace, monospace; }
+  .available-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .plugin-copy h3 { font-size: clamp(23px, 2.5vw, 30px); line-height: 1.15; margin: 16px 0; }
+  .plugin-copy > p:not(.plugin-status) { color: var(--muted); line-height: 1.65; margin: 0 0 24px; }
+  .plugin-copy a { margin-top: auto; }
+  .plugins a { color: var(--accent); font-size: 14px; font-weight: 600; text-decoration: none; }
+  .plugins a:hover { text-decoration: underline; text-underline-offset: 4px; }
+  .plugins :is(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+  .sync-plan { display: flex; align-items: center; gap: 24px; margin-top: 24px; padding: 26px 30px; border: 1px dashed var(--line); border-radius: 10px; }
+  .sync-plan > svg { width: 48px; height: 48px; flex-shrink: 0; color: var(--accent); }
+  .sync-plan > div { flex: 1; }
+  .sync-plan h3 { font-size: 20px; margin: 6px 0 10px; }
+  .sync-plan p:last-child { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 650px; }
+  .sync-plan > a { flex-shrink: 0; }
+  .changed-text, .phase-label, .event-path { opacity: 0; }
+  [data-playing] .file-node { animation: file-lifetime 10s linear infinite; }
+  [data-playing] .todo-row { animation: todo-lifetime 10s linear infinite; }
+  [data-playing] .file-before { animation: old-text 10s steps(1) infinite; }
+  [data-playing] .file-after { animation: new-text 10s steps(1) infinite; }
+  [data-playing] .todo-before { animation: old-text 10s .8s steps(1) infinite; }
+  [data-playing] .todo-after { animation: new-text 10s .8s steps(1) infinite; }
+  [data-playing] .second-tab .todo-row { animation-delay: .15s; }
+  [data-playing] .second-tab :is(.todo-before, .todo-after) { animation-delay: .95s; }
+  [data-playing] .event-path { animation: deliver 10s linear infinite; }
+  [data-playing] .phase-create { animation: create-caption 10s steps(1) infinite; }
+  [data-playing] .phase-update { animation: update-caption 10s steps(1) infinite; }
+  [data-playing] .phase-delete { animation: delete-caption 10s steps(1) infinite; }
+  [data-playing] .static-caption { display: none; }
+  [data-playing] .biometric-scan { animation: highlight 4.8s ease-in-out infinite; }
+  [data-playing] .lock-glint { animation: highlight 4.8s 1.2s ease-in-out infinite; }
+  [data-playing] .plugin-motion { animation-play-state: paused; }
+  [data-playing="true"] .plugin-motion { animation-play-state: running; }
+  @keyframes file-lifetime { 0%, 7%, 74%, 100% { opacity: 0; } 10%, 71% { opacity: 1; } }
+  @keyframes todo-lifetime { 0%, 15%, 83%, 100% { opacity: 0; transform: translateY(5px); } 19%, 79% { opacity: 1; transform: translateY(0); } }
+  @keyframes old-text { 0%, 100% { opacity: 1; } 40% { opacity: 0; } }
+  @keyframes new-text { 0%, 100% { opacity: 0; } 40% { opacity: 1; } }
+  @keyframes deliver {
+    0%, 10%, 42%, 74% { opacity: 0; stroke-dashoffset: 7; }
+    11%, 43%, 75% { opacity: 1; stroke-dashoffset: 7; }
+    16%, 48%, 80% { opacity: 1; stroke-dashoffset: -122; }
+    17%, 49%, 81%, 100% { opacity: 0; stroke-dashoffset: -122; }
+  }
+  @keyframes create-caption { 0% { opacity: 1; } 36% { opacity: 0; } }
+  @keyframes update-caption { 0% { opacity: 0; } 36% { opacity: 1; } 70% { opacity: 0; } }
+  @keyframes delete-caption { 0% { opacity: 0; } 70% { opacity: 1; } }
+  @keyframes highlight { 0%, 100% { opacity: .35; } 40%, 60% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    [data-playing] .plugin-motion { animation: none; }
+    [data-playing] .static-caption { display: block; }
+    .motion-control { display: none; }
+  }
+  @media (max-width: 700px) {
+    .plugins { margin-top: 56px; }
+    .plugins-header { align-items: start; flex-direction: column; gap: 16px; }
+    .plugin-grid { grid-template-columns: minmax(0, 1fr); }
+    .plugin-art { padding: 12px 10px 0; }
+    .sync-plan { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: start; padding: 24px; gap: 16px; }
+    .sync-plan > svg { width: 36px; height: 36px; }
+    .sync-plan > div { min-width: 0; }
+    .sync-plan > a { grid-column: 2; margin: 0; white-space: normal; }
+  }
+</style>

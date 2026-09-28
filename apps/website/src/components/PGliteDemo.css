@@ -1,0 +1,89 @@
+.pglite-demo {
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.pglite-demo header,
+.database-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  justify-content: space-between;
+  padding: 1.25rem;
+  flex-wrap: wrap;
+}
+.pglite-demo h2 {
+  margin: 0.15rem 0;
+  font-size: clamp(1.7rem, 4vw, 2.7rem);
+}
+.pglite-demo .eyebrow {
+  color: var(--accent);
+  font:
+    700 0.72rem ui-monospace,
+    monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.pglite-demo label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.pglite-demo .error {
+  margin: 0 1.25rem;
+  padding: 0.7rem;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+}
+.archive-note {
+  color: var(--muted);
+  padding: 0 1.25rem 1rem;
+}
+.repl-shell {
+  height: clamp(24rem, 60vh, 40rem);
+  border-top: 1px solid var(--line);
+  background: var(--code-bg);
+  color: var(--ink);
+}
+.pglite-demo[aria-busy='true'] .repl-shell {
+  pointer-events: none;
+  opacity: 0.72;
+}
+@media (max-width: 700px) {
+  .database-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: auto;
+  }
+  .database-actions label {
+    grid-column: 1/-1;
+  }
+}
+
+.database-actions {
+  justify-content: flex-start;
+  background: var(--soft);
+  border-block: 1px solid var(--line);
+}
+.pglite-demo [role='status'] {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-width: 58ch;
+}
+.archive-note {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  padding-top: 0.75rem;
+  margin: 0;
+}
+
+.repl-shell .PGliteRepl-root {
+  --fg: var(--ink);
+  --bg: var(--code-bg);
+  --border-color: var(--line);
+  --border: 1px solid var(--line);
+}

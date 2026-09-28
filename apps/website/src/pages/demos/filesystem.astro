@@ -1,0 +1,5 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import FilesystemDemo from '../../components/FilesystemDemo';
+---
+<SiteLayout title="Filesystem demo · OPFS VFS" description="Create and edit browser files, run shell commands, and export or import a workspace."><section class="page-head"><div><p class="kicker">Demo / filesystem</p><h1>A workspace in your browser</h1><p>Create and edit files, run shell commands, then save and reopen the volume to see what persists.</p></div><a class="button" href="/docs/integrations/just-bash/">Shell integration guide →</a></section><FilesystemDemo client:only="react" /></SiteLayout>

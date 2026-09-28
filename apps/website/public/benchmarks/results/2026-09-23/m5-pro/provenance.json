@@ -1,0 +1,34 @@
+{
+  "baseCommit": "34ba9b3970c33a57508383778d405f2e1b0d8967",
+  "build": "production",
+  "origin": "http://localhost:4336",
+  "machine": "MacBook Pro 16-inch, Apple M5 Pro, 64 GB",
+  "macOS": "26.6.2",
+  "method": "Actual installed browsers, operated through computer use; sequential collections",
+  "patch": "collector.patch",
+  "cleanup": "Wait for confirmed IndexedDB deletion, bounded at five seconds; transient blocked events do not fail early.",
+  "patchSha256": "985ff0a32a488aaf02083ca4f2c82a53c8ca67ff6f8e9295036d663334c326de",
+  "collections": [
+    {
+      "browser": "safari",
+      "file": "safari.json",
+      "sha256": "0ccba4b2a41a74d42a727515d267e5da43a4ceb6f47aa7eb007eeece8f890cf2",
+      "startedAt": "2026-09-23T18:57:23.537Z",
+      "finishedAt": "2026-09-23T18:59:15.361Z"
+    },
+    {
+      "browser": "chrome",
+      "file": "chrome.json",
+      "sha256": "05d7f24ddd98ddda725f4936f0773737fd755cbbc7372a54a305460bd63360c0",
+      "startedAt": "2026-09-23T19:00:44.819Z",
+      "finishedAt": "2026-09-23T19:03:10.569Z"
+    },
+    {
+      "browser": "firefox",
+      "file": "firefox.json",
+      "sha256": "3ea873d21905abc1b5fb3caf4a0185045b80cb0186cbfd997c45ad544b91fa79",
+      "startedAt": "2026-09-23T19:04:39.701Z",
+      "finishedAt": "2026-09-23T19:08:10.349Z"
+    }
+  ]
+}

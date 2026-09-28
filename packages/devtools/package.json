@@ -1,0 +1,55 @@
+{
+  "name": "@opfs-vfs/devtools",
+  "version": "0.1.0",
+  "description": "Explore and manage OPFS VFS volumes with file previews, a shell, and debugging tools.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "files": [
+    "dist",
+    "LICENSE.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "storybook dev --port 4326 --host 127.0.0.1 --no-open --disable-telemetry --exact-port",
+    "storybook": "storybook dev --port 4326 --host 127.0.0.1 --no-open --disable-telemetry --exact-port",
+    "build-storybook": "storybook build --disable-telemetry",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/*.test.ts && vitest run",
+    "build": "vite build && tsc -p tsconfig.lib.json",
+    "test:browser": "vitest run"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.8.0",
+    "@opfs-vfs/file-preview": "workspace:*",
+    "jszip": "3.10.1",
+    "just-bash": "2.14.2",
+    "lucide-react": "1.47.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:*",
+    "@storybook/react-vite": "10.6.0",
+    "@types/node": "22.20.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitest/browser-playwright": "4.1.11",
+    "playwright": "1.59.1",
+    "storybook": "10.6.0",
+    "typescript": "6.0.3",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:^"
+  }
+}

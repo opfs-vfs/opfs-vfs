@@ -1,0 +1,104 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+@import './theme.css';
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@source "../";
+@theme inline {
+  --color-panel: var(--panel);
+  --color-soft: var(--soft);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+}
+
+@theme inline {
+  --color-background: var(--panel);
+  --color-foreground: var(--ink);
+  --color-popover: var(--panel);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--primary-bg);
+  --color-primary-foreground: var(--primary-fg);
+  --color-secondary: var(--soft);
+  --color-secondary-foreground: var(--ink);
+  --color-muted-foreground: var(--muted);
+  --color-destructive: var(--danger);
+  --color-destructive-soft: var(--danger-soft);
+  --color-overlay: var(--overlay);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--accent);
+}
+@layer base {
+  [data-slot] {
+    box-sizing: border-box;
+    border: 0 solid var(--line);
+  }
+  button[data-slot],
+  input[data-slot],
+  textarea[data-slot] {
+    font-family: inherit;
+    margin: 0;
+  }
+  button[data-slot] {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    cursor: pointer;
+  }
+  [data-slot='dialog-close'] {
+    line-height: 1;
+  }
+  [data-slot='dialog-content'],
+  [data-slot='select-content'] {
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  }
+  [data-slot='dialog-title'],
+  [data-slot='dialog-description'] {
+    margin: 0;
+  }
+}
+[data-slot='select-trigger'] {
+  min-width: 0;
+}
+[data-slot='select-content'] {
+  max-width: calc(100vw - 24px);
+}
+[data-slot='select-item'] {
+  overflow-wrap: anywhere;
+}
+[data-slot='dialog-content'] {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+[data-slot='dialog-title'] {
+  letter-spacing: -0.025em;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot] {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+.theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+}
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+[data-slot='input'],
+[data-slot='textarea'] {
+  color: var(--ink);
+  background-color: var(--panel);
+}
+.volume-heading [data-slot='select-trigger'] {
+  min-width: 11rem;
+}

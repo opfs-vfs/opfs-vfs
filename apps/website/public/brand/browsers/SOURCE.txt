@@ -1,0 +1,4 @@
+Browser logos from https://github.com/alrra/browser-logos
+Pinned revision: 58881b84c4d73adc03c06fa2c275a7abee02d935
+Original files: src/chrome/chrome.svg, src/edge/edge.svg, src/firefox/firefox.svg, src/safari/safari.svg
+Logos and trademarks belong to their respective owners. See LICENSE.txt for the collection license.

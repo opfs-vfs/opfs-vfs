@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      has-changesets:
+        value: ${{ jobs.verify.outputs.has-changesets }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    env:
+      RELEASE_PR: >-
+        ${{ (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository &&
+             github.head_ref == 'changeset-release/main') ||
+            (github.event_name == 'workflow_dispatch' &&
+             github.ref == 'refs/heads/changeset-release/main') }}
+    outputs:
+      has-changesets: ${{ steps.changesets.outputs.pending }}
+      packages: ${{ steps.tests.outputs.packages }}
+      matrix: ${{ steps.tests.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Make the Changesets base branch available
+        if: github.ref != 'refs/heads/main'
+        run: git branch --force main origin/main
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/*.test.mjs packages/opfs-vfs/scripts/*.test.mjs
+      - name: Select affected packages
+        id: tests
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "$RELEASE_PR" == 'true' ]]; then
+            packages='[]'
+          else
+            packages=$(node scripts/ci-packages.mjs)
+          fi
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          matrix=$(jq -c 'map(if . == "@opfs-vfs/website" then {package: ., shard: "1/2"}, {package: ., shard: "2/2"} else {package: ., shard: ""} end)' <<< "$packages")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm fmt:check
+      - run: pnpm deadcode
+      - run: npm pack --dry-run
+        working-directory: packages/opfs-vfs
+      - name: Check for pending changesets
+        id: changesets
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const pending = fs.readdirSync(".changeset").some(name => name.endsWith(".md") && name !== "README.md");
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `pending=${pending}\n`);
+          '
+      - name: Validate pending release plan
+        if: steps.changesets.outputs.pending == 'true'
+        run: pnpm changeset status
+
+  tests:
+    name: test (${{ matrix.package }}, ${{ matrix.shard || 'all' }})
+    needs: checks
+    if: needs.checks.outputs.packages != '[]'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.checks.outputs.matrix) }}
+    env:
+      PACKAGE: ${{ matrix.package }}
+      SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - run: pnpm install --frozen-lockfile
+      - name: Build package and dependencies
+        run: pnpm --filter "$PACKAGE..." build
+      - name: Install browser
+        if: matrix.package != '@opfs-vfs/file-preview'
+        run: pnpm --filter @opfs-vfs/opfs-vfs exec playwright install --with-deps --only-shell chromium
+      - name: Test package
+        run: |
+          args=()
+          if [[ -n "$SHARD" ]]; then
+            args+=("--shard=$SHARD")
+          fi
+          pnpm --filter "$PACKAGE" run --if-present test "${args[@]}"
+      - name: Test installed subscriptions package
+        if: matrix.package == '@opfs-vfs/plugin-subscriptions'
+        run: pnpm --filter @opfs-vfs/plugin-subscriptions test:packed
+      - name: Test installed React package
+        if: matrix.package == '@opfs-vfs/react'
+        run: pnpm --filter @opfs-vfs/react test:packed
+      - name: Test mixed installed core artifacts
+        if: matrix.package == '@opfs-vfs/opfs-vfs'
+        run: pnpm --filter @opfs-vfs/opfs-vfs test:mixed-build
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+          path: |
+            apps/website/test-results/
+            packages/*/test-results/
+            packages/*/src/**/__screenshots__/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  verify:
+    if: ${{ always() }}
+    needs: [checks, tests]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 2
+    outputs:
+      has-changesets: ${{ needs.checks.outputs.has-changesets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require successful checks and selected tests
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          TEST_PACKAGES: ${{ needs.checks.outputs.packages }}
+        run: bash scripts/ci-verify.sh

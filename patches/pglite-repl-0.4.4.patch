@@ -1,0 +1,14 @@
+diff --git a/dist/Repl.js b/dist/Repl.js
+--- a/dist/Repl.js
++++ b/dist/Repl.js
+@@ -676,9 +676,7 @@
+   const extractStyles = () => {
+     var _a, _b;
+     const cmEditorEl = (_b = (_a = rcm.current) == null ? void 0 : _a.editor) == null ? void 0 : _b.querySelector(".cm-editor");
+-    if (!cmEditorEl) {
+-      throw new Error("No CodeMirror editor found");
+-    }
++    if (!cmEditorEl) return;
+     const gutterEl = cmEditorEl.querySelector(".cm-gutters");
+     const cmEditorElComputedStyles = window.getComputedStyle(cmEditorEl);
+     const foregroundColor = cmEditorElComputedStyles.color;

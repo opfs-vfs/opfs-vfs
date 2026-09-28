@@ -1,0 +1,72 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import '../../styles/benchmark-reading.css';
+---
+<SiteLayout title="Benchmark methodology · OPFS VFS" description="Understand the benchmark workloads, timing boundaries, correctness checks, and collection protocols.">
+  <article class="benchmark-reading">
+    <header class="reading-header">
+      <p class="kicker">Benchmarks / methodology</p>
+      <h1>Benchmark methodology</h1>
+      <p class="reading-lead">The benchmarks separate workload time from setup and reopening. This page explains the SQL, correctness checks, and timing boundaries so you can interpret the results.</p>
+      <div class="reading-links"><a href="/benchmarks/run/">Run the benchmarks →</a><a href="/benchmarks/storage/">Understand storage modes →</a></div>
+    </header>
+    <div class="reading-layout">
+      <nav class="reading-nav" aria-label="On this page">
+        <span>ON THIS PAGE</span>
+        <a href="#timing">What we time</a>
+        <a href="#sql-suite">The SQL suite</a>
+        <a href="#durability">Durability settings</a>
+        <a href="#comparison">What stays constant</a>
+        <a href="#limits">Reading the results</a>
+      </nav>
+      <div class="reading-body">
+        <section id="timing">
+          <h2>What we time</h2>
+          <p>Each backend runs sequentially with deterministic input. The runner separates preparation, initialization, measured work, persistence barriers, and reopen mount time.</p>
+          <p>This lets you distinguish the cost of starting a database from the cost of using it. Closing the instance and final cleanup are outside the reported timers.</p>
+        </section>
+        <section id="sql-suite">
+          <h2>The PGlite speed-test suite</h2>
+          <p>The full SQL workload runs the 16 historic cases published in <a href="https://pglite.dev/benchmarks">PGlite's benchmark overview</a>. This is a shared workload descended from SQLite and wa-sqlite, not a formal industry standard.</p>
+          <p>The unchanged SQL is pinned to <a href="https://github.com/electric-sql/pglite/tree/ae182ff8bd5ba4acb887d6c925d607a1498aa0b5/packages/benchmark/src">upstream commit ae182ff8</a>. Hashes and licenses accompany the <a href="/benchmarks/pglite/README.md">downloadable SQL assets</a>.</p>
+          <h3>How it runs</h3>
+          <p>Each complete SQL file goes into one PGlite <code>exec</code> call, in its original order. Every repetition starts with a fresh database. Fetching the SQL is outside the timers.</p>
+          <p>We omit the upstream live runner's additional 2.1 and 3.1 variants. Case 3.1 creates an index on a different table from the one it inserts into. The 16 included cases are unchanged.</p>
+          <h3>How we check correctness</h3>
+          <p>SELECT counts are checked after cases 4, 5, and 7. Before DROP, row counts and sums of both numeric columns and text lengths must match values independently calculated from the fixed SQL.</p>
+          <p>These checks are outside case timings. Total workload time is the sum of the 16 case timings. Only fully successful runs enter the comparison. Exports retain completed timings from failed or cancelled runs.</p>
+          <aside class="reading-note"><p>The suite ends by dropping its tables. Reopen checks that they remain absent. To verify retained rows, choose <strong>Insert + query</strong> or <strong>Transaction batch</strong>.</p></aside>
+          <p>Cancel takes effect between SQL files, after the current file finishes. Cleanup then closes and removes that run's storage.</p>
+        </section>
+        <section id="durability">
+          <h2>Durability settings</h2>
+          <p>The PGlite durability option applies equally to all four backends. The benchmark's default waits for filesystem synchronization. OPFS VFS buffer and local durability settings are separate and affect only OPFS VFS.</p>
+          <p>Persistence timing is omitted in relaxed PGlite mode because its sync call can return before the filesystem write completes. Close and reopen still run, but closing time is outside the reported measurements.</p>
+          <p>We do not override PostgreSQL's <code>synchronous_commit</code> setting. Exports record the effective settings and workload revision.</p>
+          <p>New to these settings? The <a href="/benchmarks/storage/#durability">storage guide explains buffering and durability</a> in plain language.</p>
+        </section>
+        <section id="comparison">
+          <h2>What stays constant</h2>
+          <ul>
+            <li>SQL comparisons use the same PGlite version, schema, dataset, queries, and transaction boundaries.</li>
+            <li>Filesystem comparisons use the same workload payload, repetitions, and storage options.</li>
+            <li>Exports record the browser, isolation state, selected configuration, and failed or skipped samples.</li>
+          </ul>
+          <p>Results from different hardware, browser versions, library versions, or durability settings are not directly interchangeable.</p>
+        </section>
+        <section id="limits">
+          <h2>Reading the results</h2>
+          <ul>
+            <li>Cold measurements do not mean browser or operating-system caches were cleared.</li>
+            <li>An in-memory commit does not have the same persistence guarantee as a completed flush.</li>
+            <li>A clean close and reopen does not test recovery from a crash or power loss.</li>
+            <li>A skipped backend is not a zero.</li>
+          </ul>
+          <p>The <a href="/benchmarks/">published comparisons</a> include raw samples, environment details, and workload definitions. Mac results use five measured repetitions after one excluded warm-up and identify the base commit plus collector patch. The separate iPhone results use three measured runs, with no excluded full-workload warm-up recorded and no exact source commit available.</p>
+          <p>Tables show medians and observed minimum and maximum values. These ranges are not confidence intervals. Package version labels alone do not identify the tested source build.</p>
+          <div class="reading-links"><a href="/benchmarks/">Benchmark overview →</a><a href="/benchmarks/storage/">Choose a storage mode →</a></div>
+        </section>
+      </div>
+    </div>
+  </article>
+</SiteLayout>

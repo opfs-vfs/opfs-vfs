@@ -1,0 +1,16 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import Markdown from 'react-markdown';
+import source from '../../../../packages/opfs-vfs/CHANGELOG.md?raw';
+const releases = source.split(/^## /m).slice(1).map((entry) => {
+  const [version, ...body] = entry.trim().split('\n');
+  return { version, body: body.join('\n') };
+});
+---
+<SiteLayout title="Changelog · OPFS VFS" description="Read versioned changes, fixes, and improvements to OPFS VFS.">
+  <section class="page-head"><div><p class="kicker">Changelog / project history</p><h1>What changed</h1><p>Changes and fixes by package version. Check GitHub Releases for published releases.</p></div><a class="button" href="https://github.com/opfs-vfs/opfs-vfs/releases">View GitHub releases ↗</a></section>
+  <div class="releases">{releases.map(({ version, body }) => <article id={version}><div><h2>{version}</h2><span>Release notes</span></div><div class="release-notes"><Markdown>{body}</Markdown></div></article>)}</div>
+</SiteLayout>
+<style>
+.releases{max-width:900px}.releases article{display:grid;grid-template-columns:150px 1fr;gap:30px;padding:28px 0;border-top:1px solid var(--line)}.releases h2{margin:0;font-size:27px}.releases span{color:var(--muted);font-size:12px}.release-notes{color:var(--muted);font-size:14px;line-height:1.65}.release-notes :global(h3){margin-top:0;color:var(--ink)}.release-notes :global(code){overflow-wrap:anywhere}@media(max-width:600px){.releases article{grid-template-columns:1fr;gap:10px}}
+</style>

@@ -1,0 +1,5 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import BenchmarkRunner from '../../components/BenchmarkRunner';
+---
+<SiteLayout title="Run benchmarks · OPFS VFS" description="Run PGlite SQL workloads against OPFS VFS, OPFS AHP, IndexedDB, and memory-only storage on your device."><section class="page-head"><div><p class="kicker">Benchmarks / live runner</p><h1>Run PGlite benchmarks</h1><p>Choose a workload and storage backends, then run the comparison. Each run uses temporary databases and includes correctness checks.</p></div><a class="button" href="/benchmarks/methodology/">Methodology →</a></section><nav aria-label="Benchmark suites" style="margin-bottom:20px"><a class="button solid" href="/benchmarks/run/" aria-current="page">PGlite backends</a> <a class="button" href="/benchmarks/filesystem/">Filesystem</a></nav><BenchmarkRunner client:only="react" /></SiteLayout>

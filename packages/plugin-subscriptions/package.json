@@ -1,0 +1,60 @@
+{
+  "name": "@opfs-vfs/plugin-subscriptions",
+  "version": "1.1.0",
+  "description": "Bounded file change subscriptions for OPFS VFS.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/opfs-vfs.git",
+    "directory": "packages/plugin-subscriptions"
+  },
+  "files": [
+    "dist",
+    "examples/current-view.ts",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:packed": "node scripts/test-packed.mjs",
+    "test:load": "VITE_SUBSCRIPTIONS_LOAD=1 vitest run src/__tests__/subscription-load.test.ts --reporter=verbose",
+    "test:load:two-tab": "node scripts/two-tab-load.mjs",
+    "test:acceptance": "VITE_SUBSCRIPTIONS_ACCEPTANCE=1 vitest run src/__tests__/subscription-acceptance.test.ts --reporter=verbose"
+  },
+  "devDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:*",
+    "@types/node": "22.20.3",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
+    "playwright": "1.59.1",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:^"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

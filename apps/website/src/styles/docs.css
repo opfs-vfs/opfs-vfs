@@ -1,0 +1,14 @@
+:root {
+  --sl-color-bg: var(--paper);
+  --sl-color-bg-nav: var(--panel);
+  --sl-color-bg-sidebar: var(--paper);
+  --sl-color-accent-low: #123722;
+  --sl-color-accent: #4aad7c;
+  --sl-color-accent-high: #bfead0;
+  --sl-font: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #e0efe4;
+  --sl-color-accent: #177049;
+  --sl-color-accent-high: #17482e;
+}

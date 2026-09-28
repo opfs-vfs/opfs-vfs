@@ -1,0 +1,40 @@
+---
+type Timing = { median: number; min: number; max: number; n: number };
+interface Props {
+  referenceColumn?: number;
+  caption: string;
+  columns: string[];
+  rows: { label: string; values: (Timing | null | string)[]; reference?: boolean }[];
+}
+const { caption, columns, rows, referenceColumn } = Astro.props;
+const number = (value: number) => value > 0 && value < 0.01 ? '<0.01' : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+---
+<p class="scroll-hint">Scroll horizontally to see all columns.</p>
+<div class="result-table" tabindex="0" role="region" aria-label={caption}>
+  <table>
+    <caption>{caption}</caption>
+    <thead><tr><th scope="col">Backend / phase</th>{columns.map((column, index) => <th scope="col" data-reference={index === referenceColumn ? '' : undefined}>{column}</th>)}</tr></thead>
+    {[false, true].map((reference) => rows.some((row) => !!row.reference === reference) && <tbody class:list={{ reference }}>
+      {rows.filter((row) => !!row.reference === reference).map((row) => <tr data-reference={row.reference ? '' : undefined}>
+        <th scope="row">{row.label}</th>
+        {row.values.map((value, index) => <td data-reference={index === referenceColumn ? '' : undefined}>{typeof value === 'string' ? <span class="unavailable">{value}</span> : value === null ? <span class="unavailable">Not applicable</span> : <><strong>{number(value.median)}</strong><small>{number(value.min)} – {number(value.max)}</small></>}</td>)}
+      </tr>)}
+    </tbody>)}
+  </table>
+</div>
+<style>
+  .scroll-hint { display: none; }
+  @media (max-width: 700px) { .scroll-hint { display: block; margin-bottom: -0.5rem; color: var(--muted); font-size: 0.8rem; } }
+  .result-table { overflow-x: auto; margin: 1.25rem 0; }
+  .result-table:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+  caption { text-align: left; font-weight: 600; margin-bottom: 0.75rem; }
+  th, td { padding: 0.8rem; text-align: right; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th:first-child { text-align: left; min-width: 12rem; }
+  td { min-width: 9rem; }
+  th { font-weight: 600; }
+  small { display: block; margin-top: 0.3rem; color: var(--muted); white-space: nowrap; }
+  .unavailable { color: var(--muted); font-size: 0.8rem; }
+  .reference { border-top: 2px solid var(--line); }
+  .reference th { color: var(--muted); }
+</style>

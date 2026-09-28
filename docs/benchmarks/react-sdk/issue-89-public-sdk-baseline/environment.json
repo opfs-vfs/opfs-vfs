@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "commit": "a5e424340a2bb7dca632ff579935662f8bf53b78",
+    "dirty": false
+  },
+  "browser": {
+    "engine": "chromium",
+    "version": "147.0.7727.15"
+  },
+  "node": "v26.8.1",
+  "playwright": "1.59.1",
+  "machine": {
+    "platform": "darwin",
+    "release": "25.6.0",
+    "arch": "arm64",
+    "cpus": [
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      },
+      {
+        "model": "Apple M5 Pro",
+        "speed": 2400
+      }
+    ],
+    "totalMemory": 68719476736
+  },
+  "fixtureSha256": {
+    "driver": "022761c2ebf494cf5293672dbd448f743690024fa20deb372aeb13fd7b0aa871",
+    "page": "034ca9a035eedb5ede7557fc321d5df6c18bb7d636e10c5055f138722bf68b61"
+  },
+  "artifacts": {
+    "workspace": {
+      "scope": "public bare imports",
+      "react": {
+        "sha256": "2076c19537118cd54623ae9e51cb366b539a9ab3f2aa249cc72d55f520650276"
+      },
+      "core": {
+        "sha256": "e78571d9ed531d68d8b7ec6b2c4352c711da44aa1c058e8e4734ca0327c1859e"
+      },
+      "subscriptions": {
+        "sha256": "0de247d5aa571f0585809667260e7a102526c5f2f663003805618dceff33c604"
+      },
+      "reactRuntime": {
+        "version": "19.2.4",
+        "entry": {
+          "sha256": "60caffdecbdc5db3bc4ec4e83df9488345ccb271d07533b9210bf5750918d97e"
+        },
+        "manifest": {
+          "sha256": "e60b92f6031f023907bbfab8f96e63e44307776ec1488f310ba61d41b8cda8cc"
+        }
+      },
+      "reactDomRuntime": {
+        "version": "19.2.4",
+        "entry": {
+          "sha256": "00e348ab3d6bc2eef908345d0bc4e008c95bcfecec060dfda5c4967953761396"
+        },
+        "manifest": {
+          "sha256": "b8448092689c7e6191595a98526ced808288f35138d97fbce5801a94922e3c36"
+        }
+      }
+    }
+  },
+  "setup": null,
+  "metrics": {
+    "transport": "Observed page-boundary Worker/BroadcastChannel binary payloads only; excludes clone framing and worker-internal traffic.",
+    "logical": "Application read/write Uint8Array sizes, separate from transport payloads.",
+    "longTasks": "Page PerformanceObserver longtask entries; the fixture records timestamps but cannot attribute a task to SDK code.",
+    "heap": "Chromium CDP Runtime.getHeapUsage for the calling page only; baseline/retained calls request GC and peak samples run every 50 ms. It excludes worker memory and cannot attribute bytes to SDK buffers."
+  }
+}

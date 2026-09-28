@@ -1,0 +1,22 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import BenchmarkCollection from '../../components/BenchmarkCollection';
+---
+<SiteLayout title="Collect benchmark results · OPFS VFS" description="Collect repeatable storage benchmarks and download the results with your device and browser details.">
+  <section class="page-head"><div><p class="kicker">Benchmarks / collection</p><h1>Collect results from your device</h1><p>Measure storage performance on your own device, then download the results for comparison. Nothing is uploaded or published automatically.</p></div><a class="button" href="/benchmarks/methodology/">Methodology →</a></section>
+  <section class="surface collection-guide" aria-labelledby="collection-guide-title">
+    <h2 id="collection-guide-title">Before you run</h2>
+    <ol>
+      <li><strong>Prepare a regular browser session.</strong> Use a fresh profile without sign-in or extensions. In Chrome, add a profile; in Safari, use Settings → Profiles; in Firefox, open <code>about:profiles</code>. On mobile, use a fresh profile where available, otherwise a regular tab with extensions off and note that below. Avoid private or incognito mode, which can change storage behavior.</li>
+      <li><strong>Keep conditions steady.</strong> Plug in, turn Low Power Mode off, and let the device cool. Pause downloads, builds, backups, and other busy apps. Close developer tools. Run one collection at a time, keeping this tab visible and the screen awake until it finishes.</li>
+      <li><strong>Check the details, run, and save.</strong> Enter the device model, chip and RAM if known, and exact OS version. Check the detected browser version against About or Settings. Note the power mode and any unusual conditions. Allow about 20 minutes, then select Download JSON. Keep one file per device and browser, including failed runs for diagnosis.</li>
+    </ol>
+    <p>Chrome, Safari, and Firefox are supported where the required storage APIs are available. This collector omits OPFS AHP on Safari and iOS/iPadOS. The published iPhone AHP results came from separate runs, not this collector. If you switch apps or lock the screen, rerun the collection before using it for published comparisons.</p>
+  </section>
+  <BenchmarkCollection client:only="react" />
+</SiteLayout>
+<style>
+  .collection-guide { padding: clamp(1rem, 3vw, 1.75rem); margin-bottom: 1.5rem; }
+  .collection-guide ol { padding-left: 1.4rem; }
+  .collection-guide li { margin: 0.8rem 0; line-height: 1.6; }
+</style>

@@ -1,0 +1,13 @@
+<script type="module">
+  window.results = [];
+  const w = new Worker(new URL('./probe.ts', import.meta.url), { type: 'module' });
+  w.onmessage = ({ data }) => {
+    console.log(JSON.stringify(data));
+    window.results.push(data);
+    if (data.stage === 'guest-checkpoint') w.postMessage({ type: 'mutate' });
+  };
+  w.onerror = (e) => {
+    window.results.push({ stage: 'FAIL', error: e.message });
+    console.error(e.message);
+  };
+</script>

@@ -1,0 +1,97 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import '../../styles/benchmark-reading.css';
+---
+<SiteLayout title="Storage and durability · OPFS VFS" description="Understand storage backends, memory and disk buffering, durability settings, and the limits of browser-local persistence.">
+  <article class="benchmark-reading">
+    <header class="reading-header">
+      <p class="kicker">Benchmarks / storage guide</p>
+      <h1>Storage modes and durability</h1>
+      <p class="reading-lead">Choose where files live, how the VFS uses memory, and when it synchronizes changes. These are separate settings, and each affects how you should compare the benchmark results.</p>
+      <div class="reading-links"><a href="/benchmarks/run/">Run a comparison →</a><a href="/benchmarks/methodology/">Read the methodology →</a></div>
+    </header>
+    <div class="reading-layout">
+      <nav class="reading-nav" aria-label="On this page">
+        <span>ON THIS PAGE</span>
+        <a href="#backends">Where data lives</a>
+        <a href="#compatibility">Access handle limits</a>
+        <a href="#buffering">Memory or disk buffering</a>
+        <a href="#durability">When changes are saved</a>
+        <a href="#pglite">The PGlite setting</a>
+        <a href="#choosing">Where to start</a>
+        <a href="#limits">What local storage cannot promise</a>
+      </nav>
+      <div class="reading-body">
+        <section id="motivation">
+          <p>For the story behind the filesystem, read <a href="/motivation/">why we built OPFS VFS</a>.</p>
+        </section>
+        <section id="backends">
+          <h2>Where does the data live?</h2>
+          <p>All four SQL backends run the same PGlite database engine. What changes is the way it stores database files.</p>
+          <div class="reading-table" role="region" aria-label="Storage backend comparison" tabindex="0">
+            <table>
+              <caption>The four choices in the PGlite benchmark</caption>
+              <thead><tr><th scope="col">Backend</th><th scope="col">How it stores files</th><th scope="col">After the session</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">PGlite memory</th><td>Temporary working memory, or RAM.</td><td>Gone unless you explicitly export and later restore it.</td></tr>
+                <tr><th scope="row">PGlite IndexedDB</th><td>Loads files into RAM and saves changed files into the browser's IndexedDB database.</td><td>Saved data can be reopened locally.</td></tr>
+                <tr><th scope="row">PGlite OPFS AHP</th><td>A pool of open file handles connects database files to OPFS storage.</td><td>Saved data can be reopened locally.</td></tr>
+                <tr><th scope="row">OPFS VFS</th><td>Maps many logical files into an OPFS volume, using a bounded set of handles.</td><td>Saved data can be reopened locally.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>OPFS is the browser's private filesystem for a website. AHP means <em>access handle pool</em>. Those handles let a worker read and write files. PGlite's IndexedDB backend saves whole changed files; it still keeps a working copy in RAM. See <a href="https://pglite.dev/docs/filesystems">PGlite's filesystem guide</a> for backend requirements.</p>
+          <aside class="reading-note"><p><strong>Memory-only storage is a speed reference.</strong> It avoids persistent storage work. For an app that should resume after a reload or in the next session, compare the persistent backends with each other.</p></aside>
+        </section>
+        <section id="compatibility">
+          <h2>OPFS VFS and access handle pools</h2>
+          <p>Both OPFS VFS and PGlite OPFS AHP provide synchronous filesystem operations inside a worker. An ordinary OPFS VFS volume opens six backing-file handles, independent of the number of virtual files. PGlite AHP keeps handles for database files and a spare pool. The VFS layout reduces handle consumption as the virtual file count grows.</p>
+          <p>A <a href="https://github.com/WebKit/WebKit/commit/1667e4506835aebe1431586c46888b3139db6e58">WebKit change in August 2025</a> raised the NetworkProcess and GPUProcess file-descriptor limit toward 2,560, subject to system limits. This is a process-wide resource limit, not a guarantee of 2,560 OPFS handles per application or a fixed 1,000-file ceiling. A growing handle pool can still exhaust the available descriptors; the usable count depends on the browser build and other resource use.</p>
+          <p>AHP completed the published iPhone 17 Pro SQL runs in Safari 26.6.1. A separate user-reported Mac Safari attempt stalled with <code>UnknownError: Invalid platform file handle</code>. The cause and the device's handle limit were not measured. The Mac collection omitted AHP in Safari by protocol; those entries are not measured failures.</p>
+          <p>Browser support and performance depend on the environment and workload. AHP had the lower iPhone SQL-suite median, while disk-buffered OPFS VFS had the lower iPhone transaction median and lower medians in the Mac Chrome and Firefox comparisons. Neither result establishes a universal speed or durability advantage.</p>
+        </section>
+        <section id="buffering">
+          <h2>Memory and disk buffering</h2>
+          <p>The <strong>VFS buffer</strong> setting applies only to OPFS VFS. Both choices use OPFS and can retain files across sessions.</p>
+          <h3>Memory buffer</h3>
+          <p>Keeps file contents in RAM for access. Writes also go into an OPFS recovery log, and synchronization copies changed data into the volume. RAM use grows with the files.</p>
+          <h3>Disk buffer</h3>
+          <p>Reads and writes the volume's data blocks directly. It avoids keeping a full extra copy of file contents in the VFS, though metadata and the database engine still use RAM.</p>
+          <p><strong>VFS memory buffering is different from PGlite memory-only storage.</strong> Changing the buffer does not turn persistence off. Both the benchmark and the VFS library default to disk buffering. Memory buffering remains an explicit option.</p>
+        </section>
+        <section id="durability">
+          <h2>When does a change reach disk?</h2>
+          <p>A write can finish before every change has been flushed to disk. A <em>flush</em> asks the browser to persist pending changes. Local durability controls when OPFS VFS requests that work.</p>
+          <h3>Relaxed</h3>
+          <p>Defers flushes to an explicit synchronization request or an orderly close. This can reduce waiting, but unsynchronized work is more exposed to interruption.</p>
+          <h3>Balanced</h3>
+          <p>Groups changes and schedules synchronization about 150 milliseconds after the first change. A busy or suspended worker can delay it, so this is not a guaranteed limit on lost work.</p>
+          <h3>Strict</h3>
+          <p>With memory buffering, flushes appended file-data and namespace recovery-log records immediately. In the current implementation, strict does not add a flush to every disk-buffered write. Explicit synchronization still matters.</p>
+          <p>Both the benchmark and the library default to balanced. Relaxed remains available when an application manages synchronization explicitly. These settings describe flush policy, not an absolute guarantee against every kind of crash. See the <a href="/docs/guides/persistence/">persistence API guide</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/API/FileSystemSyncAccessHandle/flush">browser flush documentation</a>.</p>
+        </section>
+        <section id="pglite">
+          <h2>PGlite has a separate durability setting</h2>
+          <p>The benchmark's PGlite durability option controls whether database work waits for filesystem synchronization. It applies to all four SQL backends. The VFS settings above apply only to OPFS VFS.</p>
+          <p>With default PGlite durability, a query can trigger a VFS synchronization even if the VFS local mode is relaxed. Relaxed PGlite durability avoids waiting on that path; the VFS balanced timer or strict memory-log flushes still apply.</p>
+          <aside class="reading-note"><p>When integrating PGlite yourself, set <code>relaxedDurability: false</code> on <strong>both PGlite and the OPFS VFS adapter</strong> if you want PGlite synchronization requests to flush the VFS. The adapter defaults to relaxed mode. The benchmark sets both together.</p></aside>
+          <p>See the <a href="/docs/integrations/pglite/">adapter guide</a> and <a href="https://pglite.dev/docs/api">PGlite API reference</a> for configuration.</p>
+        </section>
+        <section id="choosing">
+          <h2>Where to start</h2>
+          <p>For an app that saves user work, start with <strong>Persistent storage only</strong> enabled. The benchmark's disk buffer, balanced local durability, and default PGlite durability give you a consistent starting point.</p>
+          <p>Try memory buffering when your files fit comfortably in RAM. Add PGlite memory-only to see the speed of temporary storage. Keep the settings beside the results when comparing runs.</p>
+          <aside class="reading-note"><p><strong>Switching from memory to disk?</strong> If a disk mount reports a nonempty memory recovery log, reopen with <code>bufferMode: 'memory'</code>, then close the volume successfully before switching to disk. Do not delete the recovery log. See the <a href="/docs/guides/persistence/">buffer-mode troubleshooting</a>.</p></aside>
+          <p>The benchmark checks a clean close and reopen, then deletes its temporary databases. It does not simulate a crash. The full 16-case SQL suite drops its tables; the quick workloads check retained rows. Read the <a href="/benchmarks/methodology/">methodology</a> for the exact checks.</p>
+        </section>
+        <section id="limits">
+          <h2>Local storage is not a backup</h2>
+          <p>IndexedDB and OPFS belong to a site's browser storage. Quotas vary, writes can fail when space runs out, and clearing site data removes saved files. Best-effort storage may also be evicted under storage pressure.</p>
+          <p>A granted browser persistent-storage request helps protect against automatic eviction. It does not prevent a user from deleting data, and it does not copy files to another device. This browser permission is separate from the benchmark's persistence toggle. See <a href="https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria">MDN's storage limits guide</a>.</p>
+          <p>Applications should synchronize at meaningful save points, handle storage errors, and offer an export or backup for work users cannot afford to lose.</p>
+          <div class="reading-links"><a href="/benchmarks/run/">Run a comparison →</a><a href="/demos/filesystem/">Try saving and exporting files →</a></div>
+        </section>
+      </div>
+    </div>
+  </article>
+</SiteLayout>

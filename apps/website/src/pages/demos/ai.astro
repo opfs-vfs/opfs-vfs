@@ -1,0 +1,5 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import AiDemo from '../../components/AiDemo';
+---
+<SiteLayout title="Local AI demo · OPFS VFS" description="Run Gemma locally in your browser to create, edit, and organize files in an OPFS VFS workspace."><section class="page-head"><div><p class="kicker">Demo / local AI</p><h1>Work with files using local AI</h1><p>Download Gemma, then ask it to create, edit, or organize files in this browser. Setup requires about 2 GB of storage for the model and a compatible WebGPU device.</p></div></section><AiDemo client:only="react" /></SiteLayout>

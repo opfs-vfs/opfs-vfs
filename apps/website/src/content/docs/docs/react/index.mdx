@@ -1,0 +1,154 @@
+---
+title: React SDK preview
+description: Manage browser-local OPFS VFS volumes with React providers, live reads, and generation-safe commands.
+---
+
+The React SDK is a preview of the upcoming `@opfs-vfs/react` package. It is not published yet; install it from a matching workspace or packed artifact while evaluating it. It works only in a browser page that can create workers and use OPFS.
+
+## Start one managed volume
+
+The page and its worker must use the same OPFS VFS and subscriptions package versions. Serve the page with the [cross-origin isolation headers](/docs/guides/browser-setup/) required for `SharedArrayBuffer`.
+
+```tsx
+import { VolumeProvider, useFileContent, useVolume, useVolumeClient } from '@opfs-vfs/react';
+
+function Note() {
+  const volume = useVolume();
+  const fs = useVolumeClient();
+  const note = useFileContent('/note.txt', { format: 'text' });
+  if (volume.status !== 'ready' || !fs) return <p>{volume.status}</p>;
+  return <pre>{note.data ?? ''}</pre>;
+}
+
+export function App() {
+  return (
+    <VolumeProvider fileName="notes.bin">
+      <Note />
+    </VolumeProvider>
+  );
+}
+```
+
+Without a `worker` prop, React supplies its built-in subscriptions worker. Managed React volumes default to `transport="auto"`: they use a compatible built-in SharedWorker when possible, otherwise a dedicated worker. `useVolume()` reports the actual `transport` and its `fallbackReason`. Pass `transport="dedicated"` or `"shared-worker"` to require one path; forced shared reports its lifecycle failure and never changes transport.
+
+Auto probes the complete shared-worker path while opening and fixes that choice for the client lifetime; it does not promote an already-open dedicated client. It falls back only for an unavailable page `SharedWorker` API, a missing compatible application factory, or a failed shared-scope sync-access probe. Shared bootstrap errors and timeouts remain errors. If a compatible dedicated owner already holds the volume, auto keeps dedicated ownership to avoid a split owner and reports that fallback. A dedicated owner can be suspended when its creator backgrounds, so use a stable shared factory or explicit shared transport when that caveat matters.
+
+An application worker needs the matching worker-side plugin:
+
+```ts title="vfs.worker.ts"
+import { startVfsWorker } from '@opfs-vfs/opfs-vfs/worker-runtime';
+import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
+
+startVfsWorker({ plugins: [subscriptions] });
+```
+
+`VolumeProvider` owns a managed client. Give a borrowed provider a caller-created `OpfsVfsWorkerClient` instead; it reports lifecycle changes but never closes that client. Managed providers sharing a basename must use the same worker, plugin, and option profile. Change a provider key after an orderly close to open it with a different profile. Unmounting a managed provider releases its binding but deliberately retains its client for a later compatible provider; call `close()` when the application is finished with that volume.
+
+Nest providers with a nonempty `name` and pass that name to `useVolume`, `useVolumeClient`, or a read hook to select it. An unnamed provider is the default volume. A lookup without a matching provider is a configuration error, which makes accidental cross-volume reads visible during render.
+
+## Reads and saves
+
+`useFolder`, `useFile`, and `useFileContent` keep one subscribed read store per client. A result reports `idle`, `pending`, `success`, or `error`; successful values can be marked `isRefreshing` or `isStale` while a newer read is in flight. Whole-file content reads default to, and cannot exceed, 16 MiB. Folder and metadata reads have their own core result limits.
+
+Capture the ready client, generation, path, and expected bytes when the user dispatches a save. The worker checks `expected` atomically, so another client cannot silently overwrite the editor's source value. A failed mutation can have a `possibly-applied` outcome; ask the user to refresh before retrying it.
+
+```ts
+const expected = new TextEncoder().encode(currentText);
+const next = new TextEncoder().encode(draft);
+await fs.writeFileBuffer('/note.txt', next, { expected });
+await fs.sync();
+// The save is now synchronized locally.
+```
+
+Do not display “saved” after a sync failure. Keep the draft and tell the user that the final durability outcome is uncertain.
+
+## Lifecycle and errors
+
+`useVolume()` exposes `pending`, `ready`, `recovering`, `unsupported`, `error`, and `closed`, along with role, generation, persistence status, and a normalized `VolumeError`. Render these states directly; do not use an initial render as proof that a worker opened. `useVolumeClient()` is `null` until a generation is ready and becomes unavailable after lifecycle loss.
+
+Call the managed result's `close()` and await it before removing a dedicated demo or app volume with `deleteVolume()`. Closing a local client does not revoke another tab's compatible client. A **dedicated-worker** follower normally reconnects to a new owner generation automatically. If a retired read watch reports `SUBSCRIPTION_RETIREMENT_UNKNOWN`, its same-generation watch cannot be reused; surface that error and open a fresh client generation when the application decides recovery is appropriate.
+
+## SharedWorker ownership and limits
+
+Use this transport when a page-owned dedicated worker can freeze after its creator backgrounds: a shared owner may still serve another active same-origin page. It is not a promise of a faster path, background lifetime, or one cache: each page still has its own SDK client, read store, buffers, and subscriptions.
+
+Forced `transport="shared-worker"` has no dedicated-worker fallback. It needs cross-origin isolation and the same page-side `SharedArrayBuffer` gate as the dedicated transport, plus a `SharedWorker` that can use OPFS sync access handles. `createSyncAccessHandle()` is standardized for a [DedicatedWorker](https://fs.spec.whatwg.org/#api-filesystemfilehandle) scope; WebKit currently exposes its handle in [`Worker`](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/Modules/filesystem/FileSystemFileHandle.idl), so feature-detect the complete path rather than testing for `SharedWorker` alone. Shared workers are scoped by [same origin and worker URL/name](https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker), and storage partitioning still applies.
+
+Keep one stable module-level factory function (do not recreate it during render), use the same module URL and a stable name per basename, and return a **new** `SharedWorker` on each call. The React `name` is only a provider lookup key; it is not the storage `fileName`. A custom `worker` with no `sharedWorker` factory is dedicated under `auto`, with the factory-unavailable fallback reason; it cannot guess a compatible application SharedWorker.
+
+```tsx
+const sharedWorker = (fileName: string) =>
+  new SharedWorker(new URL('./vfs.sharedworker.ts', import.meta.url), {
+    type: 'module',
+    name: `my-vfs-${fileName}`,
+  });
+
+<VolumeProvider
+  fileName="notes.bin"
+  worker={worker}
+  transport="shared-worker"
+  sharedWorker={sharedWorker}
+  plugins={[subscriptionsRequest()]}
+>
+  <Note />
+</VolumeProvider>;
+```
+
+```ts title="vfs.sharedworker.ts"
+import { startVfsSharedWorker } from '@opfs-vfs/opfs-vfs/worker';
+import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
+
+startVfsSharedWorker({ plugins: [subscriptions] });
+```
+
+One shared host owns one volume. Do not deliberately mix dedicated and shared transport for that volume, and do not pass `forceLeader` or `claimIfAvailable`. Auto may join a positively identified compatible dedicated owner to avoid splitting ownership; explicit or incompatible mixed routes fail safely. The first `ATTACH` supplies its mount options and plugin payloads; later pages validate only the basename, protocol/capabilities, and each plugin's ID, contract version, and compatibility key. They do not compare every option or credential, so the application must coordinate one configuration. Plugin registrations are fixed when the host starts. Coordinate worker URL/name and deployments: an old host can survive reload, a new host may get `EBUSY`, and incompatible protocol/plugin profiles are refused.
+
+Calls remain asynchronous: followers bootstrap through the shared port, then use [BroadcastChannel](https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API) relay and structured cloning. There is no synchronous SAB API in the shared host. Owner contention, a crash, or a shutdown affects every attached page. A shared encrypted volume is unlocked for that owner, not authenticated per page; local `close()` is not key cleanup and JavaScript cannot guarantee zeroization.
+
+Managed `close()` closes compatible aliases in this page but does not stop other pages; unmounting retains the client. If the shared owner is lost, `VFS_ATTACHMENT_LOST` is terminal: there is no promotion, replay, or automatic reconnect. Keep the stable factory, create a fresh client by remounting the provider with a new React key, reread state, and verify writes that may already have been applied.
+
+For global shutdown, optional deletion, or private plugin key cleanup, create a temporary raw follower using the same factory and plugin request. Await readiness, then shutdown; only then optionally delete. Coordinate every page first: shutdown and delete are not atomic, so a new open can race them.
+
+```ts
+import { deleteVolume } from '@opfs-vfs/opfs-vfs';
+import { createSharedWorkerFollower } from '@opfs-vfs/opfs-vfs/worker';
+
+async function shutdownNotesVolume({ erase = false } = {}) {
+  const admin = await createSharedWorkerFollower('notes.bin', { plugins: [subscriptionsRequest()] }, sharedWorker);
+  try {
+    await admin.ready;
+    await admin.shutdownSharedVfs();
+    if (erase) await deleteVolume('notes.bin');
+  } finally {
+    admin.dispose();
+  }
+}
+```
+
+The shutdown request is pinned to the observed owner generation. A timeout does not prove that the owner died, so never steal its lock; do not delete on error. `useVolumeClient()` deliberately exposes filesystem commands only, so it cannot accidentally end another page's shared session.
+
+Useful React `error.details?.code` values are `VFS_UNSUPPORTED`, `EBUSY`, `VFS_PROTOCOL_MISMATCH`, `VFS_PLUGIN_MISMATCH`, and `VFS_SHUTTING_DOWN`. Treat `VFS_ATTACHMENT_LOST` and a sent mutation as uncertain: recreate the client and reread before retrying.
+
+## Persistence permission
+
+`usePersistentStorage()` checks browser persistence after commit. Its status is independent of VFS synchronization: `granted` means the browser accepted a retention request, not that any write has been flushed. Call `request()` from a user gesture for a manual retry. `persistentStorage="request-on-mount"` offers one automatic request opportunity for the page, even when React mounts multiple providers in Strict Mode.
+
+The [React SDK demo](/demos/react/) uses separate auto volumes by default and displays the selected transport and fallback reason. Its [forced dedicated](/demos/react/?transport=dedicated) and [SharedWorker preview](/demos/react/?transport=shared-worker) routes use separate names; open the exact same-origin SharedWorker URL in another page to attach to the same preview volumes.
+
+## Collecting an iPhone Safari ownership trace
+
+For a support investigation, open the [SharedWorker preview with diagnostics](/demos/react/?transport=shared-worker&opfsDebug=1) in both Safari tabs. Connect the iPhone to Safari Web Inspector, select each tab, filter the console for `[opfs-vfs:diag]`, and copy the JSON lines from both tabs after the second tab either opens or reports its error. The first line from each tab includes its browser user agent. Keep the first tab open until after the second result, then record whether closing the first tab and reloading the second changes that result, and whether Low Power Mode was enabled.
+
+In September 2026, a manual iPhone Safari check of the SharedWorker React demo passed editing, saving, and opening another tab after the first closed. Chromium 147 and Firefox 148 probes lacked the required shared-scope sync access. Those observations are not a browser-support guarantee—test the complete capability gate on the target browser and device.
+
+This opt-in trace records timestamps, client IDs, opaque owner generations, lifecycle state, visibility, browser user agent, safe feature availability, owner/client lock requests, acquisition, and callback completion, plus `LEADER_PING`/`LEADER_READY` handshakes. Callback completion means the client has returned control to the browser; it does not confirm when the browser releases a Web Lock. It does not record filenames, note contents, command payloads, plugin options, or error messages. Remove `opfsDebug` to disable the trace.
+
+## Plugins and deferred APIs
+
+The community worker example above loads only the subscriptions plugin. A private application may add its separately installed encryption plugin to both the page request and application worker after its own access and artifact checks; community builds must not import it. Managed providers require an application worker that registers the same requested plugins as the page. A SharedWorker uses a fixed registration when it starts; pages send structured plugin requests for validation and profile matching, never executable plugin code. A private integration must ship its own fixed named worker with its private plugin registration.
+
+Suspense support is deferred. Use the ordinary result hooks and their explicit pending, stale, and error states in this preview.
+
+## Current exports
+
+`VolumeProvider`, `DEFAULT_VOLUME`, `useVolume`, and `useVolumeClient` manage a volume. `useFolder`, `useFile`, `useFileContent`, and their render-callback components read resources. `usePersistentStorage` reports and requests browser persistence. `VolumeError` carries a normalized kind, operation, volume, optional path, error details, and a mutation outcome. See the [API reference](/docs/react/reference/) for signatures and browser/SSR boundaries.

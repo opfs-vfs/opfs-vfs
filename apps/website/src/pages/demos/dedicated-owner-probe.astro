@@ -1,0 +1,24 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+---
+<SiteLayout noindex title="Dedicated owner probe · OPFS VFS" description="An isolated native dedicated-worker ownership probe.">
+  <section class="page-head">
+    <div>
+      <p class="kicker">Experiment / mobile ownership</p>
+      <h1>Dedicated owner responsiveness probe</h1>
+      <p>One tab holds a throwaway Web Lock in a dedicated worker. A second tab checks the lock and challenges that worker with a nonce.</p>
+    </div>
+  </section>
+  <section data-dedicated-owner-probe aria-label="Dedicated owner probe">
+    <p data-state role="status">Starting…</p>
+    <p>Open this same-session challenge tab: <a data-same-session target="_blank" rel="noopener"></a></p>
+    <p>
+      <button type="button" data-challenge>Check lock and challenge owner</button>
+      <button type="button" data-close>Close dedicated owner</button>
+    </p>
+    <output data-report></output>
+  </section>
+</SiteLayout>
+<script>
+  import '../../scripts/dedicated-owner-probe';
+</script>

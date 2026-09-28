@@ -1,0 +1,83 @@
+---
+title: Volume Explorer
+description: Inspect browser volumes with file previews, an editor, a shell, and ZIP import and export.
+---
+
+The **OPFS VFS Volume Explorer** is available as the separate `@opfs-vfs/devtools` package. It discovers volumes on the current origin without receiving application instances or a list of volumes. [Try it with real browser storage](/demos/devtools/).
+
+Browse and edit files, preview documents, run a just-bash terminal, and import or export volumes as ZIP archives. It also works as a debugging tool while your application runs.
+
+## Try it here
+
+This is the real Volume Explorer, running inside the guide. Start with **Create demo volume**, then **Load Volume Explorer**. Select the volume named `docs-volume-explorer-…` and connect to it. Open `README.md` for a preview, or enable writes to edit the sample files and try the terminal.
+
+<iframe
+  src="/demos/devtools/embed/"
+  title="Volume Explorer live example with a docs sample volume"
+  loading="lazy"
+  style="display:block;width:100%;height:800px;border:1px solid var(--sl-color-hairline);border-radius:4px;"
+/>
+
+The example starts docked at the bottom; on small screens it fills the frame. You can move it, resize it, or change its docking position. [Open the example in a full page](/demos/devtools/embed/) for more room.
+
+Each creation makes a new docs sample volume containing `README.md` and `settings.json`. These are real files in this browser and remain after a reload. This frame shares the site's storage, so the explorer can also discover your other volumes. Connections start read-only. Only enable writes on a volume you intend to change.
+
+To remove a sample later, reload this page to close its application worker, then open the explorer and delete the sample while it is closed and not in use elsewhere. Closing the panel alone leaves that worker running.
+
+## Load it explicitly
+
+Install devtools alongside `@opfs-vfs/opfs-vfs`. Live attachment requires the standard worker's observer protocol, included with this devtools release; update the application worker as well as the devtools package.
+
+```sh
+pnpm add -D @opfs-vfs/devtools
+```
+
+In a Vite application's browser entry:
+
+```ts
+if (import.meta.env.DEV) {
+  await import('@opfs-vfs/devtools/styles.css');
+  const { mountDevtools } = await import('@opfs-vfs/devtools');
+  const panel = mountDevtools({ initialOpen: false });
+  import.meta.hot?.dispose(() => panel.unmount());
+}
+```
+
+A normal VFS import never loads devtools, its editor, PDF renderer, or shell. Keep the import behind your bundler's development-only condition to exclude it from a production build. The package requires a browser and the same [secure context and COOP/COEP headers](/docs/guides/browser-setup/) as the VFS worker. Importing the package during SSR is safe; call `mountDevtools()` only in the browser.
+
+Use the OPFS launcher or **Ctrl/Cmd + Shift + O** to open the panel. It can float or dock on any edge. Move and resize it with the pointer or the arrow keys on its handles. Repeated mounts return the existing installation.
+
+## Connect to a volume
+
+Discovery scans the origin's OPFS root while the panel is open. New volumes appear automatically. Select one to connect:
+
+- **Application owner available:** attach to the compatible worker already serving the volume. The application keeps ownership.
+- **Closed:** open a recognized, compatible volume in a devtools worker. Multiple volumes can remain connected.
+- **In use / unavailable:** an older worker, direct VFS owner, or unknown holder cannot be attached. Devtools does not compete for its locks or wait to take over.
+- **Protected:** a protected or incompatible volume needs its application's storage implementation.
+
+If an application owner disappears, the attachment disconnects and writes become disabled. Drafts remain in the panel. Reconnect explicitly; requests are never replayed against a replacement owner. A timeout means the operation's outcome may be unknown. Inspect the volume before repeating a mutation.
+
+Closing or unmounting the panel never shuts down an application's worker. Workers opened by devtools remain alive until the page ends, including across unmounts, because application followers may depend on them. Delete is available only for closed volumes and must acquire their physical ownership lock.
+
+## Files, editing and shell
+
+Connections start **Read-only**, including newly created demo volumes. Choose **Enable writes** in the access bar directly below the volume selector before editing, creating, renaming, deleting, moving, or running shell commands such as `mkdir`. This setting applies to both file actions and the terminal for the selected volume. Choose **Disable writes** to return to read-only access. These actions affect real data.
+
+Right-click an entry, or use its three-dot button, to preview, edit, copy, cut, paste, rename or delete. Use **+ File** and **+ Folder** for new entries. Copy works across volumes; cut and paste is limited to the same volume. Existing destinations are never replaced by these file actions. A failed multi-file copy can leave a partial destination, which the error reports.
+
+Use the **Preview / Editor** tabs to switch views. Text previews wrap long lines and hide line numbers for reading; the editor keeps line numbers and highlights the active line. The header shows **No changes** until you edit, then offers **Save**. Returning to the saved content clears the dirty state. The source editor fills the pane and uses CodeMirror's virtual scrolling and lazy syntax highlighting for recognized languages, including configuration and environment files. Common UTF-8 source and configuration files can be edited up to **16 MiB**, including `.conf`, `.env` and `.env.*`, INI, TOML, JSON, Python, Rust, Go, C/C++, Java, and TypeScript. Files such as `Dockerfile`, `Makefile`, `README`, and `.gitignore` are also supported. Binary data and unknown formats remain read-only. Saving compares the current contents with the version on which the draft began; a concurrent application edit rejects the save instead of silently overwriting it. Use Refresh to reread the tree and file contents. Refresh does not discard drafts.
+
+Previews include Markdown, images, SVG, multipage PDF, text and a bounded hexadecimal fallback. SVG renders as an image, not inline page markup. Markdown does not load remote images. PDF and editor code load on demand. Symbolic links are listed but not followed by file previews. The explorer is limited to 10,000 entries; previews and shell file reads/writes are bounded to 16 MiB per file.
+
+The terminal runs **just-bash**, with file writes checked at the filesystem boundary. It has no network configuration. Each volume connection starts at `/` and keeps its working directory and shell variables between commands, so `mkdir tmp`, `cd tmp`, and `touch note.txt` create `/tmp/note.txt`. Reconnecting starts a new shell session. The prompt shows the current directory, and new output scrolls into view. The shell library reports its final directory through `PWD`; assigning or unsetting `PWD` therefore changes the next command's starting directory. Commands such as `cp` retain shell semantics, including replacing a destination when writes are enabled; the context menu's no-overwrite policy applies to its own actions. Output is retained up to 16,000 characters.
+
+## ZIP import and export
+
+Import validates a ZIP before creating a new volume. It rejects traversal paths, symbolic links, duplicate paths, and file/folder conflicts. Importing into an existing application volume is not supported. A storage failure during writing leaves the partial volume available for inspection.
+
+Export downloads a live copy of the selected volume. Application writes can occur between file reads, so it is not an application-consistent snapshot. Imports and exports are limited to 2,000 entries, 16 MiB per file, 256 MiB expanded, and 128 MiB compressed. Copy/paste uses a separate 64 MiB aggregate limit.
+
+## Add a preview
+
+Pass lazy preview extensions to `mountDevtools({ previewExtensions })`. They receive file contents, without a VFS instance or a save callback. See [file preview extensions](/docs/guides/file-previews/) for a complete example and reuse outside devtools.

@@ -1,0 +1,23 @@
+packages:
+  - packages/*
+  - apps/*
+minimumReleaseAgeExclude:
+  - '@fallow-cli/darwin-arm64@3.27.0'
+  - '@fallow-cli/darwin-x64@3.27.0'
+  - '@fallow-cli/linux-arm64-gnu@3.27.0'
+  - '@fallow-cli/linux-arm64-musl@3.27.0'
+  - '@fallow-cli/linux-x64-gnu@3.27.0'
+  - '@fallow-cli/linux-x64-musl@3.27.0'
+  - '@fallow-cli/win32-arm64-msvc@3.27.0'
+  - '@fallow-cli/win32-x64-msvc@3.27.0'
+  - fallow-type-aware@3.27.0
+  - fallow@3.27.0
+allowBuilds:
+  esbuild: true
+  '@mongodb-js/zstd': false
+  node-liblzma: false
+  bufferutil: false
+
+patchedDependencies:
+  '@electric-sql/pglite@0.5.4': patches/pglite-0.5.4.patch
+  '@electric-sql/pglite-repl@0.4.4': patches/pglite-repl-0.4.4.patch

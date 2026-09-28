@@ -1,0 +1,5 @@
+dist/
+.astro/
+public/ai-assets/
+playwright-report/
+test-results/

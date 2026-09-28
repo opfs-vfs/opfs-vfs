@@ -1,0 +1,68 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "oxc"],
+  "jsPlugins": ["@shadcn/lint"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/.astro/**",
+    "apps/website/public/ai-assets/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+    ".scratch/**",
+    "**/.duckdb/**",
+    "apps/website/public/vendor/duckdb/**",
+    "apps/website/public/vendor/edgejs/**",
+    "**/.packed/**"
+  ],
+  "rules": {
+    "typescript/no-floating-promises": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**/*.test.ts", "**/__tests__/**/*.test.tsx"],
+      "rules": {
+        "typescript/unbound-method": "off"
+      }
+    },
+    {
+      "files": ["**/__tests__/test-worker.ts"],
+      "rules": {
+        "typescript/no-base-to-string": "off"
+      }
+    },
+    {
+      "files": ["apps/website/src/**/*.tsx"],
+      "rules": {
+        "shadcn/no-restyle": [
+          "error",
+          {
+            "allow": [
+              "layout",
+              "ai-jump-latest",
+              "ai-send",
+              "ai-starter",
+              "explorer-toggle",
+              "persistence-switch",
+              "study-motion"
+            ]
+          }
+        ],
+        "shadcn/no-raw-colors": "error",
+        "shadcn/no-arbitrary-values": ["error", { "allow": ["layout"] }]
+      }
+    },
+    {
+      "files": ["apps/website/src/components/ui/**/*.tsx"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": [
+          "error",
+          { "allow": ["layout", "rounded-[4px]", "ring-[3px]", "transition-[color,box-shadow]"] }
+        ]
+      }
+    }
+  ]
+}

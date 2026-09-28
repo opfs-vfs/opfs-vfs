@@ -1,0 +1,34 @@
+.mobile-owner-probe {
+  margin: 28px 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.mobile-owner-probe p {
+  margin: 0 0 10px;
+}
+.mobile-owner-probe__state {
+  font-weight: 700;
+}
+.mobile-owner-probe__result {
+  color: var(--muted);
+}
+.mobile-owner-probe__session {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.mobile-owner-probe__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.mobile-owner-probe__actions button {
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}

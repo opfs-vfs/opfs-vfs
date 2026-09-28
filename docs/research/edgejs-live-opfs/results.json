@@ -1,0 +1,66 @@
+{
+  "browser": "147.0.7727.15",
+  "pageErrors": [],
+  "results": [
+    {
+      "stage": "init",
+      "crossOriginIsolated": true
+    },
+    {
+      "stage": "load"
+    },
+    {
+      "stage": "loaded",
+      "id": "wasmer/edgejs@0.2.0"
+    },
+    {
+      "stage": "mount-validation"
+    },
+    {
+      "stage": "control",
+      "stdout": "NO-MOUNT-CONTROL-PASS\n"
+    },
+    {
+      "stage": "run"
+    },
+    {
+      "stage": "guest-checkpoint",
+      "visible": "from-guest",
+      "openHandles": 2
+    },
+    {
+      "stage": "host-mutated",
+      "value": "HOST-UPDATED-LONGER"
+    },
+    {
+      "stage": "output",
+      "exitCode": 0,
+      "stdout": "LIVE-OPFS-PASS\n",
+      "stderr": ""
+    },
+    {
+      "stage": "PASS",
+      "counts": {
+        "metadata": 27,
+        "open": 13,
+        "seek": 20,
+        "read": 14,
+        "flush": 12,
+        "close": 13,
+        "fstat": 28,
+        "write": 6,
+        "createDir": 1,
+        "rename": 1,
+        "setLen": 1,
+        "readDir": 1,
+        "removeFile": 1,
+        "removeDir": 1
+      },
+      "openHandles": 0,
+      "reopened": "REOPEN-PASS\n"
+    },
+    {
+      "stage": "closed"
+    }
+  ]
+}

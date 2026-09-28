@@ -1,0 +1,6 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import FilesystemBenchmark from '../../components/FilesystemBenchmark';
+---
+<SiteLayout title="Filesystem benchmark · OPFS VFS" description="Measure file creation, reads, writes, synchronization, and reopening with OPFS VFS."><section class="page-head"><div><p class="kicker">Benchmarks / filesystem</p><h1>Filesystem benchmarks</h1><p>Compare memory and disk buffering across file creation, reads, writes, synchronization, and reopening.</p></div><a class="button" href="/benchmarks/methodology/">Methodology →</a></section><nav class="suite-navigation" aria-label="Benchmark suites"><a class="button" href="/benchmarks/run/">PGlite backends</a> <a class="button solid" href="/benchmarks/filesystem/" aria-current="page">Filesystem</a></nav><FilesystemBenchmark client:only="react" /></SiteLayout>
+<style>.suite-navigation{margin-bottom:20px}</style>

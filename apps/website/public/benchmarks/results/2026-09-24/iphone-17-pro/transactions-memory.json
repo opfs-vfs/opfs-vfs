@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 2,
+  "createdAt": "2026-09-24T09:07:01.528Z",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Mobile/15E148 Safari/604.1",
+  "crossOriginIsolated": true,
+  "config": {
+    "backends": [
+      "opfs-vfs",
+      "opfs-ahp",
+      "idb",
+      "memory"
+    ],
+    "rows": 10000,
+    "repetitions": 3,
+    "bufferMode": "memory",
+    "durability": "balanced",
+    "relaxedDurability": false,
+    "workload": "transactions"
+  },
+  "samples": [
+    {
+      "backend": "opfs-vfs",
+      "repetition": 1,
+      "initMs": 1028.0200000000002,
+      "workloadMs": 68.57999999999993,
+      "persistenceMs": 0.01999999999998181,
+      "reopenMs": 62.7199999999998,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "opfs-vfs",
+      "repetition": 2,
+      "initMs": 1271.92,
+      "workloadMs": 28.7199999999998,
+      "persistenceMs": 0,
+      "reopenMs": 66.38000000000011,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "opfs-vfs",
+      "repetition": 3,
+      "initMs": 987.6599999999994,
+      "workloadMs": 25.100000000000364,
+      "persistenceMs": 0.020000000000436557,
+      "reopenMs": 51.3199999999988,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "opfs-ahp",
+      "repetition": 1,
+      "initMs": 1447.8600000000006,
+      "workloadMs": 19.960000000000036,
+      "persistenceMs": 0.019999999998617568,
+      "reopenMs": 191.9400000000005,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "opfs-ahp",
+      "repetition": 2,
+      "initMs": 881.960000000001,
+      "workloadMs": 19.039999999999964,
+      "persistenceMs": 0,
+      "reopenMs": 160.47999999999956,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "opfs-ahp",
+      "repetition": 3,
+      "initMs": 878.2199999999993,
+      "workloadMs": 22.23999999999978,
+      "persistenceMs": 0.020000000002255547,
+      "reopenMs": 176.65999999999985,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "idb",
+      "repetition": 1,
+      "initMs": 975.539999999999,
+      "workloadMs": 166.79999999999927,
+      "persistenceMs": 34.06000000000131,
+      "reopenMs": 323.26000000000204,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "idb",
+      "repetition": 2,
+      "initMs": 938.1599999999999,
+      "workloadMs": 173.89999999999964,
+      "persistenceMs": 36.279999999998836,
+      "reopenMs": 323.7399999999998,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "idb",
+      "repetition": 3,
+      "initMs": 933.7999999999993,
+      "workloadMs": 170.52000000000226,
+      "persistenceMs": 33.79999999999927,
+      "reopenMs": 326.5799999999999,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "memory",
+      "repetition": 1,
+      "initMs": 521.2799999999988,
+      "workloadMs": 17.020000000000437,
+      "persistenceMs": null,
+      "reopenMs": null,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "memory",
+      "repetition": 2,
+      "initMs": 514.4599999999991,
+      "workloadMs": 18.55999999999949,
+      "persistenceMs": null,
+      "reopenMs": null,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    },
+    {
+      "backend": "memory",
+      "repetition": 3,
+      "initMs": 506.3000000000011,
+      "workloadMs": 22.600000000000364,
+      "persistenceMs": null,
+      "reopenMs": null,
+      "expectedRows": 10000,
+      "actualRows": 10000,
+      "status": "ok"
+    }
+  ],
+  "metadata": {
+    "workloadRevision": "pglite-sql-v2",
+    "workloadSource": null,
+    "sourceCommit": "unavailable",
+    "opfsVfsVersion": "1.0.1",
+    "pgliteVersion": "0.5.4",
+    "interrupted": false,
+    "environmentNote": "",
+    "preparationMs": 1023.0999999999999
+  }
+}

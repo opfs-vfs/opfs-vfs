@@ -1,0 +1,154 @@
+---
+import { median, timingRank } from '../lib/benchmark';
+import '../styles/published-benchmarks.css';
+import { SPEED_TESTS } from '../lib/pglite-speedtest';
+import results from '../data/benchmark-results.json';
+import phoneReport from '../../public/benchmarks/results/2026-09-24/iphone-17-pro/safari.json';
+import phoneTransactions from '../../public/benchmarks/results/2026-09-24/iphone-17-pro/transactions-disk.json';
+import phoneMemory from '../../public/benchmarks/results/2026-09-24/iphone-17-pro/sql-memory.json';
+import phoneMemoryTransactions from '../../public/benchmarks/results/2026-09-24/iphone-17-pro/transactions-memory.json';
+import IPhoneBenchmarks from './IPhoneBenchmarks.astro';
+import BenchmarkResultTable from './BenchmarkResultTable.astro';
+const machineNames = { 'm5-pro': 'MacBook Pro · M5 Pro', 'm1-max': 'Mac Studio · M1 Max', 'iphone': 'iPhone 17 Pro' };
+const shortNames = { 'm5-pro': 'M5 Pro', 'm1-max': 'M1 Max', 'iphone': 'iPhone' };
+const number = (value: number) => value > 0 && value < 0.01 ? '<0.01' : value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+const browsers = ['Chrome', 'Safari', 'Firefox'];
+const backends = [
+  { id: 'opfs-vfs-disk', label: 'OPFS VFS · disk buffer' },
+  { id: 'opfs-vfs-memory', label: 'OPFS VFS · memory buffer' },
+  { id: 'opfs-ahp', label: 'PGlite OPFS AHP' },
+  { id: 'idb', label: 'PGlite IndexedDB' },
+  { id: 'memory', label: 'PGlite memory · nonpersistent', reference: true },
+];
+const workloads = [{ id: 'pglite-speedtest', label: '16-case SQL suite' }, { id: 'transactions', label: '10,000-row transaction batch' }];
+type Timing = { median: number; min: number; max: number; n: number };
+type Job = { id: string; metrics: Record<string, Timing | null | undefined>; stages: { id: number; timing: Timing }[] };
+const metric = (jobs: Job[], id: string, key: string, missing = 'File-handle issue'): Timing | null | string => {
+  const job = jobs.find((item) => item.id === id);
+  return job ? job.metrics[key] ?? null : missing;
+};
+const phoneJobs: Job[] = [phoneReport, phoneTransactions, phoneMemory, phoneMemoryTransactions].flatMap((report) =>
+  report.config.backends.filter((backend) => report.config.bufferMode !== 'memory' || backend === 'opfs-vfs').map((backend) => {
+    const values = report.samples.filter((sample) => sample.backend === backend && sample.status === 'ok').map((sample) => sample.workloadMs);
+    return { id: `${report.config.workload}-${backend === 'opfs-vfs' ? `opfs-vfs-${report.config.bufferMode}` : backend}`, metrics: { workloadMs: values.length ? { median: median(values)!, min: Math.min(...values), max: Math.max(...values), n: values.length } : null }, stages: [] };
+  })
+);
+const machines = [
+  ...results.machines.map((machine) => ({ ...machine, repetitions: 5, missing: 'File-handle issue' })),
+  { id: 'iphone', repetitions: 3, missing: 'Not run', browsers: [{ id: 'safari', jobs: phoneJobs }] },
+];
+---
+<section class="published" aria-labelledby="published-heading" data-memory="false" data-workload="pglite-speedtest" data-m5-pro="true" data-m1-max="true" data-iphone="true" data-empty="false">
+  <header class="results-heading">
+    <p class="kicker">Desktop and phone benchmarks</p>
+    <h2 id="published-heading">Benchmark results</h2>
+    <p>Results from a MacBook Pro with M5 Pro, a Mac Studio with M1 Max, and an iPhone 17 Pro. Values are medians; tables also show the observed minimum and maximum. Macs use five measured runs after an excluded warm-up. The iPhone uses three runs, with no excluded full-workload warm-up recorded and no exact source commit available.</p>
+  </header>
+  <div class="comparison-controls">
+    <fieldset class="workload-controls"><legend>Workload</legend>
+      {workloads.map((workload, i) => <label><input type="radio" name="published-workload" value={workload.id} checked={i === 0} aria-controls="comparison-results" /><span>{workload.label}</span></label>)}
+    </fieldset>
+    <fieldset class="device-controls"><legend>Devices</legend>
+      {machines.map((machine) => <label><input type="checkbox" name="published-device" value={machine.id} checked aria-controls="comparison-results" /><span class={`device-dot ${machine.id}`} aria-hidden="true"></span>{machineNames[machine.id as keyof typeof machineNames]}</label>)}
+    </fieldset>
+    <label class="memory-control"><input type="checkbox" name="published-memory" aria-controls="comparison-results" />Show memory-only reference <span>Nonpersistent</span></label>
+  </div>
+  <p class="comparison-context">Lower is faster. Both OPFS VFS buffer modes persist to disk. The optional memory-only reference does not. These compare complete systems; OS and browser versions differ.</p>
+  <p class="selection-empty" role="status">Select a device to show results.</p>
+  <div id="comparison-results" class="comparison-results">
+  {workloads.map((workload) => {
+    const values = machines.flatMap((machine) => machine.browsers.flatMap((browser) => backends.map((backend) => metric(browser.jobs, `${workload.id}-${backend.id}`, 'workloadMs', machine.missing)))).filter((value): value is Timing => typeof value === 'object' && value !== null);
+    const step = workload.id === 'transactions' ? 50 : 1000;
+    const maximum = Math.ceil(Math.max(...values.map((value) => value.median)) / step) * step;
+    return <section data-workload-panel={workload.id} aria-label={workload.label}>
+      <div class="chart-heading"><h3>{workload.label}</h3><span>Median · milliseconds · shared scale</span></div>
+      <div class="browser-charts">
+        {browsers.map((browserName) => <figure class="browser-chart" data-browser={browserName.toLowerCase()}>
+          <figcaption>{browserName}</figcaption>
+          <div class="chart-axis" aria-hidden="true"><span>0</span><span>{number(maximum / 2)}</span><span>{number(maximum)} ms</span></div>
+          {backends.map((backend) => <div class="bar-group" data-reference={backend.reference ? '' : undefined}>
+            <h4>{backend.label.replace('PGlite memory · nonpersistent', 'Memory-only reference')}</h4>
+            {machines.filter((machine) => machine.browsers.some((entry) => entry.id === browserName.toLowerCase())).map((machine) => {
+              const value = metric(machine.browsers.find((browser) => browser.id === browserName.toLowerCase())!.jobs, `${workload.id}-${backend.id}`, 'workloadMs', machine.missing);
+              return <div class="bar-row" data-machine={machine.id}>
+                <span class="bar-machine">{shortNames[machine.id as keyof typeof shortNames]}</span>
+                <div class="bar-track" aria-hidden="true">{typeof value === 'object' && value !== null && <span class={`bar ${machine.id}`} style={`width:${value.median / maximum * 100}%`}></span>}</div>
+                <span class="bar-value">{typeof value === 'object' && value !== null ? number(value.median) : value ?? 'Not applicable'}</span>
+              </div>;
+            })}
+          </div>)}
+        </figure>)}
+      </div>
+      <div class="table-heading"><h3>Execution times</h3><p><span class="rank-key rank-1">1st</span><span class="rank-key rank-2">2nd</span><span class="rank-key rank-3">3rd</span> Lowest visible medians within each row.</p></div>
+      <p class="ranking-note">Badges describe order, not statistical significance. Ranges are observed minimum–maximum, not confidence intervals. On the Studio Firefox SQL suite, VFS disk and IndexedDB are nearly tied and their ranges overlap.</p>
+      <p class="mobile-scroll">Scroll the table to compare all backends.</p>
+      <div class="comparison-table" tabindex="0" role="region" aria-label={`${workload.label} comparison table`}>
+        <table>
+          <caption class="sr-only">{workload.label}: median and observed minimum–maximum in milliseconds, five repetitions per Mac cell and three per iPhone cell.</caption>
+          <thead><tr><th scope="col">Browser / device</th>{backends.map((backend) => <th scope="col" data-reference={backend.reference ? '' : undefined}>{backend.label.replace('PGlite memory · nonpersistent', 'Memory-only reference')}</th>)}</tr></thead>
+          {browsers.map((browser) => <tbody>{machines.filter((machine) => machine.browsers.some((entry) => entry.id === browser.toLowerCase())).map((machine) => {
+            const timings = backends.map((backend) => metric(machine.browsers.find((entry) => entry.id === browser.toLowerCase())!.jobs, `${workload.id}-${backend.id}`, 'workloadMs', machine.missing));
+            const medians = timings.map((value) => typeof value === 'object' && value !== null ? value.median : null);
+            return <tr data-machine={machine.id}>
+              <th scope="row"><strong>{browser}</strong><span><i class={`device-dot ${machine.id}`} aria-hidden="true"></i>{shortNames[machine.id as keyof typeof shortNames]} · {medians.some((value) => value !== null) ? `${machine.repetitions} runs` : 'Not run'}</span></th>
+              {timings.map((value, index) => {
+                const rank = timingRank(medians[index]!, medians);
+                const persistentRank = index === 4 ? null : timingRank(medians[index]!, medians.slice(0, 4));
+                return <td data-reference={index === 4 ? '' : undefined} data-rank-all={rank} data-rank-persistent={persistentRank}>
+                  {typeof value === 'object' && value !== null ? <>
+                    <span class="cell-median">{number(value.median)} <span class="badge-slot"><span class="badge rank-all">{rank ? `${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : 'rd'}` : ''}</span><span class="badge rank-persistent">{persistentRank ? `${persistentRank}${persistentRank === 1 ? 'st' : persistentRank === 2 ? 'nd' : 'rd'}` : ''}</span></span></span>
+                    <small>{number(value.min)} – {number(value.max)}</small>
+                  </> : <span class="omitted">{value ?? 'Not applicable'}</span>}
+                </td>;
+              })}
+            </tr>;
+          })}</tbody>)}
+        </table>
+      </div>
+      <p class="ranking-note">Mac Safari AHP timings are unavailable. Missing results are excluded from rankings.</p>
+    </section>;
+  })}
+  </div>
+  <details class="measurement-details"><summary>Environment and detailed timings</summary>
+    <p class="comparison-context">Both Macs have 64 GB RAM and ran plugged in with extensions off. The MacBook used High Power mode. Versions differ, so these results do not isolate chip performance.</p>
+    {results.machines.map((machine) => <section class="machine-results" data-machine={machine.id} id={`results-${machine.id}`}>
+      <h3>{machineNames[machine.id as keyof typeof machineNames]}</h3><p>{machine.os} · 64 GB RAM</p>
+      <ul class="browser-versions">{machine.browsers.map((browser, i) => <li><strong>{browsers[i]}</strong> {browser.version}</li>)}</ul>
+    {machine.browsers.map((browser, i) => <details>
+      <summary>{browsers[i]}: lifecycle, SQL cases and filesystem phases</summary>
+      {workloads.map((workload) => <BenchmarkResultTable caption={`${workload.label} · lifecycle (ms)`} columns={['Preparation', 'Initialization', 'Later explicit sync', 'Reopen']} rows={backends.map((backend) => ({ ...backend, values: ['preparationMs', 'initMs', 'persistenceMs', 'reopenMs'].map((key) => metric(browser.jobs, `${workload.id}-${backend.id}`, key)) }))} />)}
+      <p class="table-note">Preparation, close and final cleanup are outside workload timings. Preparation initializes PGlite before the measured instance. The SQL suite drops its tables and checks their absence after reopen; the transaction workload verifies retained rows. Positive values below 0.01 ms display as &lt;0.01; zero means a recorded zero at the browser timer's resolution.</p>
+      <BenchmarkResultTable caption="Individual SQL cases (ms) · see methodology for the pinned SQL" columns={backends.map((backend) => backend.label)} referenceColumn={4} rows={Array.from({ length: 16 }, (_, index) => ({ label: `${index + 1}. ${SPEED_TESTS[index]}`, values: backends.map((backend) => browser.jobs.find((job) => job.id === `pglite-speedtest-${backend.id}`)?.stages[index]?.timing ?? 'File-handle issue') }))} />
+      <BenchmarkResultTable caption="Filesystem lifecycle (ms) · 1,000 files, 1 KiB each" columns={['OPFS VFS · disk buffer', 'OPFS VFS · memory buffer']} rows={['mountMs', 'create', 'write', 'read', 'rename', 'delete', 'flush', 'reopen'].map((key) => ({ label: key === 'mountMs' ? 'Mount' : key[0]!.toUpperCase() + key.slice(1), values: ['disk', 'memory'].map((buffer) => metric(browser.jobs, `filesystem-${buffer}`, key)) }))} />
+      <p class="table-note">Read includes byte verification. Delete removes half the files; reopen times mounting before verification of the 500 survivors. This suite compares the two VFS buffer modes only.</p>
+    </details>)}
+
+    </section>)}
+    <div data-machine="iphone"><IPhoneBenchmarks /></div>
+  </details>
+  <details class="data-details"><summary>Data and methodology</summary>
+    <p>Macs: five measured rounds per job, with one warm-up excluded. iPhone: three measured runs per backend, with no excluded full-workload warm-up recorded. All persistent VFS runs use balanced durability and PGlite uses <code>relaxedDurability: false</code>. Later explicit sync is not the total persistence cost. Clean reopening does not establish crash or power-loss durability.</p>
+    <p>Original JSON exports include every sample and collection notes. They let you verify the tables and reuse the measurements.</p>
+    <ul>{results.machines.map((machine) => <li><strong>{machineNames[machine.id as keyof typeof machineNames]}</strong>: {machine.browsers.map((browser, i) => <><a href={browser.source} download>{browsers[i]} JSON</a>{i < 2 ? ' · ' : ''}</>)} · <a href={`/benchmarks/results/2026-09-23/${machine.id}/provenance.json`}>Checksums</a></li>)}</ul>
+    <p>iPhone: <a href="/benchmarks/results/2026-09-24/iphone-17-pro/safari.json" download>SQL disk JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/sql-memory.json" download>SQL memory-buffer JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/transactions-disk.json" download>Transactions disk JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/transactions-memory.json" download>Transactions memory-buffer JSON</a> · <a href="/benchmarks/results/2026-09-24/iphone-17-pro/README.md">Collection notes and checksum</a>. The exact source commit is unavailable.</p>
+    <p>Mac measured source: <a href={`https://github.com/opfs-vfs/opfs-vfs/tree/${results.baseCommit}`}>{results.baseCommit.slice(0, 8)}</a> plus the <a href="/benchmarks/results/2026-09-23/collector.patch" download>collector patch</a>. PGlite {results.versions.pglite}. OPFS VFS was an unreleased build identified by the source commit and collector patch.</p>
+    <p>340 measured Mac samples across six collections, plus 36 summarized iPhone samples from 54 raw samples. Eighteen repeated SQL and transaction reference-backend samples are retained in the exports but not pooled with the original runs. These device-specific collections are not a population-wide performance estimate.</p>
+    <p><a href="/benchmarks/methodology/">Methodology →</a> · <a href="/benchmarks/results/2026-09-23/README.md">Analysis and reproduction notes</a></p>
+  </details>
+</section>
+<script>
+  const published = document.querySelector<HTMLElement>('.published');
+  if (published) {
+    const update = () => {
+      const workload = published.querySelector<HTMLInputElement>('input[name="published-workload"]:checked');
+      const memory = published.querySelector<HTMLInputElement>('input[name="published-memory"]');
+      published.dataset.workload = workload?.value ?? 'pglite-speedtest';
+      published.dataset.memory = String(memory?.checked ?? false);
+      const devices = Array.from(published.querySelectorAll<HTMLInputElement>('input[name="published-device"]'));
+      for (const device of devices) published.setAttribute(`data-${device.value}`, String(device.checked));
+      published.dataset.empty = String(devices.every((device) => !device.checked));
+    };
+    published.addEventListener('change', update);
+    update();
+  }
+</script>

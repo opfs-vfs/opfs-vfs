@@ -1,0 +1,399 @@
+.filesystem-demo {
+  container-type: inline-size;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  max-width: 100%;
+}
+.volume-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+}
+.volume-toolbar-main,
+.volume-actions,
+.volume-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.volume-toolbar-main {
+  justify-content: space-between;
+}
+.volume-heading {
+  min-width: 0;
+}
+.volume-heading > svg {
+  width: 1.15rem;
+  color: var(--accent);
+}
+.volume-actions {
+  flex-wrap: wrap;
+}
+.volume-toolbar form,
+.volume-toolbar label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  min-width: 0;
+}
+.volume-toolbar label > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.volume-toolbar [data-slot='select-trigger'] {
+  min-width: 11rem;
+}
+.demo-error {
+  padding: 0.65rem 0.8rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.filesystem-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) 6px minmax(240px, 1fr) 6px minmax(240px, 1.25fr);
+  height: min(68vh, 720px);
+  min-height: 520px;
+  max-width: 100%;
+}
+.filesystem-grid.with-side-panel {
+  grid-template-columns: minmax(180px, 0.75fr) 6px minmax(240px, 1fr) 6px minmax(240px, 1fr);
+}
+.explorer-panel,
+.shell-panel,
+.preview-panel,
+.side-panel {
+  min-width: 0;
+  min-height: 0;
+  border-right: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.shell-panel {
+  color: var(--ink);
+  background: var(--panel);
+}
+.preview-panel {
+  border: 0;
+}
+.filesystem-grid header,
+.ai-model-heading {
+  box-sizing: border-box;
+  height: 56px;
+  min-height: 56px;
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.filesystem-grid header {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.panel-title {
+  color: var(--ink);
+  font-weight: 700;
+}
+.shell-status {
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.filesystem-tree {
+  flex: 1;
+  min-height: 0;
+}
+.shell-panel pre {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  margin: 0;
+  color: var(--ink);
+  background: var(--soft);
+  white-space: pre-wrap;
+}
+.shell-panel form {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  align-items: end;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.shell-panel form small {
+  color: var(--muted);
+}
+.shell-panel textarea {
+  resize: none;
+  min-height: 64px;
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.preview-empty {
+  margin: auto;
+  color: var(--muted);
+}
+.image-preview {
+  display: block;
+  max-width: 92%;
+  max-height: 88%;
+  margin: auto;
+  object-fit: contain;
+}
+.pdf-preview {
+  display: block;
+  width: min(100%, 52rem);
+  height: auto;
+  margin: 0 auto;
+  background: white;
+}
+.pdf-preview-wrap {
+  margin: 0;
+  overflow: auto;
+  text-align: center;
+  background: var(--soft);
+}
+.pdf-preview-wrap figcaption {
+  padding: 0.5rem;
+  color: var(--muted);
+}
+.document-preview,
+.docx-preview {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: white;
+  overflow: auto;
+}
+.sheet-preview {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  overflow: auto;
+  background: var(--panel);
+}
+.editor-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.editor-shell textarea {
+  flex: 1;
+  resize: none;
+  border: 0;
+  padding: 1rem;
+  color: var(--ink);
+  background: var(--paper);
+  font:
+    13px/1.65 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.editor-shell button {
+  align-self: flex-end;
+  margin: 0.65rem;
+}
+.binary-preview {
+  padding: 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.sheet-preview table {
+  border-collapse: collapse;
+  color: var(--ink);
+  background: var(--panel);
+}
+.sheet-preview td {
+  border: 1px solid var(--line);
+  padding: 0.3rem 0.5rem;
+  white-space: nowrap;
+}
+.docx-preview {
+  color: #111;
+}
+.docx-preview > section {
+  margin: 1rem auto !important;
+}
+.side-panel {
+  overflow: auto;
+}
+.filesystem-mobile-tabs {
+  display: none;
+}
+@container (max-width: 900px) {
+  .filesystem-mobile-tabs {
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.5rem;
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    background: var(--panel);
+  }
+  .filesystem-mobile-tabs button {
+    flex: 1;
+  }
+  .filesystem-mobile-tabs button[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, var(--paper));
+  }
+  .volume-toolbar > * {
+    max-width: 100%;
+  }
+  .volume-toolbar-main {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .volume-toolbar form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .filesystem-grid,
+  .filesystem-grid.with-side-panel {
+    display: flex;
+    height: auto;
+    min-height: 0;
+    flex-direction: column;
+    overflow: visible;
+  }
+  .explorer-panel,
+  .shell-panel,
+  .side-panel,
+  .preview-panel {
+    height: 28rem;
+    max-height: 70vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .side-panel {
+    height: min(46rem, 88svh);
+    max-height: none;
+  }
+  .filesystem-grid[data-mobile-view='files'] > :not(.explorer-panel),
+  .filesystem-grid[data-mobile-view='middle'] > :not(.shell-panel, .side-panel),
+  .filesystem-grid[data-mobile-view='preview'] > :not(.preview-panel) {
+    display: none;
+  }
+}
+
+.explorer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.explorer-content {
+  padding-top: 12px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.explorer-content > .filesystem-tree {
+  min-width: 0;
+}
+.explorer-toggle {
+  flex-shrink: 0;
+}
+.panel-divider {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--panel);
+}
+.panel-divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  background: var(--line);
+}
+.panel-divider:hover::after,
+.panel-divider:focus-visible::after {
+  background: var(--accent);
+}
+.panel-divider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.panel-drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  cursor: col-resize;
+  user-select: none;
+}
+@container (min-width: 901px) {
+  .filesystem-grid[data-collapsed='true'] .explorer-content,
+  .filesystem-grid[data-collapsed='true'] .explorer-actions,
+  .filesystem-grid[data-collapsed='true'] .explorer-heading .panel-title,
+  .filesystem-grid[data-collapsed='true'] .explorer-divider {
+    display: none;
+  }
+  .filesystem-grid[data-collapsed='true'] .explorer-panel {
+    grid-column: 1;
+    border-right: 1px solid var(--line);
+  }
+  .filesystem-grid[data-collapsed='true'] .explorer-panel > header {
+    padding: 6px;
+  }
+  .filesystem-grid[data-collapsed='true'] .shell-panel,
+  .filesystem-grid[data-collapsed='true'] .side-panel {
+    grid-column: 3;
+  }
+  .filesystem-grid[data-collapsed='true'] .panel-divider:not(.explorer-divider) {
+    grid-column: 4;
+  }
+  .filesystem-grid[data-collapsed='true'] .preview-panel {
+    grid-column: 5;
+  }
+}
+@container (max-width: 900px) {
+  .panel-divider {
+    display: none;
+  }
+}
+
+.volume-heading {
+  flex-wrap: wrap;
+}
+.volume-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.volume-loading svg {
+  width: 16px;
+  height: 16px;
+  animation: volume-spin 1s linear infinite;
+}
+.filesystem-grid[inert] {
+  opacity: 0.55;
+}
+@keyframes volume-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .volume-loading svg {
+    animation: none;
+  }
+}

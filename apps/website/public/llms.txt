@@ -1,0 +1,59 @@
+# OPFS VFS
+
+> OPFS VFS is a persistent browser filesystem backed by the Origin Private File System. It maps logical files into a volume with a bounded set of native handles and offers synchronous I/O inside a dedicated worker.
+
+The asynchronous worker client lets browser pages use the filesystem. Apps need HTTPS or localhost; APIs using SharedArrayBuffer also need cross-origin isolation. Browser storage belongs to an origin and is not a backup.
+
+Disk buffering and balanced local durability are the defaults. Memory buffering also persists to OPFS; it is different from PGlite memory-only storage. Use explicit synchronization at important save points. Strict mode does not flush every disk-buffered write. A clean reopen benchmark does not establish crash or power-loss durability.
+
+PGlite and just-bash adapters are available. DuckDB and EdgeJS integrations are experimental and require matching custom runtime builds. Encryption with passkey-based access is a separate premium extension. The file-subscription plugin is available under the PolyForm Noncommercial License. It reports local logical changes and optional completed-file content. A premium cloud sync plugin is planned, but not yet available, to synchronize local volumes with backend cloud storage.
+
+The repository uses the source-available PolyForm Noncommercial License 1.0.0. Commercial use requires separate permission.
+
+## Start here
+
+- [Overview](https://opfs.dev/): Product benefits, integrations, and demos.
+- [Motivation](https://opfs.dev/motivation/): The storage problem and design choices.
+- [Documentation](https://opfs.dev/docs/): Guide index.
+- [Getting started](https://opfs.dev/docs/getting-started/): Install, write, synchronize, and reopen a volume.
+- [Browser setup](https://opfs.dev/docs/guides/browser-setup/): Secure context and isolation headers.
+- [Volumes and lifecycle](https://opfs.dev/docs/concepts/): Volume names, buffering, and closing.
+
+## File operations and tools
+
+- [Files and directories](https://opfs.dev/docs/guides/files-and-directories/): Worker operations and truncation behavior.
+- [Persistence and recovery](https://opfs.dev/docs/guides/persistence/): Save points, recovery logs, and buffer-mode changes.
+- [Volume Explorer](https://opfs.dev/docs/guides/devtools/): Inspect, edit, and transfer volumes. Connections start read-only.
+- [File preview extensions](https://opfs.dev/docs/guides/file-previews/): Trusted custom renderers and shared React previews.
+- [Public API](https://opfs.dev/docs/reference/): Imports, options, inspection, and deletion.
+- [Troubleshooting](https://opfs.dev/docs/troubleshooting/): Resolve errors without destructive recovery.
+
+## Plugins
+
+- [Plugins](https://opfs.dev/docs/plugins/): community subscriptions, separate premium encryption, and planned premium cloud sync.
+- [File subscriptions](https://opfs.dev/docs/plugins/subscriptions/): npm installation, custom workers, filtering, content, and resubscribe/rescan recovery.
+
+## Integrations
+
+- [PGlite](https://opfs.dev/docs/integrations/pglite/): PostgreSQL storage and synchronization settings.
+- [just-bash](https://opfs.dev/docs/integrations/just-bash/): Shell access to workspace files.
+- [DuckDB](https://opfs.dev/docs/integrations/duckdb/): Experimental adapter and compatible engine downloads.
+- [EdgeJS](https://opfs.dev/docs/integrations/edgejs/): Experimental live file access and compatible host downloads.
+
+## Benchmarks
+
+- [Published results](https://opfs.dev/benchmarks/): Device-specific measurements and raw exports. Mac and iPhone collections use different protocols; compare their settings before interpreting rankings.
+- [Methodology](https://opfs.dev/benchmarks/methodology/): Timing boundaries, correctness checks, and collection limits.
+- [Storage and durability](https://opfs.dev/benchmarks/storage/): Backends, buffering, flush policies, and handle usage.
+- [PGlite runner](https://opfs.dev/benchmarks/run/): Run SQL workloads on the current device.
+- [Filesystem runner](https://opfs.dev/benchmarks/filesystem/): Measure VFS file operations.
+- [Collection](https://opfs.dev/benchmarks/collect/): Download repeatable result bundles. Nothing is uploaded automatically.
+
+## Optional
+
+- [Demos](https://opfs.dev/demos/): Interactive examples. Storage and model operations require a browser.
+- [Local AI](https://opfs.dev/demos/ai/): Gemma with a browser-local workspace, an explicit model download, and WebGPU requirements.
+- [Licensing](https://opfs.dev/licensing/): Full PolyForm Noncommercial license.
+- [Changelog](https://opfs.dev/changelog/): Versioned package changes.
+- [Sitemap](https://opfs.dev/sitemap/): All public pages.
+- [Source repository](https://github.com/opfs-vfs/opfs-vfs): Implementation, package documentation, and tests.

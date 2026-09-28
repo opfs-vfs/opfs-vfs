@@ -1,0 +1,58 @@
+{
+  "name": "@opfs-vfs/react",
+  "version": "0.0.1",
+  "description": "React providers and hooks for OPFS VFS volumes.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/opfs-vfs.git",
+    "directory": "packages/react"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test src/__tests__/*.node.test.mjs && vitest run",
+    "test:packed": "node scripts/test-packed.mjs",
+    "test:release-artifact": "node scripts/check-release-artifact.mjs",
+    "benchmark:sdk": "node scripts/benchmark-sdk.mjs"
+  },
+  "devDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:*",
+    "@opfs-vfs/plugin-subscriptions": "workspace:*",
+    "@types/node": "22.20.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
+    "playwright": "1.59.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:^",
+    "@opfs-vfs/plugin-subscriptions": "workspace:^",
+    "react": ">=19.0.0 <20"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

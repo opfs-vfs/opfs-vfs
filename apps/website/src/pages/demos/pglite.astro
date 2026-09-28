@@ -1,0 +1,5 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import PGliteDemo from '../../components/PGliteDemo';
+---
+<SiteLayout title="PGlite demo · OPFS VFS" description="Run PostgreSQL queries in your browser and reopen a database saved with OPFS VFS."><section class="page-head"><div><p class="kicker">Demo / PGlite</p><h1>Postgres with persistent files</h1><p>Run SQL, save the database, and reopen it. Switch to temporary memory to compare storage behavior.</p></div><a class="button" href="/docs/integrations/pglite/">PGlite integration guide →</a></section><PGliteDemo client:only="react" /></SiteLayout>

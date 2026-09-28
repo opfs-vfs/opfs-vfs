@@ -1,0 +1,70 @@
+{
+  "baseCommit": "34ba9b3970c33a57508383778d405f2e1b0d8967",
+  "patch": "collector.patch",
+  "patchSha256": "985ff0a32a488aaf02083ca4f2c82a53c8ca67ff6f8e9295036d663334c326de",
+  "build": "production",
+  "origin": "http://localhost:4325",
+  "machine": "Mac Studio 2022, Apple M1 Max, 64 GB",
+  "macOS": "26.5.2",
+  "macOSBuild": "25F84",
+  "node": "24.21.0",
+  "pnpm": "12.4.2",
+  "method": "Actual installed browsers operated through native computer use; sequential foreground collections; clean regular profiles; extensions disabled",
+  "validation": {
+    "status": "passed",
+    "totalSamples": 204,
+    "measuredSamples": 170,
+    "warmupSamples": 34,
+    "exactJobConfigurations": true,
+    "exactRotatedSchedule": true,
+    "allSamplesSuccessful": true,
+    "allRunsUninterrupted": true,
+    "matchingSourceAndWorkloads": true,
+    "nonOverlappingRunIntervals": true,
+    "lockfileUnchanged": true,
+    "appliedPatchReverseCheckPassed": true
+  },
+  "collections": [
+    {
+      "browser": "safari",
+      "browserVersion": "26.5.2 (21624.2.5.11.8)",
+      "file": "safari.json",
+      "originalDownload": "opfs-bench-safari-4d358f4a-9c1d-4777-a187-508b06f3c1a7.json",
+      "sha256": "4909d875a72ebdc953adb5cd8d9a66d9b815b57efd64897f8ce7628c95717ceb",
+      "startedAt": "2026-09-23T19:48:43.223Z",
+      "finishedAt": "2026-09-23T19:51:53.723Z",
+      "totalSamples": 60,
+      "measuredSamples": 50
+    },
+    {
+      "browser": "chrome",
+      "browserVersion": "153.0.8010.53",
+      "file": "chrome.json",
+      "originalDownload": "opfs-bench-chrome-c845996d-0128-4b1f-a897-8347fa78a2db.json",
+      "sha256": "44ce4803a23c411de81df68b77c43dc933460f768563c9244b236d85ab9a5bd2",
+      "startedAt": "2026-09-23T19:53:56.708Z",
+      "finishedAt": "2026-09-23T19:57:46.833Z",
+      "totalSamples": 72,
+      "measuredSamples": 60
+    },
+    {
+      "browser": "firefox",
+      "browserVersion": "156.0.1",
+      "file": "firefox.json",
+      "originalDownload": "opfs-bench-firefox-c92430b9-934a-4d9e-9331-9b0da42fd47a.json",
+      "sha256": "98f09235bc110b5d96fff7f1069bb5c47eeec479115b295df1fe7b25602c8593",
+      "startedAt": "2026-09-23T20:00:34.229Z",
+      "finishedAt": "2026-09-23T20:06:28.091Z",
+      "totalSamples": 72,
+      "measuredSamples": 60
+    }
+  ],
+  "limitations": [
+    "The M5 handoff records macOS 26.6.2; this machine runs 26.5.2. Compare complete systems, not chip performance alone.",
+    "Firefox automatically updated from 136.0 to 156.0.1 on restart before its collection; the exact timing of its earlier background download was not observed.",
+    "Existing Chrome AI-related launch flags were retained and recorded in README.",
+    "No Low Power Mode field was exposed by pmset; AC power and approximately 58 GiB free disk space were recorded.",
+    "The bundle includes M5 provenance but not its original JSON reports, so matching full browser versions across machines still needs review.",
+    "Results are ready for review, not automatically approved for publication."
+  ]
+}

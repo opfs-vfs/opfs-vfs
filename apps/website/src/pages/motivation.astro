@@ -1,0 +1,50 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import '../styles/benchmark-reading.css';
+---
+<SiteLayout title="Why OPFS VFS · OPFS VFS" description="Why we built a browser filesystem for applications that need synchronous access to many persistent files.">
+  <article class="benchmark-reading">
+    <header class="reading-header">
+      <p class="kicker">Motivation</p>
+      <h1>Why OPFS VFS exists</h1>
+      <p class="reading-lead">We needed browser applications to work with many files, keep them across sessions, and access them synchronously. We built OPFS VFS so each application would not have to build its own filesystem.</p>
+      <div class="reading-links"><a href="/docs/getting-started/">Get started →</a><a href="/demos/filesystem/">Try the filesystem →</a></div>
+    </header>
+    <div class="reading-layout">
+      <nav class="reading-nav" aria-label="On this page">
+        <span>On this page</span>
+        <a href="#problem">More files than available handles</a>
+        <a href="#filesystem">Build the filesystem once</a>
+        <a href="#tools">Work with files you can inspect</a>
+        <a href="#next">Add capabilities with plugins</a>
+      </nav>
+      <div class="reading-body">
+        <section id="problem">
+          <h2>More files than available handles</h2>
+          <p>The first obstacle was a database. During development, PGlite's OPFS access handle pool could not run in macOS Safari. The browser's limit on open synchronous handles was below what a standard Postgres installation needed.</p>
+          <p>Memory-only storage could not keep the database across sessions. PGlite's IndexedDB backend could, but it keeps database files in RAM and saves whole changed files. A small update to a large file can therefore require a large write. That is a property of this backend, not a limit of every IndexedDB application.</p>
+          <p>We wanted persistent file access without tying the number of application files to the number of native handles. That became the starting point for OPFS VFS.</p>
+        </section>
+        <section id="filesystem">
+          <h2>Build the filesystem once</h2>
+          <p>OPFS VFS packs logical files into a volume backed by a bounded set of OPFS handles. Applications use paths, directories, and file operations. The library manages the storage layout, allocation, metadata, and recovery.</p>
+          <p>File operations run synchronously inside a dedicated worker, which suits databases and WebAssembly runtimes. An asynchronous worker client lets the page use the same filesystem without blocking its interface.</p>
+          <p>Browser limits have changed since we started. PGlite's access handle pool completed our published iPhone Safari runs. OPFS VFS still offers a different storage layout and a choice of memory or disk buffering. The right backend depends on the application; our <a href="/benchmarks/">benchmarks</a> and <a href="/benchmarks/storage/">storage guide</a> make those tradeoffs explicit.</p>
+          <p>Persistence is local to a browser and origin. Applications still need deliberate save points and a way to back up important work.</p>
+        </section>
+        <section id="tools">
+          <h2>Work with files you can inspect</h2>
+          <p>A common filesystem also gives applications common tools. The <a href="/docs/integrations/pglite/">PGlite adapter</a> stores database files in a volume. The <a href="/docs/integrations/just-bash/">just-bash adapter</a> brings shell commands and scripts to workspace files.</p>
+          <p>We built <a href="/docs/guides/devtools/">Volume Explorer</a> to browse, preview, and edit those files while an application runs. Developers can inspect a path directly instead of decoding an application's private chunking scheme.</p>
+          <p>The <a href="/demos/ai/">local AI demo</a> uses the same approach. A model works with documents through file paths and shell operations, and you can inspect its changes in the explorer.</p>
+        </section>
+        <section id="next">
+          <h2>Add capabilities with plugins</h2>
+          <p>Protecting stored files was another requirement. Our premium encryption plugin adds encrypted volumes with passkey-based access. Encryption is a separate extension, not a feature of the core package.</p>
+          <p>The <a href="/docs/plugins/subscriptions/">community subscription plugin</a> reports file changes, including edits made by AI tools. Applications can reread affected paths to refresh their interface. A <a href="/docs/plugins/#cloud-sync">premium cloud sync plugin</a> is planned to connect local volumes with backend cloud storage.</p>
+          <div class="reading-links"><a href="/docs/getting-started/">Create your first volume →</a><a href="/demos/">Explore the demos →</a></div>
+        </section>
+      </div>
+    </div>
+  </article>
+</SiteLayout>

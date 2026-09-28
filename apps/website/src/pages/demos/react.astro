@@ -1,0 +1,15 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import ReactSdkDemo from '../../components/ReactSdkDemo';
+---
+<SiteLayout title="React SDK demo · OPFS VFS" description="Edit two independent OPFS VFS volumes with conflict-aware React actions.">
+  <section class="page-head">
+    <div>
+      <p class="kicker">Demo / React SDK preview</p>
+      <h1>Two browser volumes, one React UI</h1>
+      <p>Each editor has its own local volume. Save waits for synchronization, and the second client lets you create a real expected-content conflict.</p>
+    </div>
+    <a class="button" href="/docs/react/">React SDK guide →</a>
+  </section>
+  <ReactSdkDemo client:only="react" />
+</SiteLayout>

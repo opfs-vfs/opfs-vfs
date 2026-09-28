@@ -1,0 +1,19 @@
+.explorer-actions {
+  display: flex;
+  min-width: 0;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.explorer-actions button {
+  flex: 0 0 auto;
+  color: var(--ink);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.68rem;
+}
+.explorer-actions button:disabled {
+  opacity: 0.45;
+}

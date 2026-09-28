@@ -1,0 +1,51 @@
+<figure class="buffer-diagram" aria-label="Two ways file data reaches the volume">
+  <div class="buffer-route">
+    <div class="route-label"><strong>Disk buffer</strong><span>Default</span></div>
+    <div class="data-path">
+      <div class="endpoint"><code>write</code><small>Your application</small></div>
+      <div class="connector"><span>direct block I/O</span><span aria-hidden="true">→</span></div>
+      <div class="endpoint volume"><strong>OPFS volume</strong><small>File data blocks</small></div>
+    </div>
+    <p>No full RAM copy of file contents. Synchronization flushes pending data and metadata.</p>
+  </div>
+  <div class="buffer-route">
+    <div class="route-label"><strong>Memory buffer</strong><span>Optional</span></div>
+    <div class="data-path memory-path">
+      <div class="endpoint"><code>write</code><small>Your application</small></div>
+      <div class="connector"><span>cache</span><span aria-hidden="true">→</span></div>
+      <div class="endpoint"><strong>RAM</strong><small>File contents</small></div>
+      <div class="connector"><span>copy at sync</span><span aria-hidden="true">→</span></div>
+      <div class="endpoint volume"><strong>OPFS volume</strong><small>File data blocks</small></div>
+    </div>
+    <p class="log-branch"><span aria-hidden="true">↳</span> Each write also appends to an <strong>OPFS recovery log</strong>. On recovery, the VFS replays recoverable records into RAM.</p>
+  </div>
+  <figcaption>Both modes use persistent OPFS storage. These are file-data paths, not flush guarantees or a complete view of metadata and bookkeeping.</figcaption>
+</figure>
+
+<style>
+  .buffer-diagram { margin: 2rem 0; color: var(--sl-color-text); }
+  .buffer-diagram :is(div, p, span, small, strong) { margin: 0; }
+  .buffer-route { padding: 1.5rem 0; border-top: 1px solid var(--sl-color-hairline); }
+  .buffer-diagram .route-label { display: flex; align-items: baseline; gap: .75rem; margin-bottom: 1.25rem; }
+  .route-label > strong { font-size: 1.1rem; }
+  .route-label > span { color: var(--sl-color-text-accent); font-size: .8rem; }
+  .data-path { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; gap: .5rem; }
+  .memory-path { grid-template-columns: 1fr .8fr .7fr .8fr 1fr; }
+  .endpoint { display: grid; align-content: center; gap: .35rem; min-height: 5rem; padding: .75rem; border-left: 3px solid var(--sl-color-gray-3); background: var(--sl-color-bg-sidebar); }
+  .endpoint code { width: fit-content; }
+  .endpoint small { font-size: .78rem; line-height: 1.4; }
+  .volume { border-color: var(--sl-color-text-accent); }
+  .connector { display: grid; text-align: center; color: var(--sl-color-text-accent); }
+  .connector span:first-child { font: .72rem/1.4 var(--sl-font-mono); }
+  .connector span:last-child { font-size: 1.6rem; line-height: 1; }
+  .buffer-route > p { margin-top: 1rem; font-size: .875rem; line-height: 1.6; }
+  .log-branch { padding-left: .75rem; border-left: 1px dashed var(--sl-color-text-accent); }
+  .log-branch > span { margin-right: .4rem; color: var(--sl-color-text-accent); }
+  figcaption { margin-top: .5rem; font-size: .8rem; line-height: 1.6; color: var(--sl-color-gray-2); }
+  @media (max-width: 40rem) {
+    .data-path { grid-template-columns: 1fr; gap: .6rem; }
+    .connector { grid-template-columns: 1fr auto; align-items: center; text-align: left; padding-inline: .75rem; }
+    .connector span:last-child { transform: rotate(90deg); }
+    .endpoint { min-height: auto; }
+  }
+</style>

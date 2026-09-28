@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": [
+    "src/index.ts",
+    "src/index_internal.ts",
+    "src/adapter.ts",
+    "src/duckdb-adapter.ts",
+    "src/just-bash-adapter.ts",
+    "src/storage.ts",
+    "src/plugins.ts",
+    "src/worker-client.ts",
+    "src/worker-runtime.ts",
+    "src/wasmer-adapter.ts",
+    "src/wasmer-sync-adapter.ts"
+  ]
+}

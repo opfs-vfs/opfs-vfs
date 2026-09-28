@@ -1,0 +1,115 @@
+{
+  "name": "@opfs-vfs/opfs-vfs",
+  "version": "2.0.0",
+  "description": "A worker-based virtual filesystem backed by the Origin Private File System.",
+  "homepage": "https://github.com/opfs-vfs/opfs-vfs#readme",
+  "bugs": {
+    "url": "https://github.com/opfs-vfs/opfs-vfs/issues"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/opfs-vfs.git",
+    "directory": "packages/opfs-vfs"
+  },
+  "files": [
+    "dist",
+    "LICENSE.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/index_internal.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./pglite": {
+      "types": "./dist/adapter.d.ts",
+      "import": "./dist/pglite.js"
+    },
+    "./just-bash": {
+      "types": "./dist/just-bash-adapter.d.ts",
+      "import": "./dist/just-bash.js"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins.d.ts",
+      "import": "./dist/plugins.js"
+    },
+    "./changes": {
+      "types": "./dist/changes.d.ts",
+      "import": "./dist/changes.js"
+    },
+    "./worker-client": {
+      "types": "./dist/worker-client.d.ts",
+      "import": "./dist/worker-client.js"
+    },
+    "./worker-runtime": {
+      "types": "./dist/worker-runtime.d.ts",
+      "import": "./dist/worker-runtime.js"
+    },
+    "./duckdb": {
+      "types": "./dist/duckdb-adapter.d.ts",
+      "import": "./dist/duckdb.js"
+    },
+    "./wasmer": {
+      "types": "./dist/wasmer-adapter.d.ts",
+      "import": "./dist/wasmer.js"
+    },
+    "./wasmer-sync": {
+      "types": "./dist/wasmer-sync-adapter.d.ts",
+      "import": "./dist/wasmer-sync.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
+    "test": "vitest run",
+    "benchmark:worker-client": "node scripts/benchmark-worker-client.mjs",
+    "test:benchmark-driver": "node --test scripts/benchmark-worker-client.test.mjs",
+    "test:mixed-build": "node scripts/test-mixed-build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:duckdb": "vitest run --config vitest.duckdb.config.ts",
+    "test:edgejs": "vitest run --config vitest.edgejs.config.ts",
+    "test:edgejs-live": "vitest run --config vitest.edgejs-live.config.ts"
+  },
+  "devDependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev64.0",
+    "@electric-sql/pglite": "0.5.4",
+    "@types/node": "22.20.3",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
+    "@wasmer/sdk": "0.14.0",
+    "playwright": "1.59.1",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@duckdb/duckdb-wasm": ">=1.33.1-dev64.0 <1.33.2-0",
+    "@electric-sql/pglite": "^0.5.4",
+    "@wasmer/sdk": "^0.14.0 || 0.14.0-opfs-vfs.1"
+  },
+  "peerDependenciesMeta": {
+    "@electric-sql/pglite": {
+      "optional": true
+    },
+    "@duckdb/duckdb-wasm": {
+      "optional": true
+    },
+    "@wasmer/sdk": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

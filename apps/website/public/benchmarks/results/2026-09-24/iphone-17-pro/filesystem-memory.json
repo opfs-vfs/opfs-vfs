@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "workloadRevision": "small-files-v1",
+  "sourceCommit": "unavailable",
+  "opfsVfsVersion": "1.0.1",
+  "createdAt": "2026-09-24T09:03:09.891Z",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Mobile/15E148 Safari/604.1",
+  "crossOriginIsolated": true,
+  "hardware": "",
+  "interrupted": false,
+  "config": {
+    "files": 100,
+    "repetitions": 3,
+    "bufferMode": "memory",
+    "durability": "balanced"
+  },
+  "payloadBytes": 1024,
+  "samples": [
+    {
+      "repetition": 1,
+      "mountMs": 17.320000000000007,
+      "timings": {
+        "create": 4.659999999999997,
+        "write": 3.960000000000008,
+        "read": 1.7199999999999989,
+        "rename": 5.199999999999989,
+        "delete": 1.1000000000000085,
+        "flush": 3.259999999999991,
+        "reopen": 3.460000000000008
+      },
+      "status": "ok",
+      "verifiedFiles": 50
+    },
+    {
+      "repetition": 2,
+      "mountMs": 6.239999999999995,
+      "timings": {
+        "create": 1.8400000000000034,
+        "write": 2.3999999999999915,
+        "read": 1.3799999999999955,
+        "rename": 2.4799999999999898,
+        "delete": 0.4800000000000182,
+        "flush": 1.7199999999999989,
+        "reopen": 1.4999999999999716
+      },
+      "status": "ok",
+      "verifiedFiles": 50
+    },
+    {
+      "repetition": 3,
+      "mountMs": 4.479999999999961,
+      "timings": {
+        "create": 1.3000000000000114,
+        "write": 1.7199999999999989,
+        "read": 0.5800000000000125,
+        "rename": 1.8999999999999773,
+        "delete": 0.3599999999999852,
+        "flush": 1.400000000000034,
+        "reopen": 1.2199999999999989
+      },
+      "status": "ok",
+      "verifiedFiles": 50
+    }
+  ]
+}

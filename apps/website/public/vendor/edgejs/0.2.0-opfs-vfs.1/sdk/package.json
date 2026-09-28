@@ -1,0 +1,52 @@
+{
+  "name": "@wasmer/sdk",
+  "version": "0.14.0-opfs-vfs.1",
+  "description": "A portable, package-first sandbox SDK powered by Wasmer",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/wasmer-sdk.git",
+    "directory": "js"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "exports": {
+    ".": {
+      "browser": "./dist/index.js",
+      "node": "./dist/node.js",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./service-worker": {
+      "types": "./dist/service-worker.d.ts",
+      "default": "./dist/service-worker.js"
+    },
+    "./service-worker-host": {
+      "types": "./dist/service-worker-host.d.ts",
+      "default": "./dist/service-worker-host.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "pkg",
+    "BUILD-Cargo.lock",
+    "THIRD_PARTY_NOTICES.txt"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@mercuryworkshop/wisp-js": "^0.4.1"
+  }
+}

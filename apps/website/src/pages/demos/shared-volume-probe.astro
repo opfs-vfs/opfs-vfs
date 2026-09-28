@@ -1,0 +1,41 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+---
+<SiteLayout noindex title="Shared volume probe · OPFS VFS" description="An isolated, disposable SharedWorker direct-volume diagnostic.">
+  <section class="page-head">
+    <div>
+      <p class="kicker">Experiment / mobile ownership</p>
+      <h1>SharedWorker direct-volume probe</h1>
+      <p>This disposable diagnostic mounts one direct OPFS VFS in a SharedWorker. It does not change the SDK transport or production demo.</p>
+    </div>
+  </section>
+  <section data-shared-volume-probe aria-label="Shared volume probe">
+    <p data-state role="status">Starting…</p>
+    <ol>
+      <li>Wait for <code>ready</code>, then use <strong>Write, sync and read</strong> in A before opening this same-session tab as B: <a data-same-session target="_blank" rel="noopener"></a></li>
+      <li>Hide A for at least 60 seconds. In active B, use <strong>Write, sync and read</strong>.</li>
+      <li>Close A, then repeat B’s write, sync, and read. Use <strong>Close, reopen and verify</strong> before cleanup.</li>
+      <li>Copy the fixed report after each operation, then use cleanup only after a successful reopen verification.</li>
+    </ol>
+    <p>
+      <button type="button" data-write>Write, sync and read</button>
+      <button type="button" data-reopen>Close, reopen and verify</button>
+      <button type="button" data-cleanup>Clean up disposable volume</button>
+    </p>
+    <output data-report></output>
+  </section>
+</SiteLayout>
+<script>
+  import '../../scripts/shared-volume-probe';
+</script>
+<style>
+  [data-same-session],
+  [data-report] {
+    overflow-wrap: anywhere;
+  }
+
+  [data-report] {
+    display: block;
+    white-space: pre-wrap;
+  }
+</style>

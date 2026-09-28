@@ -1,0 +1,8 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import DuckDBDemo from '../../components/DuckDBDemo';
+---
+<SiteLayout title="DuckDB demo · OPFS VFS" description="Query a million generated rows with an experimental DuckDB adapter and a database saved in OPFS VFS.">
+  <section class="page-head"><div><p class="kicker">Demo / DuckDB / experimental</p><h1>Analyze a million rows with DuckDB</h1><p>Prepare one million sample sales records, then sum revenue or group it by region. The database stays in OPFS VFS for later visits. This experimental demo downloads a compatible custom DuckDB-Wasm build on first use.</p></div><a class="button" href="/docs/integrations/duckdb/">DuckDB guide →</a></section>
+  <DuckDBDemo client:only="react" />
+</SiteLayout>

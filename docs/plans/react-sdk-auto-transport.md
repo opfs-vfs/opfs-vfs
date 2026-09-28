@@ -1,0 +1,13 @@
+# React SDK automatic worker transport — implementation note
+
+The work started from PR #88 (`df98c4008deac9bd9cd37cf03eb7a34f59c7e396`). PR #90 added a homepage layer above it during implementation, so the core, React, and docs/demo layers now follow #90 in stack #74.
+
+`openOpfsVfsWorker()` and managed React volumes default to `auto`. An explicit `new OpfsVfsWorker()` or `transport: 'dedicated'` remains dedicated. `auto` first keeps a positively identified compatible dedicated owner. Otherwise it probes a fresh SharedWorker port by actually opening and closing a scratch OPFS sync access handle in that scope. It chooses dedicated only when the page SharedWorker API, compatible application factory, or shared-scope sync handle is unavailable. Probe/attach faults and timeouts remain errors; there is no silent fallback after an uncertain result. The selected transport and fallback reason are visible in client and React status.
+
+The shared host reserves an ATTACH through READY. A follower sends COMMIT only after its client is ready; abort, timeout, or construction failure sends CANCEL. If the last reservation ends before any commit, the host releases the volume lock and closes. A bounded reservation also handles a page lost before commit. `forceLeader` requires explicit dedicated transport so auto cannot bypass an observed owner lock.
+
+The bundled core and React SharedWorker files are emitted as package-relative assets in their packed artifacts. Custom application workers still need matching page and worker plugin registrations and a stable SharedWorker factory. React's no-worker path bundles subscriptions in both worker types.
+
+Local checks: core and React builds/typechecks; focused core and React browser tests in Chromium and WebKit under the shared browser lock; website build/typecheck; Chromium demo; persistent-WebKit auto and shared demo; packed tarball asset inspection. The post-READY cancellation regression delays READY delivery, aborts, then opens a dedicated client on the released lock. Existing React test harness logs `act(...)` warnings despite passing assertions. GitHub Actions remain disabled in both repositories; no CI result is claimed.
+
+Local headless timing sample (five fresh volumes per route, median from call start): Chromium explicit dedicated selected in 0.1 ms and reached ready in 13.6 ms; auto dedicated fallback selected in 29.5 ms and reached ready in 43.7 ms. WebKit explicit dedicated selected in 0.1 ms and reached ready in 18.7 ms; auto shared selected in 23.3 ms and reached ready in 23.6 ms. Forced shared had the same WebKit medians because it runs the capability probe too. These are small local samples, not a browser performance guarantee.

@@ -1,0 +1,171 @@
+.edgejs-demo {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  overflow: hidden;
+}
+.edgejs-demo header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 24px 12px;
+}
+.edgejs-demo h2 {
+  margin: 8px 0;
+  font-size: clamp(24px, 4vw, 34px);
+}
+.edgejs-demo h3,
+.edgejs-editor label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.edgejs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.edgejs-demo button {
+  cursor: pointer;
+}
+.edgejs-demo button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.edgejs-status {
+  padding: 0 24px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.edgejs-error {
+  margin: 16px 24px;
+  padding: 12px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+  overflow-wrap: anywhere;
+}
+.edgejs-workspace {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  border-top: 1px solid var(--line);
+}
+.edgejs-editor,
+.edgejs-output,
+.edgejs-files > div {
+  padding: 24px;
+  min-width: 0;
+}
+.edgejs-output {
+  border-left: 1px solid var(--line);
+}
+.edgejs-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 290px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px;
+  color: var(--code-ink);
+  background: var(--code-bg);
+  font:
+    13px/1.7 ui-monospace,
+    monospace;
+  tab-size: 2;
+}
+.edgejs-demo pre {
+  margin: 0;
+  padding: 14px;
+  min-height: 180px;
+  max-height: 350px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--code-bg);
+  border-radius: 6px;
+  color: var(--code-ink);
+  font:
+    13px/1.7 ui-monospace,
+    monospace;
+}
+.edgejs-editor p,
+.edgejs-files p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.edgejs-files {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  border-top: 1px solid var(--line);
+}
+.edgejs-files > div + div {
+  border-left: 1px solid var(--line);
+}
+.edgejs-files ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 300px;
+  overflow: auto;
+}
+.edgejs-files button {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font:
+    12px/1.5 ui-monospace,
+    monospace;
+}
+.edgejs-files button span:first-child {
+  overflow-wrap: anywhere;
+}
+.edgejs-files button span:last-child {
+  flex: none;
+  color: var(--muted);
+}
+.edgejs-files button[aria-pressed='true'] {
+  background: var(--soft);
+  color: var(--accent);
+}
+.edgejs-demo :is(button, textarea, pre):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .edgejs-workspace,
+  .edgejs-files {
+    grid-template-columns: 1fr;
+  }
+  .edgejs-output,
+  .edgejs-files > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .edgejs-demo header,
+  .edgejs-editor,
+  .edgejs-output,
+  .edgejs-files > div {
+    padding: 18px;
+  }
+  .edgejs-status {
+    padding: 0 18px;
+  }
+  .edgejs-editor textarea {
+    min-height: 330px;
+  }
+}

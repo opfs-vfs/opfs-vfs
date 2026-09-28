@@ -1,0 +1,28 @@
+---
+import '../../../styles/global.css';
+import ThemeControl from '../../../components/ThemeControl.astro';
+import DevtoolsDemo from '../../../components/DevtoolsDemo';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex" />
+    <title>Volume Explorer live example</title>
+  </head>
+  <body>
+    <main>
+      <header><h1>Try a real volume</h1><ThemeControl /></header>
+      <DevtoolsDemo client:load initialDock="bottom" volumePrefix="docs-volume-explorer" />
+    </main>
+  </body>
+</html>
+<style>
+  main { padding: 1rem; }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.1rem; margin: 0; }
+  main :global(p) { font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }
+  main :global(.demo-actions) { display: flex; flex-wrap: wrap; gap: .5rem; }
+  main :global(.button) { font-size: .8rem; padding: .6rem .8rem; }
+</style>

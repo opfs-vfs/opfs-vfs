@@ -1,0 +1,328 @@
+{
+  "assetRelease": "0.2.0-opfs-vfs.1",
+  "sdk": {
+    "repository": "https://github.com/opfs-vfs/wasmer-sdk",
+    "commit": "3bc6d7513ae1cc0db82a4ccf6e70b5f107788be0",
+    "packageVersion": "0.14.0-opfs-vfs.1",
+    "abi": 1
+  },
+  "runtime": {
+    "repository": "https://github.com/opfs-vfs/wasmer",
+    "commit": "68a240a5c22a8ad9cfb127a06f805a058339d9b7",
+    "base": "e53822d23a842b1d602356cd8151f742703fdb43",
+    "dependencies": [
+      {
+        "pr": "https://github.com/wasmerio/wasmer/pull/6940",
+        "sourceCommit": "0bee6a65b0e35cb2a9fe512282be9ce868ba1056",
+        "integrationCommit": "702743bf9b8463285c792bd6546a5f71044bd43f"
+      },
+      {
+        "pr": "https://github.com/wasmerio/wasmer/pull/6731",
+        "sourceCommit": "82fb25035a7f35ed71453ea4d27f6047f7f3fb68",
+        "integrationCommit": "ebafdd55f5b0aa644786fe84df3b45e2a4db8c7e",
+        "scope": "Only metadata/readlink errno propagation hunks"
+      }
+    ],
+    "napiSubmodule": "38834f059fea9df3585e2d76d31c255fa13f5dc9"
+  },
+  "guest": {
+    "package": "wasmer/edgejs@0.2.0",
+    "sha256": "a2fe70af9f9b4803fc88efa065ac9f88ba50a6bdc41e786e1d15220362089d2c",
+    "delivery": "Official Wasmer registry; guest and dependencies not included in static host download"
+  },
+  "toolchain": {
+    "rust": "nightly-2026-09-17",
+    "wasmBindgen": "0.2.126",
+    "binaryen": "131.0.0",
+    "typescript": "5.9.2",
+    "buildHost": "macOS arm64"
+  },
+  "build": {
+    "commands": [
+      "npm ci",
+      "WASMER_RUST_TOOLCHAIN=nightly-2026-09-17 WASMER_REPO=<pinned runtime checkout> npm run build:wasm",
+      "npm run build:ts",
+      "npm pack --ignore-scripts"
+    ],
+    "notes": [
+      "Preserve sdk/dist and sdk/pkg relative paths.",
+      "The package manifest identifies the custom prerelease and includes build lockfile and notices.",
+      "Checksums identify these files, not cross-machine reproducibility.",
+      "Browser guest networking is disabled in the demo; host package acquisition still needs network access."
+    ]
+  },
+  "assets": {
+    "sdk/BUILD-Cargo.lock": {
+      "sha256": "5d3b3f55aea1a44c9a744fbd23d8285b18562166e752ae5f3bfe319d3aa2b2b0",
+      "bytes": 141026
+    },
+    "sdk/LICENSE": {
+      "sha256": "6350e730ed61a3ec83b5843634aa0a476505ec9b96792600606ced736835b45c",
+      "bytes": 1460
+    },
+    "sdk/THIRD_PARTY_NOTICES.txt": {
+      "sha256": "e12a2ba4c3cd6b15df518bca3e764cb5f1e293714e93a80112e500db79e17509",
+      "bytes": 3624229
+    },
+    "sdk/dist/browser-worker.d.ts": {
+      "sha256": "c1dad30549ddd91884dcccc5e8c3c6955979b27ba51f06990781ec669217ca30",
+      "bytes": 55
+    },
+    "sdk/dist/browser-worker.d.ts.map": {
+      "sha256": "6bd039b198de238f40d66864fcf4456afdc50483d740e2e381daf9619304f8aa",
+      "bytes": 122
+    },
+    "sdk/dist/browser-worker.js": {
+      "sha256": "cb36f5723bb1a6f9d55ce8a31fac76eb5e2e2ae7e40e5104e73da18c7ae68cea",
+      "bytes": 6080
+    },
+    "sdk/dist/browser-worker.js.map": {
+      "sha256": "adeb73791b33a82c155fe23c3d512633802300de2ede9dda88e4f2acfd2c8038",
+      "bytes": 5758
+    },
+    "sdk/dist/capi-worker-bridge.d.ts": {
+      "sha256": "913d450a2de702680f0db00a6af35aacfdb2ef87156e9fe85f0a437c4dfd47a4",
+      "bytes": 813
+    },
+    "sdk/dist/capi-worker-bridge.d.ts.map": {
+      "sha256": "99d8ed9416b1b8d083f160e53244ddc2d0ffa972c74a48c91c5f5d16cc371a4c",
+      "bytes": 419
+    },
+    "sdk/dist/capi-worker-bridge.js": {
+      "sha256": "fabe7fa99b107fcd08e14076ca2be50fc45ea73816fc15c96b13766e4eea260d",
+      "bytes": 4303
+    },
+    "sdk/dist/capi-worker-bridge.js.map": {
+      "sha256": "38ad568f09eef7b2d71cab3788cd87fd7cef953a86e337804d3b257a2a343b11",
+      "bytes": 3723
+    },
+    "sdk/dist/host-filesystem.d.ts": {
+      "sha256": "9f677a3c7b8fedb817786dd267debcba0898b664f3b9ca46950ba871c1adc69b",
+      "bytes": 1133
+    },
+    "sdk/dist/host-filesystem.d.ts.map": {
+      "sha256": "b6aa731d3a36daaf076c911da1a51c6433da1e0cc3ac789ef8cbae73c5f8e378",
+      "bytes": 775
+    },
+    "sdk/dist/host-filesystem.js": {
+      "sha256": "8d93bc4f93065fd1b7c66d658f84153f1e02dd89e6860e1b88d5accfd6cc1c3e",
+      "bytes": 4538
+    },
+    "sdk/dist/host-filesystem.js.map": {
+      "sha256": "81a707645aefe61dab9f2325b7243f9612a0ddabc09d84b06550320bd19f2fab",
+      "bytes": 4075
+    },
+    "sdk/dist/index.d.ts": {
+      "sha256": "b6761185e6b3bb015d72cab57f7d3885d5fec5344c3c71e889b77a1609170a70",
+      "bytes": 16063
+    },
+    "sdk/dist/index.d.ts.map": {
+      "sha256": "e6fa8f6431892724a6e1742a7eb6155dffc1c950a2ea2d2d09de2571e801ca1b",
+      "bytes": 10361
+    },
+    "sdk/dist/index.js": {
+      "sha256": "c39334d554e0b0e1f834d49423b3c411e520c6fbc09df1515d18f151934d74bb",
+      "bytes": 38367
+    },
+    "sdk/dist/index.js.map": {
+      "sha256": "9458d89b82cc93279053f08343e148d65f346576d6fc6889565f80117fe76c45",
+      "bytes": 35411
+    },
+    "sdk/dist/node-cache.d.ts": {
+      "sha256": "5715a90410aee49ed4156e931a0e602b9770acb7ae4c135a284f3d03e8aab018",
+      "bytes": 745
+    },
+    "sdk/dist/node-cache.d.ts.map": {
+      "sha256": "e6841bb70039f18ed81fa98756e64eb7a5e9b4bf14b073f6d3a2d68eb4e8424a",
+      "bytes": 710
+    },
+    "sdk/dist/node-cache.js": {
+      "sha256": "3f93bceeeb294897f3cba29ccd4ff8ece72cea468a8eb2628921c172591facbb",
+      "bytes": 3037
+    },
+    "sdk/dist/node-cache.js.map": {
+      "sha256": "a1824fa4e90f6e58d19d1f33dcf7ddb475a1b0d9e5c53bd1dd4b127a9442b4fb",
+      "bytes": 3393
+    },
+    "sdk/dist/node-network-rpc.d.ts": {
+      "sha256": "5db88931827a3175af38d871606ea6cfabac278c0e73eac121db039eb5262c31",
+      "bytes": 351
+    },
+    "sdk/dist/node-network-rpc.d.ts.map": {
+      "sha256": "5b75454f280fad608cea49ef2755284fc52e3c5836a10c066b990196bad0a4fc",
+      "bytes": 310
+    },
+    "sdk/dist/node-network-rpc.js": {
+      "sha256": "55fff532a77e467a13d99f8f77d189c334224b05783c73788ab2eb2e6971f4ca",
+      "bytes": 484
+    },
+    "sdk/dist/node-network-rpc.js.map": {
+      "sha256": "659c63007f6ca431590499cfb4bf51cc0170ee1d33f1812258d74341d8958a86",
+      "bytes": 536
+    },
+    "sdk/dist/node-network.d.ts": {
+      "sha256": "5bb244a61833d41a1797e4a01c601483e177e8e08272600c4804d98fc4e7a287",
+      "bytes": 1626
+    },
+    "sdk/dist/node-network.d.ts.map": {
+      "sha256": "c61a9687c034396a630d8360183838f4ced50bfc4c600dafa71b0bfac36dbbde",
+      "bytes": 1572
+    },
+    "sdk/dist/node-network.js": {
+      "sha256": "ce33d7679346207be4b6b88c2be3068257137159cb161a0bd6a0a5e8ca51897a",
+      "bytes": 10436
+    },
+    "sdk/dist/node-network.js.map": {
+      "sha256": "7c6ae4b2b72dbf36342fa0379b91c85dc6165e00b60699efc1156a6a314ccc1d",
+      "bytes": 11918
+    },
+    "sdk/dist/node-worker-adapter.d.ts": {
+      "sha256": "b4888e1e370faf4b3d4179c5a169d12fb6f3188ce90845ecf0b8b537b12019dd",
+      "bytes": 755
+    },
+    "sdk/dist/node-worker-adapter.d.ts.map": {
+      "sha256": "da7614ca4253412c002832389980b49bfb4f20a45f8139f1e37aeea08914f482",
+      "bytes": 760
+    },
+    "sdk/dist/node-worker-adapter.js": {
+      "sha256": "21f575e7c3bbdd702bf48a93c51d684cd1e257431a9cdbc7471cff7ef2cca77f",
+      "bytes": 5419
+    },
+    "sdk/dist/node-worker-adapter.js.map": {
+      "sha256": "23d5173b36b9174532ecc7739f100e8e1ef32761016362ec2c811af2e67f5d2f",
+      "bytes": 5315
+    },
+    "sdk/dist/node-worker.d.ts": {
+      "sha256": "bac7ef189c2bbc069c04f1e8bd67899f1d1e8f5f091d16dbc8d85da56bbd335f",
+      "bytes": 52
+    },
+    "sdk/dist/node-worker.d.ts.map": {
+      "sha256": "8d6920bc7268791bb594080ca66a37459fffafca18d42c88655ef79b6d9468af",
+      "bytes": 116
+    },
+    "sdk/dist/node-worker.js": {
+      "sha256": "f67c527c4635a156eaee3a2e7105b14e19a3d38b2314c06eb87761e93e868cf1",
+      "bytes": 5921
+    },
+    "sdk/dist/node-worker.js.map": {
+      "sha256": "ec929128a961a44f23c2bef0a4e277c4c55696bc0816f76ab1f0d15a479a7515",
+      "bytes": 6417
+    },
+    "sdk/dist/node.d.ts": {
+      "sha256": "8cc6fb71309185f89a452e8ba1c66b57a04dae3ad837cd3edb91607a2350e3f9",
+      "bytes": 556
+    },
+    "sdk/dist/node.d.ts.map": {
+      "sha256": "ad698132ccce10324a9953c5bab7b2a5a8254a9bacd341edf83e0db2c3dde263",
+      "bytes": 406
+    },
+    "sdk/dist/node.js": {
+      "sha256": "0a917fce4d5b22e8d39d746e9c2ae0a37715802d712e6f0f67486919b237412c",
+      "bytes": 3220
+    },
+    "sdk/dist/node.js.map": {
+      "sha256": "7b596124a593aeb2d8d2d2d6334f4d67ddcb865e54c9e5c9138575904cb98e84",
+      "bytes": 2859
+    },
+    "sdk/dist/service-worker-host.d.ts": {
+      "sha256": "fce1bba2bbd6a7ce4e74ef4a5d5d91d8c6d89d4b81fa5d318a6d3f0d5ede939f",
+      "bytes": 60
+    },
+    "sdk/dist/service-worker-host.d.ts.map": {
+      "sha256": "baca5027c825e2d50fda17054b2176d69b9600af0588e77f5fb41b273a37588d",
+      "bytes": 132
+    },
+    "sdk/dist/service-worker-host.js": {
+      "sha256": "7ba2b0b79e51414fcd263e5c9ac5df45eba5fb3569eef71e13555e1629645663",
+      "bytes": 6671
+    },
+    "sdk/dist/service-worker-host.js.map": {
+      "sha256": "61d634b595b6752b34a4b55bb8522d71afcc355c8252478293b316b673c5cad0",
+      "bytes": 6318
+    },
+    "sdk/dist/service-worker.d.ts": {
+      "sha256": "bb0240fb05a1d24c3ea0322b7a078ef4018a60433f514df1a619fe3b60d2af82",
+      "bytes": 55
+    },
+    "sdk/dist/service-worker.d.ts.map": {
+      "sha256": "6ef409a19d9ef895d2171ac35643ad0fb89705720b26fbd386c08cee903c8b24",
+      "bytes": 122
+    },
+    "sdk/dist/service-worker.js": {
+      "sha256": "b81cff7751ff5d8ec0fd89b9b7b12f650e1f6d15ac16d0fcfccdb11a3694ff51",
+      "bytes": 6559
+    },
+    "sdk/dist/service-worker.js.map": {
+      "sha256": "5bc0d954593a19a0a7cd5cd211be12d4814716043cf5a7b2b59f8ab42a3d67af",
+      "bytes": 6567
+    },
+    "sdk/dist/sync-fs.d.ts": {
+      "sha256": "2dd25738a22991174e1bce06f6bcf27de4b953fd59b15977e3749383696e9e2b",
+      "bytes": 1858
+    },
+    "sdk/dist/sync-fs.d.ts.map": {
+      "sha256": "4e975e28bc6026491efb73e514398ebb8f32b76992a86dd797b9bb2f9b554d0d",
+      "bytes": 1630
+    },
+    "sdk/dist/sync-fs.js": {
+      "sha256": "25b2803063e943c6e1744941aedbe13e7bb54591caa0f20520e94b5e3da0210f",
+      "bytes": 11970
+    },
+    "sdk/dist/sync-fs.js.map": {
+      "sha256": "b4100f3c3206673dfc6ffec36ba13d381225e349de9bc977805b32dd3c12758c",
+      "bytes": 12784
+    },
+    "sdk/dist/wisp-network.d.ts": {
+      "sha256": "f415cf00e75b900f498ddae40127c2493aa62805133c6f2db8aff4798a87fbd1",
+      "bytes": 1158
+    },
+    "sdk/dist/wisp-network.d.ts.map": {
+      "sha256": "12d422808539271b1f85c8f07cacd4ba5baaa4975c43ba123e5883680a278ae4",
+      "bytes": 1224
+    },
+    "sdk/dist/wisp-network.js": {
+      "sha256": "0de4453b159a56db49dffd282bb04efb5fcd6a852db7b7c19d91fe6a9a17e065",
+      "bytes": 18302
+    },
+    "sdk/dist/wisp-network.js.map": {
+      "sha256": "08fc26044e163bbedc39a702223446363b05f6bcfa375f4e35fd1a6f89aed527",
+      "bytes": 18928
+    },
+    "sdk/package.json": {
+      "sha256": "7b9fa1897ca7b1e8514da50447e7f870287e46873428f85bc8a50357ab5d5fc4",
+      "bytes": 1237
+    },
+    "sdk/pkg/snippets/wasmer-napi-4dc421676e010b84/acorn.LICENSE": {
+      "sha256": "76a876cf886ff9be2a8b5e2e86514fed06223c8c9f0c1e9ee9606e93841e00b7",
+      "bytes": 1099
+    },
+    "sdk/pkg/snippets/wasmer-napi-4dc421676e010b84/acorn.mjs": {
+      "sha256": "953573b8fdab71599749ea5f2b33d3e760c2116178f9423ee7458dbe39d59453",
+      "bytes": 233301
+    },
+    "sdk/pkg/snippets/wasmer-napi-4dc421676e010b84/inline0.js": {
+      "sha256": "9f2ae7628f2ee0b054392499f3eff9496ec4e07e106e7db511dfea3513846c4c",
+      "bytes": 32824
+    },
+    "sdk/pkg/wasmer_sdk_js.d.ts": {
+      "sha256": "49d86f1d7af5b8d86336be0688a94b8c50901a5872b46abe151ebfbcecbaa1be",
+      "bytes": 38328
+    },
+    "sdk/pkg/wasmer_sdk_js.js": {
+      "sha256": "b33bf1815d43d91ab6c8e6806f04b705e287310950a0fe2051171bbf068082ac",
+      "bytes": 120906
+    },
+    "sdk/pkg/wasmer_sdk_js_bg.wasm": {
+      "sha256": "ea3b15b1cf963e4aec7bf50313775e92b772c722755f300cbb5d923753efff12",
+      "bytes": 4698104
+    },
+    "sdk/pkg/wasmer_sdk_js_bg.wasm.d.ts": {
+      "sha256": "42f8e0947a8fe1576209769e852bba7a84e7fad9dbf30e00246d18a97801d4f6",
+      "bytes": 31491
+    },
+    "wasmer-sdk-0.14.0-opfs-vfs.1.tgz": {
+      "sha256": "9ac2c08a4f017a5fefc5a3b8161e25fd889f90fbe2c2d466cc103da81c51bb26",
+      "bytes": 2089531
+    }
+  }
+}

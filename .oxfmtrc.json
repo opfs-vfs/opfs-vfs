@@ -1,0 +1,21 @@
+{
+  "singleQuote": true,
+  "printWidth": 120,
+  "ignorePatterns": [
+    "**/dist/**",
+    "pnpm-lock.yaml",
+    "**/LICENSE.md",
+    "**/.astro/**",
+    "apps/website/public/ai-assets/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+    ".scratch/**",
+    "**/.duckdb/**",
+    "apps/website/public/vendor/duckdb/**",
+    "apps/website/public/vendor/edgejs/**",
+    "apps/website/public/benchmarks/results/**/*.json",
+    "apps/website/src/data/benchmark-results.json",
+    "docs/benchmarks/react-sdk/**",
+    "**/.packed/**"
+  ]
+}

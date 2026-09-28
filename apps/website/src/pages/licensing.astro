@@ -1,0 +1,34 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import Markdown from 'react-markdown';
+import license from '../../../../LICENSE.md?raw';
+---
+<SiteLayout title="Licensing · OPFS VFS" description="Read the PolyForm Noncommercial license.">
+  <article class="licensing">
+    <p class="kicker">Licensing</p>
+    <h1>Noncommercial licensing</h1>
+    <p class="lead">The next OPFS VFS release is source-available under the PolyForm Noncommercial License 1.0.0.</p>
+    <div class="license-options">
+      <section><h2>Permitted use</h2><p>The license permits noncommercial use, modification, and distribution. It also permits use by specified charitable, educational, research, public safety, health, environmental, and government organizations.</p></section>
+      <section><h2>Commercial use</h2><p>The license does not generally grant commercial use, including internal business use. Contact the copyright holder for separate permission. Open-source projects with a commercial purpose also need separate permission.</p></section>
+    </div>
+    <p>PolyForm Noncommercial is source-available, not OSI-approved open source. The full license below governs distributions carrying it.</p>
+    <div class="license-text"><Markdown>{license}</Markdown></div>
+  </article>
+</SiteLayout>
+<style>
+  .licensing { max-width: 900px; margin: 24px auto 50px; line-height: 1.65; }
+  .licensing > h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.05; margin: 16px 0 24px; }
+  .lead { max-width: 680px; color: var(--muted); font-size: 18px; }
+  .license-options { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin: 32px 0; }
+  .license-options section { padding: 26px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+  .license-options h2 { margin: 0 0 14px; }
+  .license-options p, .licensing > p:not(.kicker) { color: var(--muted); }
+  .licensing strong { color: var(--ink); }
+  .license-text { margin-top: 48px; padding-top: 28px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .license-text :global(h1) { font-size: 28px; line-height: 1.2; }
+  .license-text :global(h2) { margin-top: 30px; font-size: 20px; }
+  .license-text :global(p), .license-text :global(li) { color: var(--muted); font-size: 14px; }
+  @media (max-width: 700px) { .licensing { margin: 20px auto; } }
+  @media (max-width: 600px) { .license-options { grid-template-columns: 1fr; } }
+</style>

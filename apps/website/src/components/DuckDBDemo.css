@@ -1,0 +1,174 @@
+.duckdb-demo {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.duckdb-demo header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 24px 12px;
+}
+.duckdb-demo h2 {
+  margin: 8px 0;
+  font-size: clamp(24px, 4vw, 34px);
+}
+.duckdb-demo h3,
+.duckdb-editor label {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+.duckdb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.duckdb-demo button {
+  cursor: pointer;
+}
+.duckdb-demo button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.duckdb-status {
+  padding: 0 24px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.duckdb-error {
+  margin: 16px 24px;
+  padding: 12px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+  overflow-wrap: anywhere;
+}
+.duckdb-workspace {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-block: 1px solid var(--line);
+}
+.duckdb-editor,
+.duckdb-results {
+  padding: 24px;
+  min-width: 0;
+}
+.duckdb-results {
+  border-left: 1px solid var(--line);
+}
+.duckdb-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.duckdb-editor textarea {
+  display: block;
+  width: 100%;
+  min-height: 330px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px;
+  color: var(--code-ink);
+  background: var(--code-bg);
+  font:
+    13px/1.7 ui-monospace,
+    monospace;
+  tab-size: 2;
+}
+.duckdb-demo p {
+  line-height: 1.6;
+}
+.duckdb-editor > p,
+.duckdb-results > p,
+.duckdb-demo footer p {
+  color: var(--muted);
+  font-size: 13px;
+}
+.duckdb-table-scroll {
+  max-height: 440px;
+  overflow: auto;
+}
+.duckdb-demo table {
+  border-collapse: collapse;
+  min-width: 100%;
+  font:
+    13px/1.6 ui-monospace,
+    monospace;
+}
+.duckdb-demo th,
+.duckdb-demo td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+  text-align: left;
+  white-space: pre;
+}
+.duckdb-demo th {
+  color: var(--accent);
+  font-weight: 500;
+}
+.duckdb-null {
+  color: var(--muted);
+  font-style: italic;
+}
+.duckdb-demo footer {
+  padding: 12px 24px;
+}
+.duckdb-demo :is(button, textarea, .duckdb-table-scroll):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (max-width: 760px) {
+  .duckdb-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .duckdb-results {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .duckdb-demo header,
+  .duckdb-editor,
+  .duckdb-results,
+  .duckdb-demo footer {
+    padding: 18px;
+  }
+  .duckdb-status {
+    padding: 0 18px;
+  }
+}
+
+.duckdb-dataset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  padding: 24px;
+  border-top: 1px solid var(--line);
+}
+.duckdb-dataset p,
+.duckdb-dataset details {
+  font-size: 13px;
+  color: var(--muted);
+}
+.duckdb-dataset summary {
+  cursor: pointer;
+  margin-top: 16px;
+}
+.duckdb-dataset pre {
+  overflow: auto;
+  font-size: 12px;
+}
+.duckdb-preparation {
+  color: var(--accent) !important;
+}
+@media (max-width: 760px) {
+  .duckdb-dataset {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+  }
+}

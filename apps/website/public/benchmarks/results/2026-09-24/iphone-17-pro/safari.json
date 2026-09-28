@@ -1,0 +1,956 @@
+{
+  "schemaVersion": 2,
+  "createdAt": "2026-09-24T08:38:12.437Z",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6.1 Mobile/15E148 Safari/604.1",
+  "crossOriginIsolated": true,
+  "config": {
+    "backends": [
+      "opfs-vfs",
+      "opfs-ahp",
+      "idb",
+      "memory"
+    ],
+    "rows": null,
+    "repetitions": 3,
+    "bufferMode": "disk",
+    "durability": "balanced",
+    "relaxedDurability": false,
+    "workload": "pglite-speedtest"
+  },
+  "samples": [
+    {
+      "backend": "opfs-vfs",
+      "repetition": 1,
+      "initMs": 562.2399999999998,
+      "workloadMs": 2101.3800000000037,
+      "persistenceMs": 0,
+      "reopenMs": 47.38000000000011,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 20.980000000000018
+        },
+        {
+          "id": 2,
+          "durationMs": 203.62000000000035
+        },
+        {
+          "id": 3,
+          "durationMs": 182.15999999999985
+        },
+        {
+          "id": 4,
+          "durationMs": 106.94000000000051
+        },
+        {
+          "id": 5,
+          "durationMs": 242.76000000000022
+        },
+        {
+          "id": 6,
+          "durationMs": 24.280000000000655
+        },
+        {
+          "id": 7,
+          "durationMs": 136.40000000000055
+        },
+        {
+          "id": 8,
+          "durationMs": 59.98000000000047
+        },
+        {
+          "id": 9,
+          "durationMs": 364.7599999999993
+        },
+        {
+          "id": 10,
+          "durationMs": 511.9200000000001
+        },
+        {
+          "id": 11,
+          "durationMs": 73.48000000000047
+        },
+        {
+          "id": 12,
+          "durationMs": 8.160000000000764
+        },
+        {
+          "id": 13,
+          "durationMs": 10.399999999999636
+        },
+        {
+          "id": 14,
+          "durationMs": 83.44000000000051
+        },
+        {
+          "id": 15,
+          "durationMs": 68.64000000000033
+        },
+        {
+          "id": 16,
+          "durationMs": 3.4600000000000364
+        }
+      ]
+    },
+    {
+      "backend": "opfs-vfs",
+      "repetition": 2,
+      "initMs": 561.8999999999996,
+      "workloadMs": 2027.12,
+      "persistenceMs": 0,
+      "reopenMs": 46.68000000000029,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 9.400000000000546
+        },
+        {
+          "id": 2,
+          "durationMs": 139.48000000000047
+        },
+        {
+          "id": 3,
+          "durationMs": 181.22000000000025
+        },
+        {
+          "id": 4,
+          "durationMs": 103.27999999999975
+        },
+        {
+          "id": 5,
+          "durationMs": 261.71999999999935
+        },
+        {
+          "id": 6,
+          "durationMs": 26.079999999999927
+        },
+        {
+          "id": 7,
+          "durationMs": 96.34000000000015
+        },
+        {
+          "id": 8,
+          "durationMs": 56.05999999999949
+        },
+        {
+          "id": 9,
+          "durationMs": 375.1400000000003
+        },
+        {
+          "id": 10,
+          "durationMs": 521.4199999999992
+        },
+        {
+          "id": 11,
+          "durationMs": 75.13999999999942
+        },
+        {
+          "id": 12,
+          "durationMs": 8.099999999999454
+        },
+        {
+          "id": 13,
+          "durationMs": 10.700000000000728
+        },
+        {
+          "id": 14,
+          "durationMs": 86.18000000000029
+        },
+        {
+          "id": 15,
+          "durationMs": 73.68000000000029
+        },
+        {
+          "id": 16,
+          "durationMs": 3.180000000000291
+        }
+      ]
+    },
+    {
+      "backend": "opfs-vfs",
+      "repetition": 3,
+      "initMs": 618.539999999999,
+      "workloadMs": 2263.5200000000077,
+      "persistenceMs": 0,
+      "reopenMs": 44.219999999999345,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 7.380000000001019
+        },
+        {
+          "id": 2,
+          "durationMs": 143.08000000000175
+        },
+        {
+          "id": 3,
+          "durationMs": 184.5
+        },
+        {
+          "id": 4,
+          "durationMs": 105.02000000000044
+        },
+        {
+          "id": 5,
+          "durationMs": 260.5000000000018
+        },
+        {
+          "id": 6,
+          "durationMs": 27.73999999999978
+        },
+        {
+          "id": 7,
+          "durationMs": 110.79999999999927
+        },
+        {
+          "id": 8,
+          "durationMs": 58.31999999999971
+        },
+        {
+          "id": 9,
+          "durationMs": 448.5400000000009
+        },
+        {
+          "id": 10,
+          "durationMs": 639.2000000000007
+        },
+        {
+          "id": 11,
+          "durationMs": 81.65999999999985
+        },
+        {
+          "id": 12,
+          "durationMs": 7.240000000001601
+        },
+        {
+          "id": 13,
+          "durationMs": 10.680000000000291
+        },
+        {
+          "id": 14,
+          "durationMs": 95.54000000000087
+        },
+        {
+          "id": 15,
+          "durationMs": 81.53999999999905
+        },
+        {
+          "id": 16,
+          "durationMs": 1.7800000000006548
+        }
+      ]
+    },
+    {
+      "backend": "opfs-ahp",
+      "repetition": 1,
+      "initMs": 1134.5800000000017,
+      "workloadMs": 2044.8800000000083,
+      "persistenceMs": 0.020000000000436557,
+      "reopenMs": 130.04000000000087,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 7.219999999999345
+        },
+        {
+          "id": 2,
+          "durationMs": 135.1200000000008
+        },
+        {
+          "id": 3,
+          "durationMs": 183.59999999999854
+        },
+        {
+          "id": 4,
+          "durationMs": 105.14000000000124
+        },
+        {
+          "id": 5,
+          "durationMs": 261.9200000000001
+        },
+        {
+          "id": 6,
+          "durationMs": 33.38000000000102
+        },
+        {
+          "id": 7,
+          "durationMs": 103.1200000000008
+        },
+        {
+          "id": 8,
+          "durationMs": 58.159999999999854
+        },
+        {
+          "id": 9,
+          "durationMs": 389.28000000000065
+        },
+        {
+          "id": 10,
+          "durationMs": 523.6200000000008
+        },
+        {
+          "id": 11,
+          "durationMs": 69.84000000000196
+        },
+        {
+          "id": 12,
+          "durationMs": 9.359999999998763
+        },
+        {
+          "id": 13,
+          "durationMs": 11.56000000000131
+        },
+        {
+          "id": 14,
+          "durationMs": 78.06000000000131
+        },
+        {
+          "id": 15,
+          "durationMs": 72.36000000000058
+        },
+        {
+          "id": 16,
+          "durationMs": 3.140000000001237
+        }
+      ]
+    },
+    {
+      "backend": "opfs-ahp",
+      "repetition": 2,
+      "initMs": 768.2399999999998,
+      "workloadMs": 2075.8000000000065,
+      "persistenceMs": 0,
+      "reopenMs": 169,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 7.440000000000509
+        },
+        {
+          "id": 2,
+          "durationMs": 145
+        },
+        {
+          "id": 3,
+          "durationMs": 190.28000000000065
+        },
+        {
+          "id": 4,
+          "durationMs": 105.64000000000124
+        },
+        {
+          "id": 5,
+          "durationMs": 272.11999999999716
+        },
+        {
+          "id": 6,
+          "durationMs": 30.320000000001528
+        },
+        {
+          "id": 7,
+          "durationMs": 107.82000000000153
+        },
+        {
+          "id": 8,
+          "durationMs": 59.97999999999956
+        },
+        {
+          "id": 9,
+          "durationMs": 393.5
+        },
+        {
+          "id": 10,
+          "durationMs": 519.380000000001
+        },
+        {
+          "id": 11,
+          "durationMs": 69.29999999999927
+        },
+        {
+          "id": 12,
+          "durationMs": 7.5
+        },
+        {
+          "id": 13,
+          "durationMs": 12.040000000004511
+        },
+        {
+          "id": 14,
+          "durationMs": 80.23999999999796
+        },
+        {
+          "id": 15,
+          "durationMs": 72.68000000000029
+        },
+        {
+          "id": 16,
+          "durationMs": 2.5600000000013097
+        }
+      ]
+    },
+    {
+      "backend": "opfs-ahp",
+      "repetition": 3,
+      "initMs": 776,
+      "workloadMs": 2102.340000000004,
+      "persistenceMs": 0,
+      "reopenMs": 135.4399999999987,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 8.480000000003201
+        },
+        {
+          "id": 2,
+          "durationMs": 148.55999999999767
+        },
+        {
+          "id": 3,
+          "durationMs": 197.5600000000013
+        },
+        {
+          "id": 4,
+          "durationMs": 106.97999999999956
+        },
+        {
+          "id": 5,
+          "durationMs": 268.52000000000044
+        },
+        {
+          "id": 6,
+          "durationMs": 33.29999999999927
+        },
+        {
+          "id": 7,
+          "durationMs": 103.59999999999854
+        },
+        {
+          "id": 8,
+          "durationMs": 60.5
+        },
+        {
+          "id": 9,
+          "durationMs": 394.84000000000015
+        },
+        {
+          "id": 10,
+          "durationMs": 529.2999999999993
+        },
+        {
+          "id": 11,
+          "durationMs": 72.31999999999971
+        },
+        {
+          "id": 12,
+          "durationMs": 9.039999999997235
+        },
+        {
+          "id": 13,
+          "durationMs": 11.2400000000016
+        },
+        {
+          "id": 14,
+          "durationMs": 77.26000000000204
+        },
+        {
+          "id": 15,
+          "durationMs": 78.26000000000204
+        },
+        {
+          "id": 16,
+          "durationMs": 2.5800000000017462
+        }
+      ]
+    },
+    {
+      "backend": "idb",
+      "repetition": 1,
+      "initMs": 777.1399999999994,
+      "workloadMs": 3932.759999999984,
+      "persistenceMs": 63.659999999999854,
+      "reopenMs": 790.6800000000003,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 119.53999999999724
+        },
+        {
+          "id": 2,
+          "durationMs": 255.29999999999927
+        },
+        {
+          "id": 3,
+          "durationMs": 305.15999999999985
+        },
+        {
+          "id": 4,
+          "durationMs": 144.63999999999578
+        },
+        {
+          "id": 5,
+          "durationMs": 296.0400000000009
+        },
+        {
+          "id": 6,
+          "durationMs": 190.8399999999965
+        },
+        {
+          "id": 7,
+          "durationMs": 138.17999999999665
+        },
+        {
+          "id": 8,
+          "durationMs": 182.88000000000102
+        },
+        {
+          "id": 9,
+          "durationMs": 448.5
+        },
+        {
+          "id": 10,
+          "durationMs": 631.7599999999984
+        },
+        {
+          "id": 11,
+          "durationMs": 249.44000000000233
+        },
+        {
+          "id": 12,
+          "durationMs": 136.04000000000087
+        },
+        {
+          "id": 13,
+          "durationMs": 134.88000000000102
+        },
+        {
+          "id": 14,
+          "durationMs": 330.9599999999991
+        },
+        {
+          "id": 15,
+          "durationMs": 228.85999999999694
+        },
+        {
+          "id": 16,
+          "durationMs": 139.73999999999796
+        }
+      ]
+    },
+    {
+      "backend": "idb",
+      "repetition": 2,
+      "initMs": 909.3600000000006,
+      "workloadMs": 4063.260000000002,
+      "persistenceMs": 65.5999999999949,
+      "reopenMs": 946.359999999997,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 125.91999999999825
+        },
+        {
+          "id": 2,
+          "durationMs": 254.47999999999956
+        },
+        {
+          "id": 3,
+          "durationMs": 300.26000000000204
+        },
+        {
+          "id": 4,
+          "durationMs": 145.3199999999997
+        },
+        {
+          "id": 5,
+          "durationMs": 299.34000000000015
+        },
+        {
+          "id": 6,
+          "durationMs": 212.64000000000306
+        },
+        {
+          "id": 7,
+          "durationMs": 142
+        },
+        {
+          "id": 8,
+          "durationMs": 189.34000000000015
+        },
+        {
+          "id": 9,
+          "durationMs": 456.7999999999993
+        },
+        {
+          "id": 10,
+          "durationMs": 696.5200000000004
+        },
+        {
+          "id": 11,
+          "durationMs": 258.20000000000437
+        },
+        {
+          "id": 12,
+          "durationMs": 143.86000000000058
+        },
+        {
+          "id": 13,
+          "durationMs": 146.59999999999854
+        },
+        {
+          "id": 14,
+          "durationMs": 313.5400000000009
+        },
+        {
+          "id": 15,
+          "durationMs": 234.90000000000146
+        },
+        {
+          "id": 16,
+          "durationMs": 143.5399999999936
+        }
+      ]
+    },
+    {
+      "backend": "idb",
+      "repetition": 3,
+      "initMs": 852.2599999999875,
+      "workloadMs": 4165.97999999996,
+      "persistenceMs": 76.91999999999098,
+      "reopenMs": 918.3600000000006,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 127.97999999999593
+        },
+        {
+          "id": 2,
+          "durationMs": 266.45999999999185
+        },
+        {
+          "id": 3,
+          "durationMs": 338.6399999999994
+        },
+        {
+          "id": 4,
+          "durationMs": 147.6999999999971
+        },
+        {
+          "id": 5,
+          "durationMs": 304.91999999999825
+        },
+        {
+          "id": 6,
+          "durationMs": 195.58000000000175
+        },
+        {
+          "id": 7,
+          "durationMs": 142.7199999999939
+        },
+        {
+          "id": 8,
+          "durationMs": 191.7199999999939
+        },
+        {
+          "id": 9,
+          "durationMs": 480.5399999999936
+        },
+        {
+          "id": 10,
+          "durationMs": 722.7000000000044
+        },
+        {
+          "id": 11,
+          "durationMs": 247.44000000000233
+        },
+        {
+          "id": 12,
+          "durationMs": 141.72000000000116
+        },
+        {
+          "id": 13,
+          "durationMs": 147.81999999999243
+        },
+        {
+          "id": 14,
+          "durationMs": 319.93999999999505
+        },
+        {
+          "id": 15,
+          "durationMs": 242.54000000000087
+        },
+        {
+          "id": 16,
+          "durationMs": 147.55999999999767
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "repetition": 1,
+      "initMs": 450.8999999999942,
+      "workloadMs": 1960.380000000012,
+      "persistenceMs": null,
+      "reopenMs": null,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 7.200000000004366
+        },
+        {
+          "id": 2,
+          "durationMs": 152.76000000000204
+        },
+        {
+          "id": 3,
+          "durationMs": 190.7800000000061
+        },
+        {
+          "id": 4,
+          "durationMs": 114.88000000000466
+        },
+        {
+          "id": 5,
+          "durationMs": 284.9799999999959
+        },
+        {
+          "id": 6,
+          "durationMs": 21.74000000000524
+        },
+        {
+          "id": 7,
+          "durationMs": 97.32000000000698
+        },
+        {
+          "id": 8,
+          "durationMs": 65.39999999999418
+        },
+        {
+          "id": 9,
+          "durationMs": 329.4799999999959
+        },
+        {
+          "id": 10,
+          "durationMs": 462.3799999999974
+        },
+        {
+          "id": 11,
+          "durationMs": 70
+        },
+        {
+          "id": 12,
+          "durationMs": 7.939999999995052
+        },
+        {
+          "id": 13,
+          "durationMs": 11.419999999998254
+        },
+        {
+          "id": 14,
+          "durationMs": 67.07999999999447
+        },
+        {
+          "id": 15,
+          "durationMs": 75.9600000000064
+        },
+        {
+          "id": 16,
+          "durationMs": 1.0600000000049477
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "repetition": 2,
+      "initMs": 471.42000000000553,
+      "workloadMs": 2650.9000000000233,
+      "persistenceMs": null,
+      "reopenMs": null,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 30.520000000004075
+        },
+        {
+          "id": 2,
+          "durationMs": 272.90000000000146
+        },
+        {
+          "id": 3,
+          "durationMs": 241.24000000000524
+        },
+        {
+          "id": 4,
+          "durationMs": 176.20000000000437
+        },
+        {
+          "id": 5,
+          "durationMs": 332.63999999999214
+        },
+        {
+          "id": 6,
+          "durationMs": 32.279999999998836
+        },
+        {
+          "id": 7,
+          "durationMs": 169
+        },
+        {
+          "id": 8,
+          "durationMs": 79.30000000000291
+        },
+        {
+          "id": 9,
+          "durationMs": 466.5000000000073
+        },
+        {
+          "id": 10,
+          "durationMs": 571.8799999999974
+        },
+        {
+          "id": 11,
+          "durationMs": 84.26000000000204
+        },
+        {
+          "id": 12,
+          "durationMs": 11.459999999999127
+        },
+        {
+          "id": 13,
+          "durationMs": 13.60000000000582
+        },
+        {
+          "id": 14,
+          "durationMs": 75.36000000000058
+        },
+        {
+          "id": 15,
+          "durationMs": 91.13999999999942
+        },
+        {
+          "id": 16,
+          "durationMs": 2.6200000000026193
+        }
+      ]
+    },
+    {
+      "backend": "memory",
+      "repetition": 3,
+      "initMs": 472.320000000007,
+      "workloadMs": 1943.3999999999578,
+      "persistenceMs": null,
+      "reopenMs": null,
+      "expectedRows": 0,
+      "actualRows": 0,
+      "status": "ok",
+      "stages": [
+        {
+          "id": 1,
+          "durationMs": 7.139999999999418
+        },
+        {
+          "id": 2,
+          "durationMs": 145.47999999999593
+        },
+        {
+          "id": 3,
+          "durationMs": 187.61999999999534
+        },
+        {
+          "id": 4,
+          "durationMs": 120.49999999999272
+        },
+        {
+          "id": 5,
+          "durationMs": 284.61999999999534
+        },
+        {
+          "id": 6,
+          "durationMs": 22.65999999998894
+        },
+        {
+          "id": 7,
+          "durationMs": 95.77999999999884
+        },
+        {
+          "id": 8,
+          "durationMs": 64.24000000000524
+        },
+        {
+          "id": 9,
+          "durationMs": 332.8799999999901
+        },
+        {
+          "id": 10,
+          "durationMs": 452.8000000000029
+        },
+        {
+          "id": 11,
+          "durationMs": 70.05999999999767
+        },
+        {
+          "id": 12,
+          "durationMs": 8.099999999998545
+        },
+        {
+          "id": 13,
+          "durationMs": 11.179999999993015
+        },
+        {
+          "id": 14,
+          "durationMs": 64.36000000000058
+        },
+        {
+          "id": 15,
+          "durationMs": 74.54000000000087
+        },
+        {
+          "id": 16,
+          "durationMs": 1.4400000000023283
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "workloadRevision": "pglite-speedtest16-ae182ff8-v1",
+    "workloadSource": "https://github.com/electric-sql/pglite/tree/ae182ff8bd5ba4acb887d6c925d607a1498aa0b5/packages/benchmark/src",
+    "sourceCommit": "unavailable",
+    "opfsVfsVersion": "1.0.1",
+    "pgliteVersion": "0.5.4",
+    "interrupted": false,
+    "environmentNote": "",
+    "preparationMs": 2316.3
+  }
+}

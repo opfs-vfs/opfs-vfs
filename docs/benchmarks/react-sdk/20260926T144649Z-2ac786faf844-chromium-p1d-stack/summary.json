@@ -1,0 +1,3340 @@
+{
+  "schema": "opfs-vfs/worker-client-benchmark/v1",
+  "meta": {
+    "startedAt": "2026-09-26T14:46:49.320Z",
+    "finishedAt": "2026-09-26T14:47:37.333Z",
+    "source": {
+      "commit": "2ac786faf844ba25d457fee91a5393610bf28832",
+      "dirty": false,
+      "branch": "react-sdk/p1d-subscription-retirement"
+    },
+    "harnessSha256": {
+      "packages/opfs-vfs/scripts/benchmark-worker-client.mjs": "95780ca5f7e38bae6962ac92a2e3442840cb52fd5ebd4b5398a1f3bebe07f697",
+      "packages/opfs-vfs/src/__tests__/benchmark-worker-client-page.ts": "36a3c081cedade6018d9457b89eea16f7360944a4f6a1a48b56d562cc1486bc8",
+      "packages/opfs-vfs/src/__tests__/benchmark-worker-client-sab-worker.ts": "32adb338f5373e5606e84449c382cac0cb35ebef0f2605b849ccb5fe265d64ce",
+      "packages/opfs-vfs/src/__tests__/benchmark-worker-client-workloads.ts": "6fe17b9275bd808b2bd723cf9a6b32a744984b537935b809b9481c467ad1ed7a"
+    },
+    "node": "v26.8.1",
+    "os": {
+      "platform": "darwin",
+      "release": "25.6.0",
+      "arch": "arm64",
+      "cpuModel": "Apple M5 Pro",
+      "cpus": 18,
+      "totalMemBytes": 68719476736
+    },
+    "browser": {
+      "name": "chromium",
+      "version": "147.0.7727.15"
+    },
+    "playwright": "1.59.1",
+    "page": {
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36",
+      "crossOriginIsolated": true,
+      "hardwareConcurrency": 18,
+      "sharedArrayBuffer": true
+    }
+  },
+  "config": {
+    "browser": "chromium",
+    "runs": 5,
+    "ops": 1000,
+    "warmup": 100,
+    "largeOps": 50,
+    "largeWarmup": 5,
+    "cold": 20,
+    "coldWarmup": 2,
+    "noCold": false,
+    "modes": [
+      "disk",
+      "memory"
+    ],
+    "transports": [
+      "leader",
+      "follower",
+      "sab"
+    ],
+    "workloads": [
+      "read",
+      "write",
+      "metadata",
+      "sync",
+      "large-read",
+      "large-write"
+    ],
+    "tailRatio": 1.5,
+    "label": "p1d-subscription-retirement-candidate",
+    "out": "/private/tmp/claude-501/react-sdk-orchestration/bench/p1d-subscription-retirement-chromium",
+    "headed": false
+  },
+  "complete": true,
+  "gateEligible": true,
+  "cases": [
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "workload": "read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.98,
+          "mean": 0.0819,
+          "throughputOpsPerSec": 11679.5141
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 0.83,
+          "mean": 0.0823,
+          "throughputOpsPerSec": 11633.9945
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.975,
+          "mean": 0.0823,
+          "throughputOpsPerSec": 11629.2592
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 0.975,
+          "mean": 0.0826,
+          "throughputOpsPerSec": 11602.9471
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 1.195,
+          "mean": 0.0819,
+          "throughputOpsPerSec": 11663.1677
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.08,
+        "medianOfRunP95": 0.09,
+        "medianOfRunThroughput": 11633.9945,
+        "minRunP95": 0.09,
+        "maxRunP95": 0.09,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "workload": "write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.125,
+          "min": 0.1,
+          "max": 0.175,
+          "mean": 0.1136,
+          "throughputOpsPerSec": 8786.1881
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.125,
+          "min": 0.095,
+          "max": 0.205,
+          "mean": 0.1142,
+          "throughputOpsPerSec": 8740.4947
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.125,
+          "min": 0.1,
+          "max": 0.14,
+          "mean": 0.1135,
+          "throughputOpsPerSec": 8788.8908
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.125,
+          "min": 0.1,
+          "max": 0.15,
+          "mean": 0.1136,
+          "throughputOpsPerSec": 8788.8908
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.11,
+          "p95": 0.125,
+          "min": 0.1,
+          "max": 0.14,
+          "mean": 0.1133,
+          "throughputOpsPerSec": 8811.7372
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.115,
+        "medianOfRunP95": 0.125,
+        "medianOfRunThroughput": 8788.8908,
+        "minRunP95": 0.125,
+        "maxRunP95": 0.125,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0.0175,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "workload": "metadata",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.435,
+          "mean": 0.0113,
+          "throughputOpsPerSec": 87260.0346
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 0.46,
+          "mean": 0.0111,
+          "throughputOpsPerSec": 88731.1448
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 0.485,
+          "mean": 0.0112,
+          "throughputOpsPerSec": 87912.0879
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.455,
+          "mean": 0.0115,
+          "throughputOpsPerSec": 85506.6264
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0.005,
+          "max": 0.415,
+          "mean": 0.011,
+          "throughputOpsPerSec": 89806.9147
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.01,
+        "medianOfRunP95": 0.015,
+        "medianOfRunThroughput": 87912.0879,
+        "minRunP95": 0.015,
+        "maxRunP95": 0.02,
+        "p95Ratio": 1.3333,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "workload": "sync",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.15,
+          "max": 0.595,
+          "mean": 0.1721,
+          "throughputOpsPerSec": 3451.2511
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.155,
+          "max": 1.06,
+          "mean": 0.1728,
+          "throughputOpsPerSec": 3451.9063
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.19,
+          "min": 0.155,
+          "max": 0.545,
+          "mean": 0.1733,
+          "throughputOpsPerSec": 3430.4729
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.155,
+          "max": 0.595,
+          "mean": 0.1719,
+          "throughputOpsPerSec": 3466.8053
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.15,
+          "max": 0.585,
+          "mean": 0.1716,
+          "throughputOpsPerSec": 3461.645
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.17,
+        "medianOfRunP95": 0.185,
+        "medianOfRunThroughput": 3451.9063,
+        "minRunP95": 0.185,
+        "maxRunP95": 0.19,
+        "p95Ratio": 1.027,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "workload": "large-read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 2.345,
+          "p95": 2.425,
+          "min": 2.27,
+          "max": 2.475,
+          "mean": 2.3513,
+          "throughputOpsPerSec": 356.2142
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 2.355,
+          "p95": 2.425,
+          "min": 2.25,
+          "max": 2.445,
+          "mean": 2.3523,
+          "throughputOpsPerSec": 357.2577
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 2.34,
+          "p95": 2.395,
+          "min": 2.27,
+          "max": 2.41,
+          "mean": 2.3365,
+          "throughputOpsPerSec": 359.3632
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 2.34,
+          "p95": 2.405,
+          "min": 2.24,
+          "max": 2.41,
+          "mean": 2.348,
+          "throughputOpsPerSec": 356.8115
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 2.32,
+          "p95": 2.405,
+          "min": 2.265,
+          "max": 2.455,
+          "mean": 2.3236,
+          "throughputOpsPerSec": 360.8285
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 2.34,
+        "medianOfRunP95": 2.405,
+        "medianOfRunThroughput": 357.2577,
+        "minRunP95": 2.395,
+        "maxRunP95": 2.425,
+        "p95Ratio": 1.0125,
+        "cvOfRunMedians": 0.0049,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "workload": "large-write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 0.59,
+          "p95": 0.635,
+          "min": 0.545,
+          "max": 0.705,
+          "mean": 0.5895,
+          "throughputOpsPerSec": 1695.7775
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 0.605,
+          "p95": 0.64,
+          "min": 0.565,
+          "max": 0.75,
+          "mean": 0.6133,
+          "throughputOpsPerSec": 1629.9918
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 0.61,
+          "p95": 0.65,
+          "min": 0.55,
+          "max": 0.725,
+          "mean": 0.6034,
+          "throughputOpsPerSec": 1656.7263
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 0.61,
+          "p95": 0.645,
+          "min": 0.545,
+          "max": 0.755,
+          "mean": 0.6089,
+          "throughputOpsPerSec": 1642.0361
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 0.605,
+          "p95": 0.64,
+          "min": 0.545,
+          "max": 0.745,
+          "mean": 0.6019,
+          "throughputOpsPerSec": 1660.8537
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.605,
+        "medianOfRunP95": 0.64,
+        "medianOfRunThroughput": 1656.7263,
+        "minRunP95": 0.635,
+        "maxRunP95": 0.65,
+        "p95Ratio": 1.0236,
+        "cvOfRunMedians": 0.0122,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "workload": "read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.15,
+          "p95": 0.165,
+          "min": 0.125,
+          "max": 0.295,
+          "mean": 0.1505,
+          "throughputOpsPerSec": 6548.1452
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.15,
+          "p95": 0.17,
+          "min": 0.13,
+          "max": 0.32,
+          "mean": 0.1521,
+          "throughputOpsPerSec": 6477.9426
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.15,
+          "p95": 0.165,
+          "min": 0.13,
+          "max": 0.31,
+          "mean": 0.1505,
+          "throughputOpsPerSec": 6544.931
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.15,
+          "p95": 0.165,
+          "min": 0.125,
+          "max": 0.33,
+          "mean": 0.152,
+          "throughputOpsPerSec": 6486.5566
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.15,
+          "p95": 0.16,
+          "min": 0.12,
+          "max": 0.315,
+          "mean": 0.149,
+          "throughputOpsPerSec": 6613.1006
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.15,
+        "medianOfRunP95": 0.165,
+        "medianOfRunThroughput": 6544.931,
+        "minRunP95": 0.16,
+        "maxRunP95": 0.17,
+        "p95Ratio": 1.0625,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "workload": "write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.185,
+          "p95": 0.205,
+          "min": 0.165,
+          "max": 0.3,
+          "mean": 0.1865,
+          "throughputOpsPerSec": 5356.6168
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.185,
+          "p95": 0.205,
+          "min": 0.165,
+          "max": 0.33,
+          "mean": 0.1888,
+          "throughputOpsPerSec": 5292.8256
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.185,
+          "p95": 0.205,
+          "min": 0.165,
+          "max": 0.285,
+          "mean": 0.1862,
+          "throughputOpsPerSec": 5362.0741
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.185,
+          "p95": 0.205,
+          "min": 0.165,
+          "max": 0.355,
+          "mean": 0.1865,
+          "throughputOpsPerSec": 5354.8957
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.185,
+          "p95": 0.205,
+          "min": 0.165,
+          "max": 0.32,
+          "mean": 0.1873,
+          "throughputOpsPerSec": 5332.9067
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.185,
+        "medianOfRunP95": 0.205,
+        "medianOfRunThroughput": 5354.8957,
+        "minRunP95": 0.205,
+        "maxRunP95": 0.205,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "workload": "metadata",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 1.115,
+          "mean": 0.0804,
+          "throughputOpsPerSec": 12410.0273
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 1.08,
+          "mean": 0.0805,
+          "throughputOpsPerSec": 12386.9689
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 1.065,
+          "mean": 0.0805,
+          "throughputOpsPerSec": 12386.2018
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 1.055,
+          "mean": 0.0796,
+          "throughputOpsPerSec": 12512.5125
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 1.07,
+          "mean": 0.0806,
+          "throughputOpsPerSec": 12380.8345
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.08,
+        "medianOfRunP95": 0.09,
+        "medianOfRunThroughput": 12386.9689,
+        "minRunP95": 0.09,
+        "maxRunP95": 0.09,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0.0253,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "workload": "sync",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.235,
+          "p95": 0.255,
+          "min": 0.21,
+          "max": 0.755,
+          "mean": 0.2381,
+          "throughputOpsPerSec": 2347.7209
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.235,
+          "p95": 0.255,
+          "min": 0.14,
+          "max": 0.72,
+          "mean": 0.2384,
+          "throughputOpsPerSec": 2348.6307
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.235,
+          "p95": 0.255,
+          "min": 0.16,
+          "max": 2.015,
+          "mean": 0.2409,
+          "throughputOpsPerSec": 2328.4785
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.235,
+          "p95": 0.255,
+          "min": 0.155,
+          "max": 0.625,
+          "mean": 0.2365,
+          "throughputOpsPerSec": 2362.2233
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.235,
+          "p95": 0.255,
+          "min": 0.21,
+          "max": 0.76,
+          "mean": 0.2383,
+          "throughputOpsPerSec": 2348.879
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.235,
+        "medianOfRunP95": 0.255,
+        "medianOfRunThroughput": 2348.6307,
+        "minRunP95": 0.255,
+        "maxRunP95": 0.255,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "workload": "large-read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 3.095,
+          "p95": 3.27,
+          "min": 2.995,
+          "max": 4.235,
+          "mean": 3.1247,
+          "throughputOpsPerSec": 279.7281
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 3.11,
+          "p95": 3.285,
+          "min": 3.045,
+          "max": 4.26,
+          "mean": 3.1376,
+          "throughputOpsPerSec": 277.9322
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 3.085,
+          "p95": 3.195,
+          "min": 3.015,
+          "max": 4.3,
+          "mean": 3.1217,
+          "throughputOpsPerSec": 279.1269
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 3.11,
+          "p95": 3.285,
+          "min": 3.03,
+          "max": 4.355,
+          "mean": 3.1494,
+          "throughputOpsPerSec": 278.1719
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 3.075,
+          "p95": 3.26,
+          "min": 2.99,
+          "max": 4.2,
+          "mean": 3.1074,
+          "throughputOpsPerSec": 280.6939
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 3.095,
+        "medianOfRunP95": 3.27,
+        "medianOfRunThroughput": 279.1269,
+        "minRunP95": 3.195,
+        "maxRunP95": 3.285,
+        "p95Ratio": 1.0282,
+        "cvOfRunMedians": 0.0045,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "workload": "large-write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 1.355,
+          "p95": 1.41,
+          "min": 1.3,
+          "max": 1.965,
+          "mean": 1.3676,
+          "throughputOpsPerSec": 731.0476
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 1.35,
+          "p95": 1.425,
+          "min": 1.29,
+          "max": 1.965,
+          "mean": 1.3622,
+          "throughputOpsPerSec": 733.7295
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 1.35,
+          "p95": 1.43,
+          "min": 1.28,
+          "max": 1.96,
+          "mean": 1.3597,
+          "throughputOpsPerSec": 735.132
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 1.36,
+          "p95": 1.42,
+          "min": 1.32,
+          "max": 2.025,
+          "mean": 1.3778,
+          "throughputOpsPerSec": 725.7421
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 1.335,
+          "p95": 1.39,
+          "min": 1.28,
+          "max": 2.06,
+          "mean": 1.3554,
+          "throughputOpsPerSec": 737.5719
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 1.35,
+        "medianOfRunP95": 1.42,
+        "medianOfRunThroughput": 733.7295,
+        "minRunP95": 1.39,
+        "maxRunP95": 1.43,
+        "p95Ratio": 1.0288,
+        "cvOfRunMedians": 0.0062,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "workload": "read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.07,
+          "max": 1.02,
+          "mean": 0.0835,
+          "throughputOpsPerSec": 11601.601
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.965,
+          "mean": 0.0842,
+          "throughputOpsPerSec": 11563.3672
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 1.06,
+          "mean": 0.0846,
+          "throughputOpsPerSec": 11492.9318
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 1.05,
+          "mean": 0.0846,
+          "throughputOpsPerSec": 11484.3526
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 1.055,
+          "mean": 0.0837,
+          "throughputOpsPerSec": 11615.0764
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.08,
+        "medianOfRunP95": 0.09,
+        "medianOfRunThroughput": 11563.3672,
+        "minRunP95": 0.09,
+        "maxRunP95": 0.09,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "workload": "write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.13,
+          "min": 0.1,
+          "max": 0.16,
+          "mean": 0.1183,
+          "throughputOpsPerSec": 8428.15
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.13,
+          "min": 0.1,
+          "max": 0.175,
+          "mean": 0.1184,
+          "throughputOpsPerSec": 8417.1542
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.13,
+          "min": 0.105,
+          "max": 0.31,
+          "mean": 0.118,
+          "throughputOpsPerSec": 8459.879
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.13,
+          "min": 0.1,
+          "max": 0.32,
+          "mean": 0.1181,
+          "throughputOpsPerSec": 8448.4434
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.115,
+          "p95": 0.13,
+          "min": 0.1,
+          "max": 0.32,
+          "mean": 0.1177,
+          "throughputOpsPerSec": 8477.0907
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.115,
+        "medianOfRunP95": 0.13,
+        "medianOfRunThroughput": 8448.4434,
+        "minRunP95": 0.13,
+        "maxRunP95": 0.13,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "workload": "metadata",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.015,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.3,
+          "mean": 0.0147,
+          "throughputOpsPerSec": 66934.4043
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.015,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.29,
+          "mean": 0.0146,
+          "throughputOpsPerSec": 66533.5996
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.015,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.28,
+          "mean": 0.0147,
+          "throughputOpsPerSec": 66777.9634
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.015,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.27,
+          "mean": 0.0149,
+          "throughputOpsPerSec": 66050.1982
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.015,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.275,
+          "mean": 0.0147,
+          "throughputOpsPerSec": 66822.5859
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.015,
+        "medianOfRunP95": 0.02,
+        "medianOfRunThroughput": 66777.9634,
+        "minRunP95": 0.02,
+        "maxRunP95": 0.02,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "workload": "sync",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.15,
+          "max": 0.535,
+          "mean": 0.1714,
+          "throughputOpsPerSec": 3489.4879
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.19,
+          "min": 0.15,
+          "max": 0.39,
+          "mean": 0.1715,
+          "throughputOpsPerSec": 3467.226
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.155,
+          "max": 0.22,
+          "mean": 0.1718,
+          "throughputOpsPerSec": 3468.1279
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.185,
+          "min": 0.15,
+          "max": 0.555,
+          "mean": 0.1718,
+          "throughputOpsPerSec": 3482.6824
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.17,
+          "p95": 0.19,
+          "min": 0.15,
+          "max": 0.72,
+          "mean": 0.1731,
+          "throughputOpsPerSec": 3446.315
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.17,
+        "medianOfRunP95": 0.185,
+        "medianOfRunThroughput": 3468.1279,
+        "minRunP95": 0.185,
+        "maxRunP95": 0.19,
+        "p95Ratio": 1.027,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "workload": "large-read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 2.845,
+          "p95": 2.95,
+          "min": 2.775,
+          "max": 3.355,
+          "mean": 2.8614,
+          "throughputOpsPerSec": 301.4227
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 2.855,
+          "p95": 2.945,
+          "min": 2.805,
+          "max": 3.42,
+          "mean": 2.8724,
+          "throughputOpsPerSec": 299.949
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 2.86,
+          "p95": 2.96,
+          "min": 2.795,
+          "max": 3.255,
+          "mean": 2.8687,
+          "throughputOpsPerSec": 301.1504
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 2.89,
+          "p95": 2.995,
+          "min": 2.78,
+          "max": 3.225,
+          "mean": 2.9041,
+          "throughputOpsPerSec": 297.4243
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 2.865,
+          "p95": 3,
+          "min": 2.79,
+          "max": 6.515,
+          "mean": 2.9624,
+          "throughputOpsPerSec": 292.2097
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 2.86,
+        "medianOfRunP95": 2.96,
+        "medianOfRunThroughput": 299.949,
+        "minRunP95": 2.945,
+        "maxRunP95": 3,
+        "p95Ratio": 1.0187,
+        "cvOfRunMedians": 0.0053,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "workload": "large-write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 1.07,
+          "p95": 1.135,
+          "min": 1.005,
+          "max": 2.42,
+          "mean": 1.0981,
+          "throughputOpsPerSec": 910.581
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 1.045,
+          "p95": 1.08,
+          "min": 0.99,
+          "max": 2.555,
+          "mean": 1.0702,
+          "throughputOpsPerSec": 933.9684
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 1.06,
+          "p95": 1.095,
+          "min": 1.015,
+          "max": 2.505,
+          "mean": 1.087,
+          "throughputOpsPerSec": 919.8786
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 1.065,
+          "p95": 1.1,
+          "min": 1.005,
+          "max": 2.545,
+          "mean": 1.0967,
+          "throughputOpsPerSec": 911.7433
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 1.055,
+          "p95": 1.095,
+          "min": 1,
+          "max": 2.58,
+          "mean": 1.0809,
+          "throughputOpsPerSec": 924.9838
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 1.06,
+        "medianOfRunP95": 1.095,
+        "medianOfRunThroughput": 919.8786,
+        "minRunP95": 1.08,
+        "maxRunP95": 1.135,
+        "p95Ratio": 1.0509,
+        "cvOfRunMedians": 0.0081,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "workload": "read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0.005,
+          "max": 0.27,
+          "mean": 0.0107,
+          "throughputOpsPerSec": 78186.0827
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 1.05,
+          "mean": 0.0123,
+          "throughputOpsPerSec": 69783.6707
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 1.03,
+          "mean": 0.0122,
+          "throughputOpsPerSec": 69613.6442
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 1.075,
+          "mean": 0.0123,
+          "throughputOpsPerSec": 69444.4443
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 1.015,
+          "mean": 0.0125,
+          "throughputOpsPerSec": 68143.1005
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.01,
+        "medianOfRunP95": 0.015,
+        "medianOfRunThroughput": 69613.6442,
+        "minRunP95": 0.015,
+        "maxRunP95": 0.015,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "workload": "write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.475,
+          "mean": 0.1332,
+          "throughputOpsPerSec": 7500.1875
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.425,
+          "mean": 0.132,
+          "throughputOpsPerSec": 7568.3039
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.135,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.435,
+          "mean": 0.1345,
+          "throughputOpsPerSec": 7427.4891
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.135,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.44,
+          "mean": 0.1351,
+          "throughputOpsPerSec": 7397.8176
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.135,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.49,
+          "mean": 0.1337,
+          "throughputOpsPerSec": 7474.6795
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.135,
+        "medianOfRunP95": 0.145,
+        "medianOfRunThroughput": 7474.6795,
+        "minRunP95": 0.145,
+        "maxRunP95": 0.145,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0.0184,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "workload": "metadata",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 0.235,
+          "mean": 0.011,
+          "throughputOpsPerSec": 89086.8595
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 0.245,
+          "mean": 0.0112,
+          "throughputOpsPerSec": 88573.9591
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 0.25,
+          "mean": 0.011,
+          "throughputOpsPerSec": 89325.5918
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0,
+          "max": 0.255,
+          "mean": 0.0112,
+          "throughputOpsPerSec": 88183.4217
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.015,
+          "min": 0,
+          "max": 0.035,
+          "mean": 0.0108,
+          "throughputOpsPerSec": 90744.1018
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.01,
+        "medianOfRunP95": 0.015,
+        "medianOfRunThroughput": 89086.8595,
+        "minRunP95": 0.015,
+        "maxRunP95": 0.02,
+        "p95Ratio": 1.3333,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "workload": "sync",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.365,
+          "p95": 0.385,
+          "min": 0.33,
+          "max": 1.18,
+          "mean": 0.366,
+          "throughputOpsPerSec": 2006.0583
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.365,
+          "p95": 0.385,
+          "min": 0.325,
+          "max": 1.215,
+          "mean": 0.3655,
+          "throughputOpsPerSec": 2007.0044
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.385,
+          "min": 0.33,
+          "max": 0.855,
+          "mean": 0.3647,
+          "throughputOpsPerSec": 2004.912
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.38,
+          "min": 0.33,
+          "max": 1.225,
+          "mean": 0.3644,
+          "throughputOpsPerSec": 2006.7427
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.365,
+          "p95": 0.385,
+          "min": 0.33,
+          "max": 1.24,
+          "mean": 0.3652,
+          "throughputOpsPerSec": 2010.2321
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.365,
+        "medianOfRunP95": 0.385,
+        "medianOfRunThroughput": 2006.7427,
+        "minRunP95": 0.38,
+        "maxRunP95": 0.385,
+        "p95Ratio": 1.0132,
+        "cvOfRunMedians": 0.0067,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "workload": "large-read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 0.08,
+          "p95": 0.095,
+          "min": 0.065,
+          "max": 0.095,
+          "mean": 0.0808,
+          "throughputOpsPerSec": 1866.0198
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 0.085,
+          "p95": 0.1,
+          "min": 0.07,
+          "max": 0.105,
+          "mean": 0.0849,
+          "throughputOpsPerSec": 1839.2496
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 0.085,
+          "p95": 0.1,
+          "min": 0.07,
+          "max": 0.115,
+          "mean": 0.0851,
+          "throughputOpsPerSec": 1809.9548
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 0.085,
+          "p95": 0.1,
+          "min": 0.07,
+          "max": 0.11,
+          "mean": 0.0849,
+          "throughputOpsPerSec": 1786.6714
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 0.085,
+          "p95": 0.105,
+          "min": 0.07,
+          "max": 0.105,
+          "mean": 0.0858,
+          "throughputOpsPerSec": 1819.5051
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.085,
+        "medianOfRunP95": 0.1,
+        "medianOfRunThroughput": 1819.5051,
+        "minRunP95": 0.095,
+        "maxRunP95": 0.105,
+        "p95Ratio": 1.1053,
+        "cvOfRunMedians": 0.0238,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "workload": "large-write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 3.67,
+          "p95": 4.995,
+          "min": 3.49,
+          "max": 5.76,
+          "mean": 3.7874,
+          "throughputOpsPerSec": 264.0194
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 3.66,
+          "p95": 4.77,
+          "min": 3.51,
+          "max": 5.835,
+          "mean": 3.772,
+          "throughputOpsPerSec": 265.0973
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 3.65,
+          "p95": 4.865,
+          "min": 3.55,
+          "max": 5.99,
+          "mean": 3.7943,
+          "throughputOpsPerSec": 263.5324
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 3.68,
+          "p95": 4.765,
+          "min": 3.56,
+          "max": 6.065,
+          "mean": 3.8113,
+          "throughputOpsPerSec": 262.3432
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 3.665,
+          "p95": 4.78,
+          "min": 3.52,
+          "max": 5.945,
+          "mean": 3.7967,
+          "throughputOpsPerSec": 263.3797
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 3.665,
+        "medianOfRunP95": 4.78,
+        "medianOfRunThroughput": 263.5324,
+        "minRunP95": 4.765,
+        "maxRunP95": 4.995,
+        "p95Ratio": 1.0483,
+        "cvOfRunMedians": 0.0027,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "workload": "read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 1.005,
+          "mean": 0.0801,
+          "throughputOpsPerSec": 12181.0098
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.945,
+          "mean": 0.0794,
+          "throughputOpsPerSec": 12268.4333
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.08,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.95,
+          "mean": 0.0804,
+          "throughputOpsPerSec": 12125.6214
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.965,
+          "mean": 0.0792,
+          "throughputOpsPerSec": 12296.3418
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.09,
+          "min": 0.065,
+          "max": 0.97,
+          "mean": 0.0798,
+          "throughputOpsPerSec": 12231.6678
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.075,
+        "medianOfRunP95": 0.09,
+        "medianOfRunThroughput": 12231.6678,
+        "minRunP95": 0.09,
+        "maxRunP95": 0.09,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0.0318,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "workload": "write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.2,
+          "p95": 0.22,
+          "min": 0.18,
+          "max": 0.99,
+          "mean": 0.2045,
+          "throughputOpsPerSec": 4887.9439
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.2,
+          "p95": 0.22,
+          "min": 0.175,
+          "max": 1.015,
+          "mean": 0.203,
+          "throughputOpsPerSec": 4922.7134
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.205,
+          "p95": 0.225,
+          "min": 0.175,
+          "max": 0.985,
+          "mean": 0.2071,
+          "throughputOpsPerSec": 4827.0702
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.2,
+          "p95": 0.22,
+          "min": 0.18,
+          "max": 1.025,
+          "mean": 0.2032,
+          "throughputOpsPerSec": 4919.0811
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.2,
+          "p95": 0.22,
+          "min": 0.18,
+          "max": 0.995,
+          "mean": 0.2027,
+          "throughputOpsPerSec": 4929.508
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.2,
+        "medianOfRunP95": 0.22,
+        "medianOfRunThroughput": 4919.0811,
+        "minRunP95": 0.22,
+        "maxRunP95": 0.225,
+        "p95Ratio": 1.0227,
+        "cvOfRunMedians": 0.01,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "workload": "metadata",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.085,
+          "min": 0.055,
+          "max": 1.035,
+          "mean": 0.0799,
+          "throughputOpsPerSec": 12468.8279
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.085,
+          "min": 0.055,
+          "max": 1.015,
+          "mean": 0.0778,
+          "throughputOpsPerSec": 12836.9705
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.085,
+          "min": 0.06,
+          "max": 0.94,
+          "mean": 0.0777,
+          "throughputOpsPerSec": 12846.0402
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.09,
+          "min": 0.06,
+          "max": 0.945,
+          "mean": 0.0782,
+          "throughputOpsPerSec": 12761.6131
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.075,
+          "p95": 0.085,
+          "min": 0.06,
+          "max": 0.965,
+          "mean": 0.0779,
+          "throughputOpsPerSec": 12811.4791
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.075,
+        "medianOfRunP95": 0.085,
+        "medianOfRunThroughput": 12811.4791,
+        "minRunP95": 0.085,
+        "maxRunP95": 0.09,
+        "p95Ratio": 1.0588,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "workload": "sync",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.425,
+          "p95": 0.45,
+          "min": 0.37,
+          "max": 0.625,
+          "mean": 0.4253,
+          "throughputOpsPerSec": 1592.1919
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.425,
+          "p95": 0.445,
+          "min": 0.355,
+          "max": 0.63,
+          "mean": 0.4245,
+          "throughputOpsPerSec": 1597.1124
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.425,
+          "p95": 0.455,
+          "min": 0.34,
+          "max": 1.315,
+          "mean": 0.4293,
+          "throughputOpsPerSec": 1572.1046
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.425,
+          "p95": 0.445,
+          "min": 0.37,
+          "max": 1.425,
+          "mean": 0.4253,
+          "throughputOpsPerSec": 1595.3671
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.425,
+          "p95": 0.45,
+          "min": 0.34,
+          "max": 0.59,
+          "mean": 0.4256,
+          "throughputOpsPerSec": 1593.689
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.425,
+        "medianOfRunP95": 0.45,
+        "medianOfRunThroughput": 1593.689,
+        "minRunP95": 0.445,
+        "maxRunP95": 0.455,
+        "p95Ratio": 1.0225,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "workload": "large-read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 0.81,
+          "p95": 1.035,
+          "min": 0.775,
+          "max": 1.72,
+          "mean": 0.8476,
+          "throughputOpsPerSec": 780.884
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 0.81,
+          "p95": 1.075,
+          "min": 0.775,
+          "max": 1.125,
+          "mean": 0.8319,
+          "throughputOpsPerSec": 792.2675
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 0.82,
+          "p95": 1.005,
+          "min": 0.77,
+          "max": 1.26,
+          "mean": 0.8335,
+          "throughputOpsPerSec": 789.3283
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 0.82,
+          "p95": 1.085,
+          "min": 0.775,
+          "max": 1.3,
+          "mean": 0.8493,
+          "throughputOpsPerSec": 781.9831
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 0.815,
+          "p95": 1.055,
+          "min": 0.78,
+          "max": 1.135,
+          "mean": 0.8329,
+          "throughputOpsPerSec": 790.2015
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.815,
+        "medianOfRunP95": 1.055,
+        "medianOfRunThroughput": 789.3283,
+        "minRunP95": 1.005,
+        "maxRunP95": 1.085,
+        "p95Ratio": 1.0796,
+        "cvOfRunMedians": 0.0055,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "workload": "large-write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 4.3,
+          "p95": 4.655,
+          "min": 4.22,
+          "max": 5.855,
+          "mean": 4.3649,
+          "throughputOpsPerSec": 229.0793
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 4.31,
+          "p95": 4.66,
+          "min": 4.245,
+          "max": 5.99,
+          "mean": 4.3767,
+          "throughputOpsPerSec": 228.467
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 4.335,
+          "p95": 4.53,
+          "min": 4.255,
+          "max": 6.625,
+          "mean": 4.3978,
+          "throughputOpsPerSec": 227.3709
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 4.345,
+          "p95": 4.755,
+          "min": 4.24,
+          "max": 5.63,
+          "mean": 4.3972,
+          "throughputOpsPerSec": 227.3916
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 4.33,
+          "p95": 4.815,
+          "min": 4.245,
+          "max": 5.915,
+          "mean": 4.3949,
+          "throughputOpsPerSec": 227.5313
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 4.33,
+        "medianOfRunP95": 4.66,
+        "medianOfRunThroughput": 227.5313,
+        "minRunP95": 4.53,
+        "maxRunP95": 4.815,
+        "p95Ratio": 1.0629,
+        "cvOfRunMedians": 0.0038,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "workload": "read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 1.08,
+          "mean": 0.0148,
+          "throughputOpsPerSec": 57306.5901
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 1.13,
+          "mean": 0.0143,
+          "throughputOpsPerSec": 58944.8866
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 1.13,
+          "mean": 0.0147,
+          "throughputOpsPerSec": 58156.4409
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 1.13,
+          "mean": 0.0146,
+          "throughputOpsPerSec": 58582.3082
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 1.155,
+          "mean": 0.0146,
+          "throughputOpsPerSec": 59772.8633
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.01,
+        "medianOfRunP95": 0.02,
+        "medianOfRunThroughput": 58582.3082,
+        "minRunP95": 0.02,
+        "maxRunP95": 0.02,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "workload": "write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.49,
+          "mean": 0.1326,
+          "throughputOpsPerSec": 7532.9567
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.445,
+          "mean": 0.1322,
+          "throughputOpsPerSec": 7553.1553
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.465,
+          "mean": 0.1336,
+          "throughputOpsPerSec": 7475.2383
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.485,
+          "mean": 0.1342,
+          "throughputOpsPerSec": 7442.9683
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.13,
+          "p95": 0.145,
+          "min": 0.115,
+          "max": 0.5,
+          "mean": 0.1333,
+          "throughputOpsPerSec": 7490.0757
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.13,
+        "medianOfRunP95": 0.145,
+        "medianOfRunThroughput": 7490.0757,
+        "minRunP95": 0.145,
+        "maxRunP95": 0.145,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "workload": "metadata",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.015,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.525,
+          "mean": 0.0135,
+          "throughputOpsPerSec": 72912.8689
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.03,
+          "mean": 0.0124,
+          "throughputOpsPerSec": 78308.5357
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0,
+          "max": 0.22,
+          "mean": 0.0127,
+          "throughputOpsPerSec": 77369.439
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0,
+          "max": 0.215,
+          "mean": 0.0124,
+          "throughputOpsPerSec": 78957.7575
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.01,
+          "p95": 0.02,
+          "min": 0.005,
+          "max": 0.225,
+          "mean": 0.0126,
+          "throughputOpsPerSec": 77429.346
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.01,
+        "medianOfRunP95": 0.02,
+        "medianOfRunThroughput": 77429.346,
+        "minRunP95": 0.02,
+        "maxRunP95": 0.02,
+        "p95Ratio": 1,
+        "cvOfRunMedians": 0.1818,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "workload": "sync",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.385,
+          "min": 0.33,
+          "max": 0.405,
+          "mean": 0.362,
+          "throughputOpsPerSec": 2024.5989
+        },
+        {
+          "run": 2,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.38,
+          "min": 0.33,
+          "max": 0.455,
+          "mean": 0.3619,
+          "throughputOpsPerSec": 2025.378
+        },
+        {
+          "run": 3,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.38,
+          "min": 0.33,
+          "max": 0.395,
+          "mean": 0.3614,
+          "throughputOpsPerSec": 2027.1229
+        },
+        {
+          "run": 4,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.38,
+          "min": 0.33,
+          "max": 0.505,
+          "mean": 0.3615,
+          "throughputOpsPerSec": 2028.2124
+        },
+        {
+          "run": 5,
+          "n": 1000,
+          "median": 0.36,
+          "p95": 0.38,
+          "min": 0.33,
+          "max": 0.55,
+          "mean": 0.3621,
+          "throughputOpsPerSec": 2026.6299
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.36,
+        "medianOfRunP95": 0.38,
+        "medianOfRunThroughput": 2026.6299,
+        "minRunP95": 0.38,
+        "maxRunP95": 0.385,
+        "p95Ratio": 1.0132,
+        "cvOfRunMedians": 0,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "workload": "large-read",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 0.59,
+          "p95": 0.615,
+          "min": 0.575,
+          "max": 0.625,
+          "mean": 0.595,
+          "throughputOpsPerSec": 955.6575
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 0.6,
+          "p95": 0.625,
+          "min": 0.58,
+          "max": 0.63,
+          "mean": 0.5997,
+          "throughputOpsPerSec": 950.48
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 0.6,
+          "p95": 0.64,
+          "min": 0.575,
+          "max": 0.66,
+          "mean": 0.6036,
+          "throughputOpsPerSec": 948.1369
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 0.605,
+          "p95": 0.62,
+          "min": 0.585,
+          "max": 0.635,
+          "mean": 0.6037,
+          "throughputOpsPerSec": 945.4477
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 0.605,
+          "p95": 0.625,
+          "min": 0.58,
+          "max": 0.63,
+          "mean": 0.604,
+          "throughputOpsPerSec": 931.7928
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 0.6,
+        "medianOfRunP95": 0.625,
+        "medianOfRunThroughput": 948.1369,
+        "minRunP95": 0.615,
+        "maxRunP95": 0.64,
+        "p95Ratio": 1.0407,
+        "cvOfRunMedians": 0.0091,
+        "inconclusive": false
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "workload": "large-write",
+      "perRun": [
+        {
+          "run": 1,
+          "n": 50,
+          "median": 4.075,
+          "p95": 5.27,
+          "min": 3.965,
+          "max": 6.34,
+          "mean": 4.1977,
+          "throughputOpsPerSec": 238.1973
+        },
+        {
+          "run": 2,
+          "n": 50,
+          "median": 4.09,
+          "p95": 4.925,
+          "min": 3.96,
+          "max": 6.155,
+          "mean": 4.1998,
+          "throughputOpsPerSec": 238.0896
+        },
+        {
+          "run": 3,
+          "n": 50,
+          "median": 4.105,
+          "p95": 4.79,
+          "min": 3.965,
+          "max": 6.375,
+          "mean": 4.2089,
+          "throughputOpsPerSec": 237.5692
+        },
+        {
+          "run": 4,
+          "n": 50,
+          "median": 4.125,
+          "p95": 5.05,
+          "min": 3.965,
+          "max": 6.305,
+          "mean": 4.2062,
+          "throughputOpsPerSec": 237.716
+        },
+        {
+          "run": 5,
+          "n": 50,
+          "median": 4.14,
+          "p95": 4.725,
+          "min": 3.98,
+          "max": 6.605,
+          "mean": 4.2142,
+          "throughputOpsPerSec": 237.2761
+        }
+      ],
+      "acrossRuns": {
+        "runs": 5,
+        "medianOfRunMedians": 4.105,
+        "medianOfRunP95": 4.925,
+        "medianOfRunThroughput": 237.716,
+        "minRunP95": 4.725,
+        "maxRunP95": 5.27,
+        "p95Ratio": 1.1153,
+        "cvOfRunMedians": 0.0057,
+        "inconclusive": false
+      }
+    }
+  ],
+  "cold": [
+    {
+      "transport": "follower",
+      "mode": "disk",
+      "ready": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 0.295,
+            "p95": 0.36,
+            "min": 0.27,
+            "max": 0.37,
+            "mean": 0.3085,
+            "throughputOpsPerSec": 3241.4911
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 0.29,
+            "p95": 0.335,
+            "min": 0.265,
+            "max": 0.38,
+            "mean": 0.3012,
+            "throughputOpsPerSec": 3319.5022
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 0.3,
+            "p95": 0.355,
+            "min": 0.27,
+            "max": 0.365,
+            "mean": 0.3072,
+            "throughputOpsPerSec": 3254.6788
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 0.295,
+            "p95": 0.355,
+            "min": 0.255,
+            "max": 0.36,
+            "mean": 0.3072,
+            "throughputOpsPerSec": 3254.6786
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 0.29,
+            "p95": 0.345,
+            "min": 0.265,
+            "max": 0.37,
+            "mean": 0.298,
+            "throughputOpsPerSec": 3355.7047
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 0.295,
+          "medianOfRunP95": 0.355,
+          "medianOfRunThroughput": 3254.6788,
+          "minRunP95": 0.335,
+          "maxRunP95": 0.36,
+          "p95Ratio": 1.0746,
+          "cvOfRunMedians": 0.0127,
+          "inconclusive": false
+        }
+      },
+      "close": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 0.155,
+            "p95": 0.175,
+            "min": 0.145,
+            "max": 0.185,
+            "mean": 0.1588,
+            "throughputOpsPerSec": 6299.2126
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 0.155,
+            "p95": 0.18,
+            "min": 0.135,
+            "max": 0.185,
+            "mean": 0.159,
+            "throughputOpsPerSec": 6289.3079
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 0.155,
+            "p95": 0.185,
+            "min": 0.135,
+            "max": 0.19,
+            "mean": 0.1623,
+            "throughputOpsPerSec": 6163.3276
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 0.16,
+            "p95": 0.195,
+            "min": 0.14,
+            "max": 0.215,
+            "mean": 0.1615,
+            "throughputOpsPerSec": 6191.9503
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 0.155,
+            "p95": 0.18,
+            "min": 0.13,
+            "max": 0.2,
+            "mean": 0.157,
+            "throughputOpsPerSec": 6369.4267
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 0.155,
+          "medianOfRunP95": 0.18,
+          "medianOfRunThroughput": 6289.3079,
+          "minRunP95": 0.175,
+          "maxRunP95": 0.195,
+          "p95Ratio": 1.1143,
+          "cvOfRunMedians": 0.0128,
+          "inconclusive": false
+        }
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "disk",
+      "ready": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 12.72,
+            "p95": 13.18,
+            "min": 12.435,
+            "max": 14.13,
+            "mean": 12.8005,
+            "throughputOpsPerSec": 78.1219
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 12.715,
+            "p95": 12.91,
+            "min": 12.505,
+            "max": 13.095,
+            "mean": 12.7553,
+            "throughputOpsPerSec": 78.3991
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 12.745,
+            "p95": 13.035,
+            "min": 12.22,
+            "max": 13.14,
+            "mean": 12.7275,
+            "throughputOpsPerSec": 78.57
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 12.69,
+            "p95": 12.91,
+            "min": 12.4,
+            "max": 13.23,
+            "mean": 12.699,
+            "throughputOpsPerSec": 78.7464
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 12.62,
+            "p95": 13.125,
+            "min": 12.23,
+            "max": 13.125,
+            "mean": 12.6948,
+            "throughputOpsPerSec": 78.7727
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 12.715,
+          "medianOfRunP95": 13.035,
+          "medianOfRunThroughput": 78.57,
+          "minRunP95": 12.91,
+          "maxRunP95": 13.18,
+          "p95Ratio": 1.0209,
+          "cvOfRunMedians": 0.0034,
+          "inconclusive": false
+        }
+      },
+      "close": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 1.545,
+            "p95": 1.59,
+            "min": 1.485,
+            "max": 1.59,
+            "mean": 1.551,
+            "throughputOpsPerSec": 644.7453
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 1.56,
+            "p95": 1.59,
+            "min": 1.51,
+            "max": 1.6,
+            "mean": 1.5592,
+            "throughputOpsPerSec": 641.334
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 1.555,
+            "p95": 1.6,
+            "min": 1.52,
+            "max": 1.6,
+            "mean": 1.557,
+            "throughputOpsPerSec": 642.2608
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 1.55,
+            "p95": 1.59,
+            "min": 1.505,
+            "max": 1.595,
+            "mean": 1.5485,
+            "throughputOpsPerSec": 645.7862
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 1.54,
+            "p95": 1.58,
+            "min": 1.515,
+            "max": 1.58,
+            "mean": 1.5455,
+            "throughputOpsPerSec": 647.0398
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 1.55,
+          "medianOfRunP95": 1.59,
+          "medianOfRunThroughput": 644.7453,
+          "minRunP95": 1.58,
+          "maxRunP95": 1.6,
+          "p95Ratio": 1.0127,
+          "cvOfRunMedians": 0.0046,
+          "inconclusive": false
+        }
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "disk",
+      "ready": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 12.625,
+            "p95": 12.995,
+            "min": 12.385,
+            "max": 13.29,
+            "mean": 12.665,
+            "throughputOpsPerSec": 78.9578
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 12.625,
+            "p95": 12.92,
+            "min": 12.325,
+            "max": 13.395,
+            "mean": 12.6525,
+            "throughputOpsPerSec": 79.0358
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 12.66,
+            "p95": 12.845,
+            "min": 12.385,
+            "max": 14.32,
+            "mean": 12.7167,
+            "throughputOpsPerSec": 78.6364
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 12.61,
+            "p95": 12.78,
+            "min": 12.335,
+            "max": 12.78,
+            "mean": 12.5907,
+            "throughputOpsPerSec": 79.4234
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 12.585,
+            "p95": 12.82,
+            "min": 12.305,
+            "max": 13.11,
+            "mean": 12.5945,
+            "throughputOpsPerSec": 79.3997
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 12.625,
+          "medianOfRunP95": 12.845,
+          "medianOfRunThroughput": 79.0358,
+          "minRunP95": 12.78,
+          "maxRunP95": 12.995,
+          "p95Ratio": 1.0168,
+          "cvOfRunMedians": 0.0019,
+          "inconclusive": false
+        }
+      },
+      "close": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 1.56,
+            "p95": 1.61,
+            "min": 1.515,
+            "max": 1.635,
+            "mean": 1.5567,
+            "throughputOpsPerSec": 642.3639
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 1.545,
+            "p95": 1.56,
+            "min": 1.515,
+            "max": 1.595,
+            "mean": 1.5415,
+            "throughputOpsPerSec": 648.7188
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 1.55,
+            "p95": 1.585,
+            "min": 1.52,
+            "max": 1.59,
+            "mean": 1.553,
+            "throughputOpsPerSec": 643.915
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 1.545,
+            "p95": 1.59,
+            "min": 1.495,
+            "max": 1.675,
+            "mean": 1.5515,
+            "throughputOpsPerSec": 644.5375
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 1.545,
+            "p95": 1.57,
+            "min": 1.5,
+            "max": 1.575,
+            "mean": 1.5403,
+            "throughputOpsPerSec": 649.2453
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 1.545,
+          "medianOfRunP95": 1.585,
+          "medianOfRunThroughput": 644.5375,
+          "minRunP95": 1.56,
+          "maxRunP95": 1.61,
+          "p95Ratio": 1.0321,
+          "cvOfRunMedians": 0.0038,
+          "inconclusive": false
+        }
+      }
+    },
+    {
+      "transport": "follower",
+      "mode": "memory",
+      "ready": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 0.28,
+            "p95": 0.31,
+            "min": 0.26,
+            "max": 0.345,
+            "mean": 0.287,
+            "throughputOpsPerSec": 3484.3207
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 0.29,
+            "p95": 0.31,
+            "min": 0.27,
+            "max": 0.335,
+            "mean": 0.29,
+            "throughputOpsPerSec": 3448.2759
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 0.29,
+            "p95": 0.325,
+            "min": 0.27,
+            "max": 0.335,
+            "mean": 0.292,
+            "throughputOpsPerSec": 3424.6575
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 0.29,
+            "p95": 0.335,
+            "min": 0.27,
+            "max": 0.375,
+            "mean": 0.297,
+            "throughputOpsPerSec": 3367.0033
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 0.28,
+            "p95": 0.325,
+            "min": 0.255,
+            "max": 0.325,
+            "mean": 0.2845,
+            "throughputOpsPerSec": 3514.9385
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 0.29,
+          "medianOfRunP95": 0.325,
+          "medianOfRunThroughput": 3448.2759,
+          "minRunP95": 0.31,
+          "maxRunP95": 0.335,
+          "p95Ratio": 1.0806,
+          "cvOfRunMedians": 0.0171,
+          "inconclusive": false
+        }
+      },
+      "close": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 0.15,
+            "p95": 0.16,
+            "min": 0.135,
+            "max": 0.195,
+            "mean": 0.1518,
+            "throughputOpsPerSec": 6589.7855
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 0.15,
+            "p95": 0.17,
+            "min": 0.13,
+            "max": 0.18,
+            "mean": 0.152,
+            "throughputOpsPerSec": 6578.9473
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 0.155,
+            "p95": 0.17,
+            "min": 0.135,
+            "max": 0.18,
+            "mean": 0.156,
+            "throughputOpsPerSec": 6410.2566
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 0.145,
+            "p95": 0.185,
+            "min": 0.135,
+            "max": 0.225,
+            "mean": 0.155,
+            "throughputOpsPerSec": 6451.6135
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 0.145,
+            "p95": 0.17,
+            "min": 0.13,
+            "max": 0.175,
+            "mean": 0.1475,
+            "throughputOpsPerSec": 6779.661
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 0.15,
+          "medianOfRunP95": 0.17,
+          "medianOfRunThroughput": 6578.9473,
+          "minRunP95": 0.16,
+          "maxRunP95": 0.185,
+          "p95Ratio": 1.1562,
+          "cvOfRunMedians": 0.0251,
+          "inconclusive": false
+        }
+      }
+    },
+    {
+      "transport": "leader",
+      "mode": "memory",
+      "ready": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 17.295,
+            "p95": 17.605,
+            "min": 16.91,
+            "max": 17.695,
+            "mean": 17.3342,
+            "throughputOpsPerSec": 57.6893
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 17.335,
+            "p95": 17.715,
+            "min": 17.065,
+            "max": 17.98,
+            "mean": 17.3622,
+            "throughputOpsPerSec": 57.5962
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 17.325,
+            "p95": 17.99,
+            "min": 17.07,
+            "max": 18.685,
+            "mean": 17.4293,
+            "throughputOpsPerSec": 57.3748
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 17.405,
+            "p95": 17.565,
+            "min": 16.75,
+            "max": 17.685,
+            "mean": 17.3675,
+            "throughputOpsPerSec": 57.5788
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 17.325,
+            "p95": 17.695,
+            "min": 17.175,
+            "max": 17.795,
+            "mean": 17.4,
+            "throughputOpsPerSec": 57.4713
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 17.325,
+          "medianOfRunP95": 17.695,
+          "medianOfRunThroughput": 57.5788,
+          "minRunP95": 17.565,
+          "maxRunP95": 17.99,
+          "p95Ratio": 1.0242,
+          "cvOfRunMedians": 0.0021,
+          "inconclusive": false
+        }
+      },
+      "close": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 1.695,
+            "p95": 1.725,
+            "min": 1.605,
+            "max": 1.73,
+            "mean": 1.6858,
+            "throughputOpsPerSec": 593.2078
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 1.68,
+            "p95": 1.73,
+            "min": 1.585,
+            "max": 1.74,
+            "mean": 1.676,
+            "throughputOpsPerSec": 596.6587
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 1.675,
+            "p95": 1.735,
+            "min": 1.595,
+            "max": 1.815,
+            "mean": 1.679,
+            "throughputOpsPerSec": 595.5926
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 1.7,
+            "p95": 1.74,
+            "min": 1.635,
+            "max": 1.765,
+            "mean": 1.7003,
+            "throughputOpsPerSec": 588.1488
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 1.69,
+            "p95": 1.715,
+            "min": 1.65,
+            "max": 1.73,
+            "mean": 1.6878,
+            "throughputOpsPerSec": 592.5048
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 1.69,
+          "medianOfRunP95": 1.73,
+          "medianOfRunThroughput": 593.2078,
+          "minRunP95": 1.715,
+          "maxRunP95": 1.74,
+          "p95Ratio": 1.0146,
+          "cvOfRunMedians": 0.0055,
+          "inconclusive": false
+        }
+      }
+    },
+    {
+      "transport": "sab",
+      "mode": "memory",
+      "ready": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 17.25,
+            "p95": 17.7,
+            "min": 16.885,
+            "max": 18.165,
+            "mean": 17.3137,
+            "throughputOpsPerSec": 57.7576
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 17.4,
+            "p95": 17.585,
+            "min": 17.07,
+            "max": 19.07,
+            "mean": 17.4205,
+            "throughputOpsPerSec": 57.4036
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 17.4,
+            "p95": 17.97,
+            "min": 17.13,
+            "max": 18.725,
+            "mean": 17.5398,
+            "throughputOpsPerSec": 57.0134
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 17.72,
+            "p95": 18.72,
+            "min": 17.1,
+            "max": 24.56,
+            "mean": 18.115,
+            "throughputOpsPerSec": 55.2029
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 17.275,
+            "p95": 17.47,
+            "min": 16.85,
+            "max": 17.48,
+            "mean": 17.2577,
+            "throughputOpsPerSec": 57.945
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 17.4,
+          "medianOfRunP95": 17.7,
+          "medianOfRunThroughput": 57.4036,
+          "minRunP95": 17.47,
+          "maxRunP95": 18.72,
+          "p95Ratio": 1.0716,
+          "cvOfRunMedians": 0.0096,
+          "inconclusive": false
+        }
+      },
+      "close": {
+        "count": 20,
+        "perRun": [
+          {
+            "run": 1,
+            "n": 20,
+            "median": 1.67,
+            "p95": 1.705,
+            "min": 1.62,
+            "max": 1.71,
+            "mean": 1.669,
+            "throughputOpsPerSec": 599.1612
+          },
+          {
+            "run": 2,
+            "n": 20,
+            "median": 1.675,
+            "p95": 1.74,
+            "min": 1.625,
+            "max": 1.775,
+            "mean": 1.6823,
+            "throughputOpsPerSec": 594.442
+          },
+          {
+            "run": 3,
+            "n": 20,
+            "median": 1.69,
+            "p95": 1.76,
+            "min": 1.635,
+            "max": 2.025,
+            "mean": 1.707,
+            "throughputOpsPerSec": 585.8231
+          },
+          {
+            "run": 4,
+            "n": 20,
+            "median": 1.695,
+            "p95": 1.925,
+            "min": 1.625,
+            "max": 2.485,
+            "mean": 1.7568,
+            "throughputOpsPerSec": 569.233
+          },
+          {
+            "run": 5,
+            "n": 20,
+            "median": 1.675,
+            "p95": 1.715,
+            "min": 1.625,
+            "max": 1.735,
+            "mean": 1.6785,
+            "throughputOpsPerSec": 595.77
+          }
+        ],
+        "acrossRuns": {
+          "runs": 5,
+          "medianOfRunMedians": 1.675,
+          "medianOfRunP95": 1.74,
+          "medianOfRunThroughput": 594.442,
+          "minRunP95": 1.705,
+          "maxRunP95": 1.925,
+          "p95Ratio": 1.129,
+          "cvOfRunMedians": 0.0058,
+          "inconclusive": false
+        }
+      }
+    }
+  ]
+}

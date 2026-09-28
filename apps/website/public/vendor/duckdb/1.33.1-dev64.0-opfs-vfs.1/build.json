@@ -1,0 +1,33 @@
+{
+  "assetRelease": "1.33.1-dev64.0-opfs-vfs.1",
+  "duckdbWasmVersion": "1.33.1-dev64.0",
+  "sourceRepository": "https://github.com/opfs-vfs/duckdb-wasm",
+  "sourceCommit": "12651a2d772ce17d85466c3ba0929f867aeec814",
+  "upstreamCommit": "def100b4be91a8ba27d441914e496231695ba0a8",
+  "duckdbCoreCommit": "d8cdaa33fda8df955cc76ef58a280f68f4cd43fa",
+  "variant": "eh",
+  "emscripten": "3.1.71",
+  "cmake": "3.31.6",
+  "esbuild": "0.20.2",
+  "dependencyPatches": {
+    "patches/duckdb/all_of_them.patch": "c9c0c86b83eadc7f64163ff4dd690e7a40b9fefc1ea25d668be2a48f3be91e29",
+    "patches/duckdb/invalid_arrow.patch": "1ef38bd303e444cb15818735b9dc92f20e0c08b448f653828df390d1c4d60e37",
+    "patches/arrow/fix_shared_ptr_indirection.patch": "50b259bcfed243922d7e820882bc8e7ce8f0a8ebb443ece9c3c9ce6874c5c513",
+    "patches/arrow/hashing_compile_in_emscripten.patch": "74dd0afd9951b140af14d3c59c9d27ab230447aee4af5a440b71f634a3fc915b",
+    "patches/rapidjson/cmake_minimum_required.patch": "89a6b6a09c2ba0052b969af7be5d5001da4021d52231e1e1e43c088c462230ba"
+  },
+  "assets": {
+    "duckdb.js": {
+      "sha256": "4ca38a2e7e6249b79404a43de99af892225771aa98dfe561cc4155f1bbaa6686",
+      "bytes": 246378
+    },
+    "duckdb.wasm": {
+      "sha256": "5ab2a8aa5724153406bd842e6d3de665c09a655f3064bd69f7bf7d3527466e85",
+      "bytes": 24754079
+    },
+    "duckdb.d.ts": {
+      "sha256": "d23da80f607af22b2536bf1ef6bf336c3b4aafe450a01f9e3c879a986e2b016f",
+      "bytes": 278
+    }
+  }
+}

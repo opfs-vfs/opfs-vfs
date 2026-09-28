@@ -1,0 +1,23 @@
+{
+  "source": "https://github.com/electric-sql/pglite",
+  "commit": "ae182ff8bd5ba4acb887d6c925d607a1498aa0b5",
+  "license": "Apache-2.0",
+  "files": {
+    "benchmark1.sql": "a08d732a6e6a2cd459bac5b96112692a618b34704d229b8e1a1840e7ea6d2763",
+    "benchmark2.sql": "c1e50ed8346fb189b0abb323e12e7e2318e769e4b3e1cc5d2c11061a43a24dc7",
+    "benchmark3.sql": "f55a9cb1a0be70f3fee35773fa42b44bf8c78a91be4ecf79bc74b483d6c2f4f4",
+    "benchmark4.sql": "4c55abd764f334d6ac56d1a65bbf5a9f34dbf330e635f1cb8ed67b5c01d1f47c",
+    "benchmark5.sql": "45274f3a4b054c600110e34a36bce1ad763acc76163c780d05d88cf1dfc12157",
+    "benchmark6.sql": "9dc0bd7209a9b2bb001b9c2b40c40f6943300778d282fd42b5706392679e6c11",
+    "benchmark7.sql": "8d1fbbfca789ae5c1db60123358ea98d66bf3e527ec25a6508e29a3a5d6033f6",
+    "benchmark8.sql": "5931c958a6c7457e1381f091703e50fd990674087a91c4885b1def6e5e37b567",
+    "benchmark9.sql": "239f02e756b6edf8759a58e5206333f0b34ba47fcc29806a60504eab53c2ea22",
+    "benchmark10.sql": "831e818dcd1ce187ede697b4a51cba3b684ab99bf93f935ca6d2dbaa53025ef2",
+    "benchmark11.sql": "a93ec656d7e65d4c7a0156cda83352459f734c0568d1b7f06ef6f0584b75d828",
+    "benchmark12.sql": "e3d3c6eb7ccd57b1c2676f8450bf94276764e22d3efd2bd41b05dbd6bf69ad06",
+    "benchmark13.sql": "aa7ebc8aac509c34c7c68c374625c6c1a9029ebaa2096f8f55dc7486f17ccbdd",
+    "benchmark14.sql": "d8e952e93473a28ae231f64ef7190444e3d733223bdecd6ab60096144d7dab1a",
+    "benchmark15.sql": "3f5370096dbe3abcbc2d108109c0edda330634362bd4e5590af4904e70abd9e9",
+    "benchmark16.sql": "98d55e0a83c8bf30ea9c871a7f85c38956a6b8d316adf27c4b29cf006d886536"
+  }
+}

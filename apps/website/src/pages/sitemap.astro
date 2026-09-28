@@ -1,0 +1,47 @@
+---
+import { getCollection } from 'astro:content';
+import SiteLayout from '../layouts/SiteLayout.astro';
+const docs = (await getCollection('docs')).filter((entry) => !entry.data.draft).sort((a, b) => a.id.localeCompare(b.id));
+const sections = [
+  { title: 'About OPFS VFS', pages: [
+    ['/', 'Home', 'The filesystem, its benefits, and available tools.'],
+    ['/motivation/', 'Why OPFS VFS', 'The storage problem and the choices behind the library.'],
+    ['/licensing/', 'Licensing', 'Community and commercial terms.'],
+    ['/changelog/', 'Changelog', 'Changes by package version.'],
+  ] },
+  { title: 'Demos', pages: [
+    ['/demos/', 'All demos', 'Choose an example to try in your browser.'],
+    ['/demos/filesystem/', 'Filesystem', 'Files, a shell, previews, and workspace transfers.'],
+    ['/demos/devtools/', 'Volume Explorer', 'Inspect and edit real browser volumes.'],
+    ['/demos/pglite/', 'PGlite', 'Postgres queries with persistent storage.'],
+    ['/demos/duckdb/', 'DuckDB', 'Experimental analytical SQL with a custom engine.'],
+    ['/demos/edgejs/', 'EdgeJS', 'Experimental JavaScript with saved files.'],
+    ['/demos/ai/', 'Local AI', 'A local model that works with workspace files.'],
+    ['/demos/react/', 'React SDK', 'Managed OPFS VFS volumes with live reads and synchronized saves.'],
+  ] },
+  { title: 'Benchmarks', pages: [
+    ['/benchmarks/', 'Published results', 'Measurements with settings and raw samples.'],
+    ['/benchmarks/run/', 'PGlite benchmark', 'Run SQL workloads across storage backends.'],
+    ['/benchmarks/filesystem/', 'Filesystem benchmark', 'Measure file operations and buffer modes.'],
+    ['/benchmarks/collect/', 'Collect results', 'Download a repeatable collection from your device.'],
+    ['/benchmarks/methodology/', 'Methodology', 'Workloads, timing boundaries, and limitations.'],
+    ['/benchmarks/storage/', 'Storage and durability', 'Choose backends, buffer modes, and save policies.'],
+  ] },
+  { title: 'Documentation', pages: docs.map((entry) => [`/${entry.id.replace(/\/index$/, '')}/`, entry.data.title, entry.data.description ?? '']) },
+];
+---
+<SiteLayout title="Sitemap · OPFS VFS" description="Find every OPFS VFS product page, demo, benchmark, and documentation guide.">
+  <section class="page-head"><div><p class="kicker">Sitemap</p><h1>Find your way around</h1><p>Learn why the filesystem exists, try it in your browser, or go straight to an integration guide.</p></div></section>
+  <div class="sitemap-sections">{sections.map(({ title, pages }) => <section><h2>{title}</h2><ul>{pages.map(([href, label, description]) => <li><a href={href}>{label}</a><p>{description}</p></li>)}</ul></section>)}</div>
+  <p class="discovery-links"><a href="/sitemap-index.xml">XML sitemap</a> · <a href="/llms.txt">LLM guide</a></p>
+</SiteLayout>
+<style>
+  .sitemap-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 64px; }
+  .sitemap-sections h2 { font-size: 24px; }
+  .sitemap-sections ul { list-style: none; padding: 0; }
+  .sitemap-sections li { padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .sitemap-sections a { font-weight: 600; text-underline-offset: 4px; }
+  .sitemap-sections p { margin: 6px 0 0; color: var(--muted); line-height: 1.6; }
+  .discovery-links { margin-top: 40px; }
+  @media (max-width: 700px) { .sitemap-sections { grid-template-columns: 1fr; gap: 24px; } }
+</style>

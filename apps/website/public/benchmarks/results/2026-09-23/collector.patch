@@ -1,0 +1,855 @@
+diff --git a/apps/website/README.md b/apps/website/README.md
+index 475e31f..26ef74f 100644
+--- a/apps/website/README.md
++++ b/apps/website/README.md
+@@ -23,6 +23,9 @@ Astro can run its server in the background in agent environments. Use `pnpm --fi
+ 
+ ## Content
+ 
++For repeatable measurements on the two Macs, follow [the collection guide](../../docs/benchmark-collection.md).
++`pnpm benchmark:collect` builds a production preview. Open `/benchmarks/collect/` in each actual browser and download one JSON bundle per run.
++
+ - Marketing pages: `src/pages` and `src/components/Hero.tsx`.
+ - Documentation: Markdown/MDX under `src/content/docs/docs`, rendered with Starlight search and GitHub edit links.
+ - Changelog: read directly from `packages/opfs-vfs/CHANGELOG.md` at build time. No duplicated release notes. Entries are versioned notes, not proof that a release has been published. The existing Changesets publish workflow already creates GitHub Releases; missed historical releases require explicit reconciliation.
+diff --git a/apps/website/src/pages/benchmarks/index.astro b/apps/website/src/pages/benchmarks/index.astro
+index 438c1e4..42f9f91 100644
+--- a/apps/website/src/pages/benchmarks/index.astro
++++ b/apps/website/src/pages/benchmarks/index.astro
+@@ -1,5 +1,5 @@
+ ---
+ import SiteLayout from '../../layouts/SiteLayout.astro';
+ ---
+-<SiteLayout title="Benchmarks · OPFS VFS"><section class="page-head"><div><p class="kicker">Benchmarks / your browser, your results</p><h1>Measure what matters.</h1><p>Compare like-for-like storage backends with the configuration beside every result.</p></div><a class="button solid" href="/benchmarks/run/">Run on your device →</a></section><div class="backend-table"><table><caption>What each comparison measures</caption><thead><tr><th>Backend</th><th>Storage</th><th>Comparison</th></tr></thead><tbody><tr><th>OPFS VFS</th><td>Persistent volume in OPFS</td><td>Memory or disk buffering, with selectable durability</td></tr><tr><th>PGlite OPFS AHP</th><td>Persistent access-handle pool</td><td>PGlite’s own OPFS backend; availability depends on browser limits</td></tr><tr><th>PGlite IndexedDB</th><td>Persistent IndexedDB database</td><td>The same SQL workload through PGlite’s IndexedDB backend</td></tr><tr><th>PGlite memory</th><td>Temporary process memory</td><td>A throughput reference with no persistence or reopen result</td></tr></tbody></table></div><section class="surface"><div class="surface-header"><span>PUBLISHED RESULTS</span><span>Awaiting verified samples</span></div><div class="empty"><div><h2>No published measurements yet.</h2><p>We will publish only results that include the workload, browser, machine, versions, settings, and raw samples.</p><a class="button" href="/benchmarks/methodology/">Read the methodology</a></div></div></section><section class="storage-guide"><div><h2>What happens to your work after a reload?</h2><p>Understand memory, IndexedDB, OPFS, buffering, and durability before comparing their speed.</p></div><a class="button" href="/benchmarks/storage/">Read the storage guide →</a></section><section class="feature-grid"><article class="card"><h2>PGlite suite</h2><p>OPFS VFS, PGlite OPFS AHP, IndexedDB, and in-memory run the same SQL workload.</p></article><article class="card"><h2>Filesystem suite</h2><p>Create, read, write, rename, delete, flush, and reopen operations test filesystem behavior directly.</p><a href="/benchmarks/filesystem/">Run filesystem benchmarks →</a></article></section></SiteLayout>
++<SiteLayout title="Benchmarks · OPFS VFS"><section class="page-head"><div><p class="kicker">Benchmarks / your browser, your results</p><h1>Measure what matters.</h1><p>Compare like-for-like storage backends with the configuration beside every result.</p></div><a class="button solid" href="/benchmarks/run/">Run on your device →</a></section><div class="backend-table"><table><caption>What each comparison measures</caption><thead><tr><th>Backend</th><th>Storage</th><th>Comparison</th></tr></thead><tbody><tr><th>OPFS VFS</th><td>Persistent volume in OPFS</td><td>Memory or disk buffering, with selectable durability</td></tr><tr><th>PGlite OPFS AHP</th><td>Persistent access-handle pool</td><td>PGlite’s own OPFS backend; availability depends on browser limits</td></tr><tr><th>PGlite IndexedDB</th><td>Persistent IndexedDB database</td><td>The same SQL workload through PGlite’s IndexedDB backend</td></tr><tr><th>PGlite memory</th><td>Temporary process memory</td><td>A throughput reference with no persistence or reopen result</td></tr></tbody></table></div><section class="surface"><div class="surface-header"><span>PUBLISHED RESULTS</span><span>Awaiting verified samples</span></div><div class="empty"><div><h2>No published measurements yet.</h2><p>We will publish only results that include the workload, browser, machine, versions, settings, and raw samples.</p><a class="button" href="/benchmarks/collect/">Collect a full result set →</a> <a class="button" href="/benchmarks/methodology/">Read the methodology</a></div></div></section><section class="storage-guide"><div><h2>What happens to your work after a reload?</h2><p>Understand memory, IndexedDB, OPFS, buffering, and durability before comparing their speed.</p></div><a class="button" href="/benchmarks/storage/">Read the storage guide →</a></section><section class="feature-grid"><article class="card"><h2>PGlite suite</h2><p>OPFS VFS, PGlite OPFS AHP, IndexedDB, and in-memory run the same SQL workload.</p></article><article class="card"><h2>Filesystem suite</h2><p>Create, read, write, rename, delete, flush, and reopen operations test filesystem behavior directly.</p><a href="/benchmarks/filesystem/">Run filesystem benchmarks →</a></article></section></SiteLayout>
+ <style>.storage-guide{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px;padding:32px 0;border-bottom:1px solid var(--line)}.storage-guide h2{font-size:24px;letter-spacing:-.025em;margin:0 0 12px}.storage-guide p{max-width:58ch;color:var(--muted);line-height:1.6;margin:0}.backend-table{overflow:auto;margin:0 0 30px}.backend-table table{border-collapse:collapse;width:100%;font-size:14px;text-align:left}.backend-table caption{text-align:left;padding:0 0 12px;font-weight:600}.backend-table th,.backend-table td{padding:14px;border-bottom:1px solid var(--line);line-height:1.5}.backend-table td{color:var(--muted)}.empty p{max-width:520px;line-height:1.6;margin:10px auto 20px;color:var(--muted)}</style>
+diff --git a/apps/website/src/workers/benchmark.worker.ts b/apps/website/src/workers/benchmark.worker.ts
+index f06cc79..802652f 100644
+--- a/apps/website/src/workers/benchmark.worker.ts
++++ b/apps/website/src/workers/benchmark.worker.ts
+@@ -1,5 +1,6 @@
+ /// <reference lib="webworker" />
+ import { PGlite } from '@electric-sql/pglite';
++import { deleteBenchmarkIdb } from '../lib/benchmark-idb';
+ import { OpfsVfsPGliteAdapter } from '@opfs-vfs/opfs-vfs/pglite';
+ import { deleteVolume, OpfsVfs } from '@opfs-vfs/opfs-vfs';
+ import {
+@@ -18,16 +19,6 @@ const post = (event: BenchmarkWorkerEvent) => scope.postMessage(event),
+   message = (error: unknown) => (error instanceof Error ? error.message : String(error)),
+   unavailable = (error: unknown) =>
+     /not supported|unavailable|cross.origin|SharedArrayBuffer|createSyncAccessHandle/i.test(message(error));
+-async function deleteIdb(name: string) {
+-  const databases = await indexedDB.databases();
+-  for (const database of databases.filter((item) => item.name?.includes(name)))
+-    await new Promise<void>((resolve, reject) => {
+-      const request = indexedDB.deleteDatabase(database.name!);
+-      request.onsuccess = () => resolve();
+-      request.onerror = () => reject(request.error);
+-      request.onblocked = () => reject(new Error('IndexedDB cleanup is blocked by another tab.'));
+-    });
+-}
+ async function removeOpfs(name: string) {
+   const root = await navigator.storage.getDirectory();
+   try {
+@@ -154,7 +145,7 @@ async function runSample(
+     } catch {}
+     try {
+       if (backend === 'opfs-vfs') await deleteVolume(volume);
+-      if (backend === 'idb') await deleteIdb(store);
++      if (backend === 'idb') await deleteBenchmarkIdb(store);
+       if (backend === 'opfs-ahp') await removeOpfs(store);
+     } catch (error) {
+       result.error = `${result.error ? `${result.error} ` : ''}Cleanup failed: ${message(error)}`;
+diff --git a/package.json b/package.json
+index b4d51c7..96e35e7 100644
+--- a/package.json
++++ b/package.json
+@@ -4,6 +4,7 @@
+   "license": "SEE LICENSE IN LICENSE.md",
+   "type": "module",
+   "scripts": {
++    "benchmark:collect": "pnpm --filter @opfs-vfs/website... build && pnpm --filter @opfs-vfs/website preview --host localhost",
+     "build": "pnpm -r run build",
+     "typecheck": "pnpm -r run typecheck",
+     "test": "pnpm -r run test",
+diff --git a/apps/website/src/components/BenchmarkCollection.tsx b/apps/website/src/components/BenchmarkCollection.tsx
+new file mode 100644
+index 0000000..ec252fa
+--- /dev/null
++++ b/apps/website/src/components/BenchmarkCollection.tsx
+@@ -0,0 +1,343 @@
++import { useEffect, useRef, useState } from 'react';
++import { Button } from './ui/button';
++import { Input } from './ui/input';
++import { SelectField } from './ui/select-field';
++import {
++  collectionBrowser,
++  collectionEligible,
++  collectionJobs,
++  collectionSchedule,
++  type CollectionEntry,
++} from '../lib/benchmark-collection';
++import type { BenchmarkWorkerEvent } from '../lib/benchmark';
++import type { FilesystemEvent } from '../lib/filesystem-benchmark';
++import { SPEED_TEST_REVISION, SPEED_TEST_SOURCE } from '../lib/pglite-speedtest';
++import './BenchmarkRunner.css';
++
++const machines = [
++  { id: 'm5-pro', label: 'MacBook Pro 16-inch · M5 Pro · 64 GB', macOS: '26.6.2' },
++  { id: 'm1-max', label: 'Mac Studio 2022 · M1 Max · 64 GB', macOS: '26.5.2' },
++];
++type Collection = {
++  schemaVersion: 1;
++  kind: 'opfs-vfs-benchmark-collection';
++  protocol: 'mac-browser-v1';
++  id: string;
++  startedAt: string;
++  finishedAt?: string;
++  status: 'running' | 'complete' | 'cancelled' | 'failed';
++  interrupted: boolean;
++  eligibleForReview: boolean;
++  error?: string;
++  environment: {
++    machine: string;
++    macOS: string;
++    browser: string;
++    browserVersion: string;
++    userAgent: string;
++    profile: 'regular-clean';
++    notes: string;
++    hardwareConcurrency: number;
++    crossOriginIsolated: boolean;
++  };
++  versions: { sourceCommit: string; opfsVfs: string; pglite: string };
++  workloads: { speedtest: string; source: string; transactions: string; filesystem: string; payloadBytes: number };
++  skipped: { backend: string; reason: string }[];
++  jobs: ReturnType<typeof collectionJobs>;
++  entries: CollectionEntry[];
++};
++
++export default function BenchmarkCollection() {
++  const [machine, setMachine] = useState(machines[0]!);
++  const [macOS, setMacOS] = useState(machine.macOS);
++  const [browserVersion, setBrowserVersion] = useState('');
++  const [notes, setNotes] = useState('');
++  const [confirmed, setConfirmed] = useState(false);
++  const [report, setReport] = useState<Collection | null>(null);
++  const [progress, setProgress] = useState('Ready');
++  const [error, setError] = useState('');
++  const control = useRef<{ cancel: () => void } | null>(null);
++  const browser = collectionBrowser(navigator.userAgent);
++  const running = report?.status === 'running';
++  useEffect(() => () => control.current?.cancel(), []);
++
++  const run = async () => {
++    if (!browser || control.current) return;
++    setError('');
++    if (
++      !crossOriginIsolated ||
++      typeof SharedArrayBuffer === 'undefined' ||
++      !navigator.locks ||
++      !navigator.storage?.getDirectory
++    ) {
++      setError(
++        'OPFS, Web Locks and cross-origin isolation are required. Use the local production preview in a regular browser profile.',
++      );
++      return;
++    }
++    const result: Collection = {
++      schemaVersion: 1,
++      kind: 'opfs-vfs-benchmark-collection',
++      protocol: 'mac-browser-v1',
++      id: crypto.randomUUID(),
++      startedAt: new Date().toISOString(),
++      status: 'running',
++      interrupted: document.hidden,
++      eligibleForReview: false,
++      environment: {
++        machine: machine.label,
++        macOS,
++        browser,
++        browserVersion,
++        userAgent: navigator.userAgent,
++        profile: 'regular-clean',
++        notes,
++        hardwareConcurrency: navigator.hardwareConcurrency,
++        crossOriginIsolated,
++      },
++      versions: {
++        sourceCommit: import.meta.env.PUBLIC_SOURCE_COMMIT,
++        opfsVfs: import.meta.env.PUBLIC_OPFS_VFS_VERSION,
++        pglite: import.meta.env.PUBLIC_PGLITE_VERSION,
++      },
++      workloads: {
++        speedtest: SPEED_TEST_REVISION,
++        source: SPEED_TEST_SOURCE,
++        transactions: 'pglite-sql-v2',
++        filesystem: 'small-files-v1',
++        payloadBytes: 1024,
++      },
++      skipped:
++        browser === 'safari' ? [{ backend: 'opfs-ahp', reason: 'Omitted on Safari by collection protocol.' }] : [],
++      jobs: collectionJobs(browser),
++      entries: [],
++    };
++    const publish = () => setReport({ ...result, entries: [...result.entries] });
++    let cancelled = false;
++    let cancelWorker: (() => void) | undefined;
++    control.current = {
++      cancel: () => {
++        cancelled = true;
++        result.interrupted = true;
++        setProgress('Cancelling and waiting for cleanup…');
++        cancelWorker?.();
++      },
++    };
++    const hidden = () => {
++      if (document.hidden) {
++        result.interrupted = true;
++        publish();
++      }
++    };
++    const unloading = (event: BeforeUnloadEvent) => {
++      event.preventDefault();
++      event.returnValue = '';
++    };
++    document.addEventListener('visibilitychange', hidden);
++    window.addEventListener('beforeunload', unloading);
++    publish();
++    try {
++      await navigator.storage.getDirectory();
++      const schedule = collectionSchedule(result.jobs);
++      for (const [index, { job, round, warmup }] of schedule.entries()) {
++        if (cancelled) break;
++        const label = `${index + 1}/${schedule.length} · ${warmup ? 'Warm-up' : `Round ${round}/5`} · ${job.id}`;
++        setProgress(label);
++        const entry: CollectionEntry = {
++          jobId: job.id,
++          round,
++          warmup,
++          startedAt: new Date().toISOString(),
++          samples: [],
++        };
++        result.entries.push(entry);
++        await new Promise<void>((resolve, reject) => {
++          const worker =
++            job.suite === 'sql'
++              ? new Worker(new URL('../workers/benchmark.worker.ts', import.meta.url), { type: 'module' })
++              : new Worker(new URL('../workers/filesystem-benchmark.worker.ts', import.meta.url), { type: 'module' });
++          const cancellation = new Int32Array(new SharedArrayBuffer(4));
++          let grace: ReturnType<typeof setTimeout> | undefined;
++          let timedOut = false;
++          let settled = false;
++          const finish = (failure?: string) => {
++            if (settled) return;
++            settled = true;
++            clearTimeout(timeout);
++            clearTimeout(grace);
++            cancelWorker = undefined;
++            worker.terminate();
++            entry.finishedAt = new Date().toISOString();
++            if (failure) {
++              entry.error = failure;
++              reject(new Error(failure));
++            } else resolve();
++          };
++          cancelWorker = () => {
++            if (grace) return;
++            if (job.suite === 'sql') worker.postMessage({ type: 'cancel' });
++            Atomics.store(cancellation, 0, 1);
++            grace = setTimeout(
++              () =>
++                finish(
++                  'Worker did not stop within 30 seconds. Cleanup is unconfirmed; clear this benchmark origin’s data before retrying.',
++                ),
++              30_000,
++            );
++          };
++          const timeout = setTimeout(() => {
++            timedOut = true;
++            cancelWorker?.();
++          }, 600_000);
++          worker.onmessage = ({ data }: MessageEvent<BenchmarkWorkerEvent | FilesystemEvent>) => {
++            if (data.type === 'sample') {
++              entry.samples.push(data.sample);
++              publish();
++            }
++            if (data.type === 'prepared') entry.preparationMs = data.preparationMs;
++            if (data.type === 'progress' && !cancelled) setProgress(`${label}${data.stage ? ` · ${data.stage}` : ''}`);
++            if (data.type === 'fatal')
++              finish(`${data.error} Cleanup is unconfirmed; clear this benchmark origin’s data before retrying.`);
++            if (data.type === 'done')
++              finish(
++                entry.samples.some((sample) => sample.error?.includes('Cleanup failed:'))
++                  ? 'Cleanup failed. Clear this benchmark origin’s data before retrying.'
++                  : timedOut
++                    ? 'Sample exceeded the ten-minute limit.'
++                    : undefined,
++              );
++          };
++          worker.onerror = (event) =>
++            finish(`${event.message} Cleanup is unconfirmed; clear this benchmark origin’s data before retrying.`);
++          worker.postMessage(
++            job.suite === 'sql'
++              ? { type: 'run', config: job.config }
++              : { config: job.config, cancellation: cancellation.buffer },
++          );
++        });
++        publish();
++      }
++      result.status = cancelled ? 'cancelled' : 'complete';
++    } catch (caught) {
++      result.status = 'failed';
++      result.error = caught instanceof Error ? caught.message : String(caught);
++      setError(result.error);
++    } finally {
++      result.finishedAt = new Date().toISOString();
++      result.eligibleForReview =
++        result.status === 'complete' && collectionEligible(result.jobs, result.entries, result.interrupted);
++      control.current = null;
++      document.removeEventListener('visibilitychange', hidden);
++      window.removeEventListener('beforeunload', unloading);
++      setProgress(result.status === 'complete' ? 'Complete' : result.status === 'cancelled' ? 'Cancelled' : 'Failed');
++      publish();
++    }
++  };
++  const download = () => {
++    if (!report) return;
++    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
++    const link = document.createElement('a');
++    link.href = url;
++    link.download = `opfs-bench-${report.environment.browser}-${report.id}.json`;
++    link.click();
++    setTimeout(() => URL.revokeObjectURL(url), 1000);
++  };
++  return (
++    <section className="benchmark-runner" aria-busy={running}>
++      <header>
++        <div>
++          <h2>Collect a full benchmark set</h2>
++          <p>One excluded warm-up and five measured rounds. Download one JSON file per browser.</p>
++        </div>
++        <p role="status">{progress}</p>
++      </header>
++      <fieldset disabled={running}>
++        <legend>Environment</legend>
++        <label>
++          Machine{' '}
++          <SelectField
++            label="Machine"
++            disabled={running}
++            value={machine.id}
++            options={machines.map((m) => ({ value: m.id, label: m.label }))}
++            onValueChange={(id) => {
++              const selected = machines.find((m) => m.id === id)!;
++              setMachine(selected);
++              setMacOS(selected.macOS);
++            }}
++          />
++        </label>
++        <label>
++          macOS version <Input value={macOS} onChange={(e) => setMacOS(e.target.value)} />
++        </label>
++        <label>
++          {browser ?? 'Unsupported browser'} version{' '}
++          <Input
++            aria-label="Browser version"
++            placeholder="Copy full version from About"
++            value={browserVersion}
++            onChange={(e) => setBrowserVersion(e.target.value)}
++          />
++        </label>
++        <label>
++          Notes{' '}
++          <Input
++            placeholder="Power mode, free disk space, unusual conditions"
++            value={notes}
++            onChange={(e) => setNotes(e.target.value)}
++          />
++        </label>
++        <label>
++          <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />I am using a
++          fresh regular profile, extensions off, plugged in, with other apps quiet.
++        </label>
++      </fieldset>
++      <p>
++        Runs the 16 PGlite SQL cases and a 10,000-row transaction batch on OPFS VFS with disk and memory buffers,
++        IndexedDB, and a memory-only reference
++        {browser === 'safari' ? '. OPFS AHP is omitted on Safari.' : ', plus OPFS AHP.'} Also tests 1,000 files in both
++        VFS buffer modes. All persistent VFS tests use balanced durability; PGlite waits for filesystem synchronization.
++      </p>
++      <p className="note">
++        Keep this tab visible and the Mac awake. Each sample uses fresh storage and a fresh worker. Warm-ups prime
++        browser caches, not a reused worker. Preparation, close and cleanup are outside the workload timers.
++        Cancellation may wait for the current SQL case.
++      </p>
++      <div className="actions">
++        <Button
++          disabled={running || !browser || !confirmed || !macOS.trim() || !browserVersion.trim()}
++          onClick={() => void run()}
++        >
++          Run collection
++        </Button>
++        <Button variant="outline" disabled={!running} onClick={() => control.current?.cancel()}>
++          Cancel
++        </Button>
++        <Button variant="outline" disabled={!report || running} onClick={download}>
++          Download JSON
++        </Button>
++      </div>
++      {error && <p role="alert">{error}</p>}
++      {report?.interrupted && (
++        <p role="alert">
++          This collection was interrupted or backgrounded. Retain it for diagnosis and rerun before publication.
++        </p>
++      )}
++      {report && !running && (
++        <p>
++          {report.eligibleForReview
++            ? 'All checks passed. Ready for review before publication.'
++            : 'Incomplete or questionable collection. Download includes all results and errors.'}{' '}
++          {report.entries.filter((e) => !e.warmup && e.samples[0]?.status === 'ok').length} successful measured samples.
++        </p>
++      )}
++      {report?.entries
++        .filter((e) => e.error || e.samples.some((s) => s.status !== 'ok'))
++        .map((e, index) => (
++          <p role="alert" key={index}>
++            {e.jobId}, round {e.round}: {e.error ?? e.samples.map((s) => s.error ?? s.status).join('; ')}
++          </p>
++        ))}
++    </section>
++  );
++}
+diff --git a/apps/website/src/lib/benchmark-collection.ts b/apps/website/src/lib/benchmark-collection.ts
+new file mode 100644
+index 0000000..110679a
+--- /dev/null
++++ b/apps/website/src/lib/benchmark-collection.ts
+@@ -0,0 +1,82 @@
++import type { BenchmarkBackend, BenchmarkConfig, BenchmarkSample } from './benchmark';
++import type { FilesystemConfig, FilesystemSample } from './filesystem-benchmark';
++
++export type CollectionBrowser = 'chrome' | 'safari' | 'firefox';
++export type CollectionJob = { id: string } & (
++  | { suite: 'sql'; config: BenchmarkConfig }
++  | { suite: 'filesystem'; config: FilesystemConfig }
++);
++export type CollectionEntry = {
++  jobId: string;
++  round: number;
++  warmup: boolean;
++  startedAt: string;
++  finishedAt?: string;
++  preparationMs?: number;
++  samples: (BenchmarkSample | FilesystemSample)[];
++  error?: string;
++};
++export function collectionJobs(browser: CollectionBrowser): CollectionJob[] {
++  const jobs: CollectionJob[] = [];
++  const backends: BenchmarkBackend[] = ['opfs-vfs', 'opfs-ahp', 'idb', 'memory'];
++  for (const workload of ['pglite-speedtest', 'transactions'] as const)
++    for (const backend of backends) {
++      if (browser === 'safari' && backend === 'opfs-ahp') continue;
++      for (const bufferMode of backend === 'opfs-vfs' ? (['disk', 'memory'] as const) : (['disk'] as const))
++        jobs.push({
++          id: `${workload}-${backend}${backend === 'opfs-vfs' ? `-${bufferMode}` : ''}`,
++          suite: 'sql',
++          config: {
++            backends: [backend],
++            workload,
++            rows: workload === 'transactions' ? 10_000 : null,
++            repetitions: 1,
++            bufferMode,
++            durability: 'balanced',
++            relaxedDurability: false,
++          },
++        });
++    }
++  for (const bufferMode of ['disk', 'memory'] as const)
++    jobs.push({
++      id: `filesystem-${bufferMode}`,
++      suite: 'filesystem',
++      config: {
++        files: 1000,
++        repetitions: 1,
++        bufferMode,
++        durability: 'balanced',
++      },
++    });
++  return jobs;
++}
++export function collectionSchedule(jobs: CollectionJob[]) {
++  return Array.from({ length: 6 }, (_, round) =>
++    jobs.map((_, index) => ({ job: jobs[(index + round) % jobs.length]!, round, warmup: round === 0 })),
++  ).flat();
++}
++export function collectionEligible(jobs: CollectionJob[], entries: CollectionEntry[], interrupted: boolean) {
++  const schedule = collectionSchedule(jobs);
++  return (
++    !interrupted &&
++    entries.length === schedule.length &&
++    schedule.every(({ job, round, warmup }, index) => {
++      const entry = entries[index]!;
++      return (
++        entry.jobId === job.id &&
++        entry.round === round &&
++        entry.warmup === warmup &&
++        !!entry.finishedAt &&
++        !entry.error &&
++        entry.samples.length === 1 &&
++        entry.samples[0]!.status === 'ok'
++      );
++    })
++  );
++}
++export function collectionBrowser(userAgent: string): CollectionBrowser | null {
++  if (/Firefox\//.test(userAgent)) return 'firefox';
++  if (/Chrome\//.test(userAgent) && !/Edg\/|OPR\//.test(userAgent)) return 'chrome';
++  if (/Version\/.*Safari\//.test(userAgent) && !/Chrome\//.test(userAgent)) return 'safari';
++  return null;
++}
+diff --git a/apps/website/src/lib/benchmark-idb.ts b/apps/website/src/lib/benchmark-idb.ts
+new file mode 100644
+index 0000000..58f3c69
+--- /dev/null
++++ b/apps/website/src/lib/benchmark-idb.ts
+@@ -0,0 +1,18 @@
++export async function deleteBenchmarkIdb(name: string) {
++  const databases = await indexedDB.databases();
++  for (const database of databases.filter((item) => item.name?.includes(name))) {
++    let timeout: ReturnType<typeof setTimeout> | undefined;
++    try {
++      await new Promise<void>((resolve, reject) => {
++        const request = indexedDB.deleteDatabase(database.name!);
++        timeout = setTimeout(() => reject(new Error('IndexedDB cleanup did not finish within 5 seconds.')), 5000);
++        request.onsuccess = () => resolve();
++        request.onerror = () => reject(request.error);
++        // Safari can emit blocked while closed connections are still being released.
++        // Only success confirms deletion; the timeout bounds a genuinely blocked request.
++      });
++    } finally {
++      clearTimeout(timeout);
++    }
++  }
++}
+diff --git a/apps/website/src/pages/benchmarks/collect.astro b/apps/website/src/pages/benchmarks/collect.astro
+new file mode 100644
+index 0000000..46e7764
+--- /dev/null
++++ b/apps/website/src/pages/benchmarks/collect.astro
+@@ -0,0 +1,8 @@
++---
++import SiteLayout from '../../layouts/SiteLayout.astro';
++import BenchmarkCollection from '../../components/BenchmarkCollection';
++---
++<SiteLayout title="Collect benchmark results · OPFS VFS">
++  <section class="page-head"><div><p class="kicker">Benchmarks / collection</p><h1>One file per browser.</h1><p>Run the same collection on each Mac in Chrome, Safari, and optionally Firefox. Use a fresh regular profile with extensions off. Private browsing can restrict or change storage behavior.</p></div><a class="button" href="/benchmarks/methodology/">Methodology →</a></section>
++  <BenchmarkCollection client:only="react" />
++</SiteLayout>
+diff --git a/apps/website/tests/benchmark-collection.spec.ts b/apps/website/tests/benchmark-collection.spec.ts
+new file mode 100644
+index 0000000..9887e48
+--- /dev/null
++++ b/apps/website/tests/benchmark-collection.spec.ts
+@@ -0,0 +1,86 @@
++import { readFile } from 'node:fs/promises';
++import { expect, test } from '@playwright/test';
++
++test('collection exports all real worker samples with warmups, versions and correctness results', async ({ page }) => {
++  test.skip(!process.env.BENCHMARK_COLLECTION_FULL, 'Opt in to the full 72-sample collection.');
++  test.setTimeout(900_000);
++  await page.goto('/benchmarks/collect/');
++  await page
++    .getByRole('textbox', { name: 'Browser version', exact: true })
++    .fill('automated smoke test, not for publication');
++  await page.getByRole('checkbox').check();
++  await page.getByRole('button', { name: 'Run collection', exact: true }).click();
++  await expect(page.getByRole('status')).toHaveText(/^(Complete|Failed|Cancelled)$/, { timeout: 870_000 });
++  await expect(page.getByRole('status')).toHaveText('Complete');
++  await expect(page.getByRole('alert')).toHaveCount(0);
++  const downloading = page.waitForEvent('download');
++  await page.getByRole('button', { name: 'Download JSON' }).click();
++  const report = JSON.parse(await readFile(await (await downloading).path(), 'utf8'));
++  expect(report.kind).toBe('opfs-vfs-benchmark-collection');
++  expect(report.eligibleForReview).toBe(true);
++  expect(report.versions.sourceCommit).not.toBe('');
++  expect(report.environment.machine).toContain('M5 Pro');
++  expect(report.entries).toHaveLength(report.jobs.length * 6);
++  expect(report.entries.filter((e: { warmup: boolean }) => !e.warmup)).toHaveLength(report.jobs.length * 5);
++  for (const entry of report.entries) {
++    expect(entry.samples).toHaveLength(1);
++    expect(entry.samples[0].status).toBe('ok');
++    if (entry.jobId.startsWith('pglite-speedtest')) expect(entry.samples[0].stages).toHaveLength(16);
++    if (entry.jobId.startsWith('filesystem')) expect(entry.samples[0].verifiedFiles).toBe(500);
++    if (entry.jobId.startsWith('transactions')) expect(entry.samples[0].actualRows).toBe(10000);
++  }
++});
++
++test('collection cancellation preserves a partial export', async ({ page }) => {
++  await page.goto('/benchmarks/collect/');
++  await page.getByRole('textbox', { name: 'Browser version', exact: true }).fill('smoke test');
++  await page.getByRole('checkbox').check();
++  await page.getByRole('button', { name: 'Run collection', exact: true }).click();
++  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
++  await expect(page.getByRole('status')).toHaveText('Cancelled', { timeout: 45_000 });
++  const downloading = page.waitForEvent('download');
++  await page.getByRole('button', { name: 'Download JSON' }).click();
++  const report = JSON.parse(await readFile(await (await downloading).path(), 'utf8'));
++  expect(report.status).toBe('cancelled');
++  expect(report.eligibleForReview).toBe(false);
++  expect(report.interrupted).toBe(true);
++});
++
++test('cleanup failure stops collection before another worker starts', async ({ page }) => {
++  await page.addInitScript(() => {
++    // A real cleanup failure is unsafe to provoke; retain the real controller and inject the worker reply.
++    class CleanupFailedWorker {
++      onmessage: ((event: { data: unknown }) => void) | null = null;
++      postMessage() {
++        queueMicrotask(() => {
++          this.onmessage?.({
++            data: {
++              type: 'sample',
++              sample: {
++                backend: 'opfs-vfs',
++                repetition: 1,
++                status: 'failed',
++                error: 'Cleanup failed: test failure',
++              },
++            },
++          });
++          this.onmessage?.({ data: { type: 'done', cancelled: false } });
++        });
++      }
++      terminate() {}
++    }
++    window.Worker = CleanupFailedWorker as unknown as typeof Worker;
++  });
++  await page.goto('/benchmarks/collect/');
++  await page.getByRole('textbox', { name: 'Browser version', exact: true }).fill('smoke test');
++  await page.getByRole('checkbox').check();
++  await page.getByRole('button', { name: 'Run collection', exact: true }).click();
++  await expect(page.getByRole('status')).toHaveText('Failed');
++  const downloading = page.waitForEvent('download');
++  await page.getByRole('button', { name: 'Download JSON' }).click();
++  const report = JSON.parse(await readFile(await (await downloading).path(), 'utf8'));
++  expect(report.entries).toHaveLength(1);
++  expect(report.entries[0].samples[0].error).toContain('Cleanup failed:');
++  expect(report.eligibleForReview).toBe(false);
++  expect(report.error).toContain('Clear this benchmark origin');
++});
+diff --git a/apps/website/tests/benchmark-collection.test.ts b/apps/website/tests/benchmark-collection.test.ts
+new file mode 100644
+index 0000000..0fb701f
+--- /dev/null
++++ b/apps/website/tests/benchmark-collection.test.ts
+@@ -0,0 +1,58 @@
++import assert from 'node:assert/strict';
++import { test } from 'node:test';
++import {
++  collectionBrowser,
++  collectionEligible,
++  collectionJobs,
++  collectionSchedule,
++} from '../src/lib/benchmark-collection.ts';
++import type { CollectionEntry } from '../src/lib/benchmark-collection.ts';
++
++test('collection covers both buffers and all backends, omits Safari AHP, excludes warmups and rejects incomplete results', () => {
++  assert.equal(collectionBrowser('Version/26.0 Safari/605.1.15'), 'safari');
++  assert.equal(collectionBrowser('Chrome/140.0 Safari/537.36'), 'chrome');
++  assert.equal(collectionBrowser('Firefox/142.0'), 'firefox');
++  assert.equal(collectionBrowser('Chrome/140.0 Safari/537.36 Edg/140'), null);
++  for (const browser of ['chrome', 'firefox', 'safari'] as const) {
++    const jobs = collectionJobs(browser);
++    assert.equal(jobs.length, browser === 'safari' ? 10 : 12);
++    assert.equal(
++      jobs.some((j) => j.suite === 'sql' && j.config.backends.includes('opfs-ahp')),
++      browser !== 'safari',
++    );
++    assert.deepEqual(
++      jobs.filter((j) => j.suite === 'filesystem').map((j) => j.config.bufferMode),
++      ['disk', 'memory'],
++    );
++    const schedule = collectionSchedule(jobs);
++    for (const job of jobs) {
++      const scheduled = schedule.filter((s) => s.job.id === job.id);
++      assert.deepEqual(
++        scheduled.map((s) => s.round),
++        [0, 1, 2, 3, 4, 5],
++      );
++      assert.deepEqual(
++        scheduled.map((s) => s.warmup),
++        [true, false, false, false, false, false],
++      );
++    }
++    assert.equal(schedule[jobs.length]!.job.id, jobs[1]!.id);
++    const entries: CollectionEntry[] = schedule.map(({ job, round, warmup }) => ({
++      jobId: job.id,
++      round,
++      warmup,
++      startedAt: 'start',
++      finishedAt: 'finish',
++      samples: [{ repetition: 1, mountMs: 1, timings: {}, status: 'ok', verifiedFiles: 500 }],
++    }));
++    assert.equal(collectionEligible(jobs, entries, false), true);
++    assert.equal(collectionEligible(jobs, entries, true), false);
++    assert.equal(collectionEligible(jobs, entries.slice(1), false), false);
++    const failed = structuredClone(entries);
++    failed[0]!.samples[0]!.status = 'failed';
++    assert.equal(collectionEligible(jobs, failed, false), false);
++    const unfinished = structuredClone(entries);
++    delete unfinished[1]!.finishedAt;
++    assert.equal(collectionEligible(jobs, unfinished, false), false);
++  }
++});
+diff --git a/apps/website/tests/benchmark-idb.test.ts b/apps/website/tests/benchmark-idb.test.ts
+new file mode 100644
+index 0000000..4b750a6
+--- /dev/null
++++ b/apps/website/tests/benchmark-idb.test.ts
+@@ -0,0 +1,47 @@
++import assert from 'node:assert/strict';
++import { test } from 'node:test';
++import { deleteBenchmarkIdb } from '../src/lib/benchmark-idb.ts';
++
++test('IndexedDB cleanup waits through blocked, requires success, and bounds failures', async (t) => {
++  t.mock.timers.enable({ apis: ['setTimeout'] });
++  const original = Object.getOwnPropertyDescriptor(globalThis, 'indexedDB');
++  let request: IDBOpenDBRequest;
++  const deleted: string[] = [];
++  Object.defineProperty(globalThis, 'indexedDB', {
++    configurable: true,
++    value: {
++      databases: async () => [{ name: '/pglite/unique-benchmark' }, { name: 'unrelated' }],
++      deleteDatabase(name: string) {
++        deleted.push(name);
++        request = { error: new Error('delete failed') } as unknown as IDBOpenDBRequest;
++        return request;
++      },
++    },
++  });
++  try {
++    let settled = false;
++    const success = deleteBenchmarkIdb('unique-benchmark').finally(() => {
++      settled = true;
++    });
++    await Promise.resolve();
++    request!.onblocked?.call(request!, new Event('blocked') as IDBVersionChangeEvent);
++    await Promise.resolve();
++    assert.equal(settled, false);
++    request!.onsuccess?.call(request!, new Event('success'));
++    await success;
++    assert.deepEqual(deleted, ['/pglite/unique-benchmark']);
++
++    const failure = deleteBenchmarkIdb('unique-benchmark');
++    await Promise.resolve();
++    request!.onerror?.call(request!, new Event('error'));
++    await assert.rejects(failure, /delete failed/);
++
++    const timeout = deleteBenchmarkIdb('unique-benchmark');
++    await Promise.resolve();
++    t.mock.timers.tick(5000);
++    await assert.rejects(timeout, /within 5 seconds/);
++  } finally {
++    if (original) Object.defineProperty(globalThis, 'indexedDB', original);
++    else Reflect.deleteProperty(globalThis, 'indexedDB');
++  }
++});
+diff --git a/docs/benchmark-collection.md b/docs/benchmark-collection.md
+new file mode 100644
+index 0000000..eb5ae92
+--- /dev/null
++++ b/docs/benchmark-collection.md
+@@ -0,0 +1,91 @@
++# Collect website benchmark results
++
++Run `/benchmarks/collect/` once per browser on each Mac. This produces four JSON files for Chrome and Safari, or six if Firefox is included. Nothing is uploaded or published automatically. Send the original files back for review and the website tables.
++
++## Install and start
++
++- Install [Node.js 24 LTS](https://nodejs.org/en/download) and the repository's pinned pnpm: `npm install --global pnpm@12.4.2`.
++- Use installed stable [Google Chrome](https://www.google.com/chrome/) and Safari, which comes with macOS. [Firefox](https://www.mozilla.org/firefox/new/) is optional. No browser drivers, Playwright downloads, Homebrew or Python are needed.
++- Use the same clean repository commit on both Macs, including the collection page. Keep the lockfile unchanged and rebuild dependencies on each Mac. A `+dirty` source version needs its exact patch preserved and reviewed before publication.
++
++From the repository directory:
++
++```sh
++pnpm install --frozen-lockfile
++pnpm benchmark:collect
++```
++
++Wait for the build and preview to finish, then open <http://localhost:4325/benchmarks/collect/>. If the preview stays attached to the terminal, keep it open. If Astro starts it in the background, stop it later with `pnpm --filter @opfs-vfs/website exec astro preview stop`. The command builds the website and its workspace dependencies, with the isolation headers required by the workers. Use this production preview rather than the development server. Do not run another build during collection.
++
++If pnpm cannot verify its pinned version because the registry is unreachable, restore network access and retry. Do not disable signature verification.
++
++To prevent sleep while collecting, open a second terminal and run the macOS command:
++
++```sh
++caffeinate -di
++```
++
++Press Control-C in that terminal when finished. Keep the laptop plugged in and the lid open.
++
++## Browser profiles
++
++Use a fresh **regular** profile named `OPFS benchmarks`, without sign-in or extensions. Private browsing is unsuitable for the published comparison. Firefox [disables OPFS in private browsing](https://bugzilla.mozilla.org/show_bug.cgi?id=1785125), and [getDirectory can fail in private browsing](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/getDirectory). Storage behavior is part of what we are measuring.
++
++- Chrome: profile menu, Add profile, continue without an account. [Chrome profile instructions](https://support.google.com/chrome/answer/2364824).
++- Safari: Settings, Profiles, create a profile and open its regular window. Check extensions are off. [Safari profile instructions](https://support.apple.com/105100).
++- Firefox: open `about:profiles`, create a profile, and launch it in a new browser. [Firefox profile instructions](https://support.mozilla.org/en-US/kb/profile-manager-create-remove-switch-firefox-profiles).
++
++Use actual Safari. Playwright WebKit is a separate browser build and its results must not be labelled Safari. No Safari developer setting or remote automation permission is required.
++
++## Run on each Mac
++
++1. Close other browsers and busy apps. Pause builds, backups and downloads. Allow the Mac to cool and idle before each browser. Use the same power mode throughout, preferably Automatic with Low Power Mode off. Leave developer tools closed.
++2. Open the collection URL in the fresh profile. Select the machine preset, check the OS version, and copy the full browser version from its About dialog. Record power mode, approximate free disk space and unusual conditions in Notes.
++3. Confirm the preparation checkbox and select **Run collection**. Keep the tab visible until it finishes. Run only one collection at a time. Allow about 20 minutes per browser; slower systems may need more. A single sample exceeding ten minutes stops the run.
++4. Select **Download JSON**, even if the collection failed. Keep interrupted or failed files separate from publishable ones. Close the browser and repeat in the next browser.
++5. Repeat on the other Mac. Match browser versions across machines where possible; otherwise report them separately. The presets reflect the supplied screenshots:
++
++| Machine              | Chip   | Memory | macOS  |
++| -------------------- | ------ | ------ | ------ |
++| MacBook Pro, 16-inch | M5 Pro | 64 GB  | 26.6.2 |
++| Mac Studio, 2022     | M1 Max | 64 GB  | 26.5.2 |
++
++The OS versions differ, so these results compare complete systems, not chip performance alone. No device serial number is recorded. Update the OS field if either machine changes.
++
++If you cancel, let the worker finish cleanup. If the page reports unconfirmed cleanup after an error or forced stop, close the benchmark tab and clear **only this benchmark origin's** website data in the disposable profile before retrying. A browser crash loses the in-page report. The runner never clears unrelated storage automatically.
++
++## Fixed protocol `mac-browser-v1`
++
++Each browser runs one excluded warm-up round and five measured rounds. The starting job rotates each round to reduce fixed-order bias. Each job uses a fresh worker and fresh uniquely named storage, runs sequentially, verifies correctness and deletes its own storage. Browser and OS caches are not cleared. The warm-up primes caches and storage paths; it does not preserve a worker's JIT state. Every SQL worker also performs untimed PGlite initialization, recorded as `preparationMs`.
++
++| Workload                                  | Variants                                                                       | Settings                                                                      |
++| ----------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
++| PGlite historic speed tests, 16 cases     | VFS disk buffer, VFS memory buffer, OPFS AHP, IndexedDB, memory-only reference | Fixed SQL revision; raw timings for every case                                |
++| Transaction batch and retained-row reopen | Same variants                                                                  | 10,000 rows, insert and update in one transaction, count checked after reopen |
++| Filesystem lifecycle                      | VFS disk buffer, VFS memory buffer                                             | 1,000 files, deterministic 1 KiB payloads                                     |
++
++Safari omits OPFS AHP from both SQL workloads and records why. Chrome and Firefox have 12 variants, 72 total samples including warm-ups. Safari has 10 variants, 60 total samples. AHP failures in other browsers remain failures; they are never converted into timings or silently removed.
++
++VFS uses `balanced` local durability in both buffer modes. PGlite uses `relaxedDurability: false` for every backend. The memory-only PGlite backend is a nonpersistent reference and must have its own table section. VFS memory buffering still persists to OPFS.
++
++SQL reports initialization, workload, subsequent explicit sync and reopen separately. The workload can already include synchronization, so the later sync timer is not total persistence cost. Close and final cleanup are excluded. The 16-case suite drops its tables and verifies their absence after reopen; the separate transaction job checks retained rows. Filesystem read includes byte verification, delete removes half the files, and reopen times mounting before verification of the surviving files. A clean reopen is not a crash or power-loss test, and identical option names do not establish equivalent durability across backends.
++
++## Reading the JSON and preparing tables
++
++The bundle has `kind: "opfs-vfs-benchmark-collection"`, schema version 1 and a protocol revision. It contains environment and package/source versions, workload revisions, the full job configuration, explicit skipped backends and ordered entries. Each entry references its `jobId`, stores `round` from 0 to 5, `warmup`, timestamps and raw worker samples. Worker-local `repetition` is always 1; use the entry's `round` for the collection repetition.
++
++For publication, verify `status === "complete"`, `eligibleForReview === true`, no interruption, one successful warm-up plus five successful measured samples per job, and identical source/workload revisions. These flags qualify a file for review, not automatic publication. The browser profile and environment details are user declarations. Review notes, versions and raw errors too.
++
++Compute median, minimum and maximum from the five measured samples only. Show `n=5`, units, settings, machine, OS and full browser version. Keep hardware/browser groups separate; do not pool all six files or average backend ratios. Keep initialization, SQL work, explicit sync, reopen, each SQL case and filesystem phases separate. Failed, unavailable or omitted results are text, never zero; absent memory persistence/reopen metrics remain null. If any required sample fails, retain the file for diagnosis and rerun the collection before producing a complete comparison table.
++
++The existing website remains without published numbers until these files have been reviewed. Automated smoke-test results are not measurements for publication.
++
++## Developer verification
++
++The normal website tests cover scheduling, Safari omission, eligibility, cancellation and stopping after cleanup failure. To exercise the complete collection with real workers against a production build, run:
++
++```sh
++BENCHMARK_COLLECTION_FULL=1 pnpm --filter @opfs-vfs/website exec playwright test tests/benchmark-collection.spec.ts
++```
++
++This uses the installed Playwright test browser and can take several minutes. It checks functionality only; collect publishable measurements manually in the regular profiles described above.
