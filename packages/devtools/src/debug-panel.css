@@ -302,6 +302,8 @@
   outline: none;
 }
 .panel-titlebar {
+  cursor: grab;
+  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -316,12 +318,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: grab;
   padding: 6px;
   min-width: 0;
-  touch-action: none;
 }
-.drag-title:active {
+.panel-titlebar:active {
   cursor: grabbing;
 }
 .drag-title > svg:first-child {

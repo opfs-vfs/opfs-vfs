@@ -748,7 +748,8 @@ export function DebugPanel({
     if (event.button !== 0 || (kind === 'move' && dock !== 'floating')) return;
     event.preventDefault();
     const target = event.currentTarget;
-    target.focus();
+    if (kind === 'move') target.querySelector<HTMLElement>('.drag-title')?.focus();
+    else target.focus();
     target.setPointerCapture(event.pointerId);
     if (kind === 'launcher') launcherDragged.current = false;
     const bounds = target.getBoundingClientRect();
@@ -965,13 +966,17 @@ export function DebugPanel({
             }
           }}
         >
-          <header className="panel-titlebar">
+          <header
+            className="panel-titlebar"
+            onPointerDown={(event) => {
+              if (!(event.target as Element).closest('button')) startPointer(event, 'move');
+            }}
+          >
             <div
               className="drag-title"
               role="button"
               tabIndex={0}
               aria-label="Move floating panel with arrow keys"
-              onPointerDown={(event) => startPointer(event, 'move')}
               onKeyDown={(event) => {
                 const amount = event.shiftKey ? 50 : 15;
                 const offsets: Record<string, [number, number]> = {
