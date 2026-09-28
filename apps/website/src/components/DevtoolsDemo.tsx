@@ -1,3 +1,4 @@
+import '@opfs-vfs/devtools/styles.css';
 import { useEffect, useRef, useState } from 'react';
 import type { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import type { DevtoolsOptions } from '@opfs-vfs/devtools';
@@ -24,7 +25,6 @@ export default function DevtoolsDemo({
   async function load() {
     setBusy(true);
     try {
-      await import('@opfs-vfs/devtools/styles.css');
       const { mountDevtools } = await import('@opfs-vfs/devtools');
       mounted.current = mountDevtools({
         initialOpen: true,

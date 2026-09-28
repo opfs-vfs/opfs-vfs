@@ -1,3 +1,4 @@
+import '@opfs-vfs/devtools/styles.css';
 import { Tabs } from '@base-ui/react/tabs';
 import { FilePreview } from '@opfs-vfs/file-preview';
 import '@opfs-vfs/file-preview/styles.css';
@@ -816,7 +817,6 @@ function DemoDevtools() {
     let panel: { unmount(): void } | undefined;
     void (async () => {
       try {
-        await import('@opfs-vfs/devtools/styles.css');
         const { mountDevtools } = await import('@opfs-vfs/devtools');
         if (!active) return;
         panel = mountDevtools({
