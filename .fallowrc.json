@@ -23,7 +23,6 @@
     "examples/duckdb/main.ts",
     "packages/devtools/.storybook/middleware.mjs",
     "packages/plugin-subscriptions/scripts/test-packed.mjs",
-    "packages/react/scripts/test-packed.mjs",
     "packages/plugin-subscriptions/scripts/two-tab-load.mjs",
     "packages/plugin-subscriptions/vitest.packed.config.ts",
     "packages/plugin-subscriptions/tests/packed-consumer.ts",
@@ -35,18 +34,14 @@
     "packages/opfs-vfs/scripts/benchmark-worker-client.test.mjs",
     "packages/opfs-vfs/src/__tests__/benchmark-worker-client-page.ts",
     "packages/opfs-vfs/src/__tests__/benchmark-worker-client-sab-worker.ts",
-    "packages/react/src/__tests__/benchmark-sdk-page.tsx",
-    "packages/opfs-vfs/scripts/test-mixed-build.mjs",
-    "packages/opfs-vfs/vitest.mixed-build.config.ts",
-    "packages/opfs-vfs/tests/mixed-build.test.ts",
-    "packages/react/fixtures/vite/legacy-worker.config.mjs"
+    "packages/react/src/__tests__/benchmark-sdk-page.tsx"
   ],
-  "ignoreDependencies": ["@webgpu/types", "tw-animate-css", "html-webpack-plugin", "webpack"],
+  "ignoreDependencies": ["@webgpu/types", "tw-animate-css"],
   "ignorePatterns": [
     "apps/website/public/vendor/duckdb/**",
     "apps/website/public/vendor/edgejs/**",
     "docs/research/edgejs-live-opfs/**",
-    "**/.packed/**",
-    "packages/opfs-vfs/tests/mixed-build/**"
+    "docs/benchmarks/react-sdk/issue-89-relay-probe/probe.mjs",
+    "**/.packed/**"
   ]
 }

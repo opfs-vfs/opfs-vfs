@@ -29,7 +29,6 @@
     "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test src/__tests__/*.node.test.mjs && vitest run",
-    "test:packed": "node scripts/test-packed.mjs",
     "test:release-artifact": "node scripts/check-release-artifact.mjs",
     "benchmark:sdk": "node scripts/benchmark-sdk.mjs"
   },

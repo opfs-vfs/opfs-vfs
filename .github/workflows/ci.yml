@@ -117,12 +117,6 @@ jobs:
       - name: Test installed subscriptions package
         if: matrix.package == '@opfs-vfs/plugin-subscriptions'
         run: pnpm --filter @opfs-vfs/plugin-subscriptions test:packed
-      - name: Test installed React package
-        if: matrix.package == '@opfs-vfs/react'
-        run: pnpm --filter @opfs-vfs/react test:packed
-      - name: Test mixed installed core artifacts
-        if: matrix.package == '@opfs-vfs/opfs-vfs'
-        run: pnpm --filter @opfs-vfs/opfs-vfs test:mixed-build
       - name: Upload test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

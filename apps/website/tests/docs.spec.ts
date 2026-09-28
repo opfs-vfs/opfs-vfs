@@ -29,7 +29,7 @@ test('persistence illustrations stay readable and work without motion', async ({
 test('Volume Explorer naming reaches the running tool', async ({ page }) => {
   await page.goto('/demos/');
   await page.getByRole('link', { name: /Demo Volume Explorer/ }).click();
-  await expect(page.getByRole('heading', { name: 'OPFS VFS Volume Explorer', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Explore the files behind your app' })).toBeVisible();
   await page.getByRole('button', { name: 'Load Volume Explorer', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' })).toBeVisible();
   await page.getByRole('button', { name: 'Close volume explorer', exact: true }).click();

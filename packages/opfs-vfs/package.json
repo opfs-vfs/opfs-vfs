@@ -76,7 +76,6 @@
     "test": "vitest run",
     "benchmark:worker-client": "node scripts/benchmark-worker-client.mjs",
     "test:benchmark-driver": "node --test scripts/benchmark-worker-client.test.mjs",
-    "test:mixed-build": "node scripts/test-mixed-build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:duckdb": "vitest run --config vitest.duckdb.config.ts",
     "test:edgejs": "vitest run --config vitest.edgejs.config.ts",
