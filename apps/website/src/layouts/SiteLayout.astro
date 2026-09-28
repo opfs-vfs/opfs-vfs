@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import Analytics from '@vercel/analytics/astro';
 import ThemeControl from '../components/ThemeControl.astro';
 import Brand from '../components/Brand.astro';
 interface Props { title?: string; description: string; noindex?: boolean }
@@ -15,6 +16,7 @@ const activeLink = links.find(([href]) => href !== '/#plugins' && Astro.url.path
     <link rel="canonical" href={canonical} />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <link rel="describedby" href="/llms.txt" type="text/markdown" />
+    <Analytics />
     {noindex && <meta name="robots" content="noindex, follow" />}
     <script is:inline>
       (() => {
