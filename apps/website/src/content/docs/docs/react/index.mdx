@@ -3,7 +3,7 @@ title: React SDK preview
 description: Manage browser-local OPFS VFS volumes with React providers, live reads, and generation-safe commands.
 ---
 
-The React SDK is a preview of the upcoming `@opfs-vfs/react` package. It is not published yet; install it from a matching workspace or packed artifact while evaluating it. It works only in a browser page that can create workers and use OPFS.
+The React SDK is available as the preview `@opfs-vfs/react` package. Install it with `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions`. It works only in a browser page that can create workers and use OPFS.
 
 ## Start one managed volume
 
@@ -33,7 +33,7 @@ Without a `worker` prop, React supplies its built-in subscriptions worker. Manag
 
 Auto probes the complete shared-worker path while opening and fixes that choice for the client lifetime; it does not promote an already-open dedicated client. It falls back only for an unavailable page `SharedWorker` API, a missing compatible application factory, or a failed shared-scope sync-access probe. Shared bootstrap errors and timeouts remain errors. If a compatible dedicated owner already holds the volume, auto keeps dedicated ownership to avoid a split owner and reports that fallback. A dedicated owner can be suspended when its creator backgrounds, so use a stable shared factory or explicit shared transport when that caveat matters.
 
-An application worker needs the matching worker-side plugin:
+A custom application worker must register the subscriptions plugin. `VolumeProvider` requests it automatically for managed volumes, so the page does not need `subscriptionsRequest()` or a `plugins` prop for subscriptions:
 
 ```ts title="vfs.worker.ts"
 import { startVfsWorker } from '@opfs-vfs/opfs-vfs/worker-runtime';
@@ -77,6 +77,7 @@ Forced `transport="shared-worker"` has no dedicated-worker fallback. It needs cr
 Keep one stable module-level factory function (do not recreate it during render), use the same module URL and a stable name per basename, and return a **new** `SharedWorker` on each call. The React `name` is only a provider lookup key; it is not the storage `fileName`. A custom `worker` with no `sharedWorker` factory is dedicated under `auto`, with the factory-unavailable fallback reason; it cannot guess a compatible application SharedWorker.
 
 ```tsx
+const worker = () => new Worker(new URL('./vfs.worker.ts', import.meta.url), { type: 'module' });
 const sharedWorker = (fileName: string) =>
   new SharedWorker(new URL('./vfs.sharedworker.ts', import.meta.url), {
     type: 'module',
@@ -88,7 +89,6 @@ const sharedWorker = (fileName: string) =>
   worker={worker}
   transport="shared-worker"
   sharedWorker={sharedWorker}
-  plugins={[subscriptionsRequest()]}
 >
   <Note />
 </VolumeProvider>;
@@ -112,6 +112,7 @@ For global shutdown, optional deletion, or private plugin key cleanup, create a 
 ```ts
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import { createSharedWorkerFollower } from '@opfs-vfs/opfs-vfs/worker';
+import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
 
 async function shutdownNotesVolume({ erase = false } = {}) {
   const admin = await createSharedWorkerFollower('notes.bin', { plugins: [subscriptionsRequest()] }, sharedWorker);

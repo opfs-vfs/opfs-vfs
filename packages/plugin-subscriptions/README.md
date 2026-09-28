@@ -2,7 +2,7 @@
 
 `@opfs-vfs/plugin-subscriptions` provides bounded logical file and directory change notifications for OPFS VFS. It is a local, live notification API: it has no initial enumeration, replay, persistent history, server sync, or atomic scan-plus-subscribe snapshot.
 
-Register the plugin on a direct mount or in a custom worker. Page clients request the same empty plugin profile, then use `subscribe()` from `/client`.
+Register the plugin on a direct mount or in a custom worker. The worker registration is executable code; `subscriptionsRequest()` is the serializable profile a raw page client sends to that worker when opening a volume. The React `VolumeProvider` sends this request automatically for managed volumes. After opening, use `subscribe()` from `/client` to watch changes.
 
 ## Direct mount
 
@@ -89,6 +89,6 @@ The package README covers the public contract, accounting limits, and verified d
 
 ## Development and license
 
-Build the core and plugin together with `pnpm --filter @opfs-vfs/plugin-subscriptions... build`. Run `pnpm --filter @opfs-vfs/plugin-subscriptions test` and `pnpm --filter @opfs-vfs/plugin-subscriptions test:packed` from the workspace. The packed check builds both packages from this checkout; registry core 1.0.1 does not contain these APIs. Release through the workspace Changesets flow so the core peer range follows the released version.
+Build the core and plugin together with `pnpm --filter @opfs-vfs/plugin-subscriptions... build`. Run `pnpm --filter @opfs-vfs/plugin-subscriptions test` and `pnpm --filter @opfs-vfs/plugin-subscriptions test:packed` from the workspace. The packed check builds both packages from this checkout. Release through the workspace Changesets flow so the core peer range follows the released version.
 
 This package uses the repository's [PolyForm Noncommercial License 1.0.0](LICENSE.md). Encryption remains a separately licensed premium plugin.

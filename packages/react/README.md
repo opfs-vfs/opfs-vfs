@@ -2,7 +2,11 @@
 
 `@opfs-vfs/react` supplies React providers, lifecycle hooks, live file reads, and a browser persistence-permission hook for OPFS VFS worker clients.
 
-This preview package is not published yet. Use a matching packed artifact or workspace checkout together with matching `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions` artifacts.
+Install the preview package with its core and subscriptions peers:
+
+```sh
+npm install @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions @opfs-vfs/react
+```
 
 ```tsx
 import { useState } from 'react';
@@ -36,7 +40,7 @@ export function App() {
 
 Without a `worker` prop, the React SDK uses its built-in subscriptions worker. It defaults to `transport="auto"`: it selects a compatible built-in SharedWorker when possible, or a dedicated worker with an observable fallback reason. Inspect `useVolume().transport` and `fallbackReason` to show what opened. Set `transport="dedicated"` or `"shared-worker"` for an explicit choice; forced shared reports its lifecycle error instead of falling back.
 
-An application worker needs the matching worker-side plugin:
+A custom application worker must register the subscriptions plugin. `VolumeProvider` requests it automatically for managed volumes, so the page does not need `subscriptionsRequest()` or a `plugins` prop for subscriptions:
 
 ```ts
 import { startVfsWorker } from '@opfs-vfs/opfs-vfs/worker-runtime';
@@ -62,7 +66,6 @@ const sharedWorker = (fileName: string) =>
   worker={worker}
   transport="shared-worker"
   sharedWorker={sharedWorker}
-  plugins={[subscriptionsRequest()]}
 >
   <Note />
 </VolumeProvider>;

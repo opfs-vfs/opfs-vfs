@@ -65,7 +65,7 @@ await fs.closeVfs();
 
 The returned promise resolves when registration succeeds. Invalid options or a failed setup reject that promise. `onError` is required and handles terminal failures after registration. The logging example above reports the error; an application maintaining a current view must also [rebuild that view](#keep-a-current-view).
 
-Registering the worker factory makes the plugin available; `subscriptionsRequest()` enables it for this mount. Every normal follower of the volume must request the same profile, including followers that do not subscribe. Plugins cannot be enabled on an already-open mount.
+The worker registration bundles executable plugin code; `subscriptionsRequest()` sends a serializable profile from a raw page client to enable it for this mount. React's managed `VolumeProvider` sends that request automatically. Every normal follower of the volume must request the same profile, including followers that do not subscribe. Plugins cannot be enabled on an already-open mount.
 
 ### Direct use inside a worker
 
