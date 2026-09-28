@@ -809,43 +809,29 @@ function TodoLists({
 }
 
 function DemoDevtools() {
-  const panel = useRef<{ unmount(): void } | null>(null);
-  const active = useRef(true);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'loaded'>('idle');
   const [error, setError] = useState('');
   useEffect(() => {
-    active.current = true;
+    let active = true;
+    let panel: { unmount(): void } | undefined;
+    void (async () => {
+      try {
+        await import('@opfs-vfs/devtools/styles.css');
+        const { mountDevtools } = await import('@opfs-vfs/devtools');
+        if (!active) return;
+        panel = mountDevtools({
+          initialOpen: false,
+          initialTheme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
+        });
+      } catch (cause) {
+        if (active) setError(errorMessage(cause));
+      }
+    })();
     return () => {
-      active.current = false;
-      panel.current?.unmount();
+      active = false;
+      panel?.unmount();
     };
   }, []);
-  const open = async () => {
-    setStatus('loading');
-    setError('');
-    try {
-      await import('@opfs-vfs/devtools/styles.css');
-      const { mountDevtools } = await import('@opfs-vfs/devtools');
-      if (!active.current) return;
-      panel.current = mountDevtools({
-        initialOpen: true,
-        initialTheme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
-      });
-      setStatus('loaded');
-    } catch (cause) {
-      if (!active.current) return;
-      setError(errorMessage(cause));
-      setStatus('idle');
-    }
-  };
-  return (
-    <>
-      <button type="button" onClick={() => void open()} disabled={status !== 'idle'}>
-        {status === 'loaded' ? 'Devtools loaded' : status === 'loading' ? 'Loading devtools…' : 'Open devtools'}
-      </button>
-      {error && <span role="alert">{error}</span>}
-    </>
-  );
+  return error ? <span role="alert">{error}</span> : null;
 }
 
 export default function ReactSdkDemo() {

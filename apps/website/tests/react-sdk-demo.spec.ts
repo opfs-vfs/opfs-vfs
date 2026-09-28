@@ -184,10 +184,14 @@ test('deletes a clean list in every tab without reviving a pending draft', async
 
 test('opens devtools with recognizable volumes from both React examples', async ({ page }) => {
   await openInbox(page);
+  const launcher = page.getByRole('button', { name: 'Open OPFS VFS Volume Explorer', exact: true });
+  await expect(launcher).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' })).not.toBeVisible();
   await openTodos(page);
+  await expect(launcher).toBeVisible();
   await page.getByRole('button', { name: 'New list', exact: true }).click();
   await expect(page.getByLabel('Title')).toBeVisible();
-  await page.getByRole('button', { name: 'Open devtools', exact: true }).click();
+  await launcher.click();
   const panel = page.getByRole('dialog', { name: 'OPFS VFS Volume Explorer' });
   await expect(panel).toBeVisible();
   await panel.getByRole('combobox', { name: 'Active volume' }).click();
