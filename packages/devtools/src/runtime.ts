@@ -129,6 +129,7 @@ export class DevtoolsSession {
     const locks = await navigator.locks.query();
     const held = new Set(locks.held?.map((lock) => lock.name));
     const next: MockVolume[] = [];
+    const unavailableNames = new Set<string>();
     for (const name of [...names].sort()) {
       if (this.disposed) break;
       let peek: Awaited<ReturnType<typeof peekVolume>> | undefined;
@@ -140,6 +141,7 @@ export class DevtoolsSession {
       }
       let c = this.connections.get(name);
       const unavailable = !peek || peek.importing;
+      if (unavailable) unavailableNames.add(name);
       const client = retained.get(name);
       if (!c && !unavailable && client && !client.disposed) c = this.add(name, client);
       const owner =
@@ -171,7 +173,13 @@ export class DevtoolsSession {
         files: unavailable ? [] : (previous?.files ?? []),
       });
     }
-    if (!this.disposed) this.volumes = next;
+    if (!this.disposed)
+      this.volumes = next.map((v) => ({
+        ...v,
+        files: unavailableNames.has(v.name)
+          ? []
+          : (this.volumes.find((current) => current.name === v.name)?.files ?? v.files),
+      }));
     return this.volumes;
   }
   async connect(name: string) {
@@ -237,6 +245,65 @@ export class DevtoolsSession {
       });
     }
     this.volumes = this.volumes.map((v) => (v.name === name ? { ...v, files: entries } : v));
+    return this.volumes;
+  }
+  async listDirectory(name: string, directory: string, signal: AbortSignal) {
+    const c = this.connection(name);
+    const entries: MockFile[] = [];
+    const missing = (error: unknown) => (error as { code?: string }).code === 'ENOENT';
+    let names: string[];
+    try {
+      names = await c.fs.readdir(directory);
+    } catch (error) {
+      if (!missing(error)) throw error;
+      names = [];
+    }
+    if (names.length > 10000) throw new Error('This folder exceeds the 10,000-entry explorer limit.');
+    for (const child of names) {
+      if (signal.aborted) return this.volumes;
+      const path = `${directory === '/' ? '' : directory}/${child}`;
+      try {
+        const stat = await c.fs.lstat(path);
+        entries.push({
+          path,
+          content: '',
+          modified: stat.mtime.getTime(),
+          size: stat.size,
+          loaded: false,
+          ...(stat.isDirectory ? { kind: 'directory' as const } : {}),
+          symlink: stat.isSymbolicLink,
+        });
+      } catch (error) {
+        if (!missing(error)) throw error;
+      }
+    }
+    if (signal.aborted || this.connections.get(name) !== c) return this.volumes;
+    this.volumes = this.volumes.map((v) => {
+      if (v.name !== name) return v;
+      const previous = new Map(v.files.map((file) => [file.path, file]));
+      const folders = new Set(entries.filter((file) => file.kind === 'directory').map((file) => file.path));
+      const removed = v.files.filter(
+        (file) => parentPath(file.path) === directory && file.kind === 'directory' && !folders.has(file.path),
+      );
+      return {
+        ...v,
+        files: [
+          ...v.files.filter(
+            (file) => parentPath(file.path) !== directory && !removed.some((folder) => within(folder.path, file.path)),
+          ),
+          ...entries.map((file) => {
+            const old = previous.get(file.path);
+            return old &&
+              old.modified === file.modified &&
+              old.size === file.size &&
+              old.kind === file.kind &&
+              !!old.symlink === !!file.symlink
+              ? old
+              : file;
+          }),
+        ],
+      };
+    });
     return this.volumes;
   }
   async read(name: string, path: string): Promise<MockFile> {

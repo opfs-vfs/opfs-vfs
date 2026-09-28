@@ -245,10 +245,16 @@
 }
 .opfs-launcher {
   position: fixed;
-  right: 24px;
-  bottom: 22px;
+  touch-action: none;
+  user-select: none;
+  transition:
+    left 180ms ease-out,
+    top 180ms ease-out,
+    transform 180ms ease-out;
   z-index: 10000;
-  background: var(--bg) !important;
+  background: color-mix(in srgb, var(--bg) 80%, transparent) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid #56624e !important;
   color: var(--accent) !important;
   padding: 12px 15px !important;
@@ -259,6 +265,15 @@
     600 12px ui-monospace,
     monospace !important;
   letter-spacing: 1px;
+}
+.opfs-launcher[data-dragging='true'] {
+  transition: none;
+  cursor: grabbing;
+}
+@media (prefers-reduced-motion: reduce) {
+  .opfs-launcher {
+    transition: none;
+  }
 }
 .launcher-dot,
 .status-dot {
@@ -1180,10 +1195,6 @@
   }
   .debug-panel {
     border-radius: 9px;
-  }
-  .opfs-launcher {
-    right: 16px;
-    bottom: 16px;
   }
 }
 @media (forced-colors: active) {

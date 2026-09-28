@@ -11,6 +11,10 @@ if (import.meta.env.DEV) {
 }
 ```
 
+Drag the launcher to snap it to any corner or edge center. Release animates to the nearest position, respecting reduced-motion preferences. Alt + arrow keys cycle positions. `initialPosition` accepts `top-left`, `top-center`, `top-right`, `right-center`, `bottom-right` (default), `bottom-center`, `bottom-left`, or `left-center`.
+
+While the panel is open and the page is visible, the current folder refreshes 500 ms after each completed read. Reads include immediate children only; unchanged previews and unsaved drafts are preserved. Use Refresh for a full-volume scan, including nested search results. No subscriptions plugin is required.
+
 The standard application worker must support observer protocol 1. Requires a secure cross-origin-isolated browser context. No volume prop or application registration is needed. Older/custom/direct workers remain unavailable while busy. Protected volumes require their application.
 
 Writes start disabled. Choose **Enable writes** below the volume selector to enable file creation, editing, and shell commands that modify the selected volume. An owner loss invalidates the attachment and clears write access; uncertain mutations are never replayed. Passive detach does not close or flush the app worker. Devtools-owned workers remain alive for the page lifetime because other application clients may attach to them.
