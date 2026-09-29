@@ -18,6 +18,7 @@
   ],
   "entry": [
     "apps/website/src/components/docs/SiteTitle.astro",
+    "apps/website/src/components/docs/Head.astro",
     "apps/website/src/workers/gemma-runtime.worker.ts",
     "apps/website/src/styles/docs.css",
     "packages/effect/examples/direct.ts",
@@ -42,6 +43,7 @@
   "ignorePatterns": [
     "apps/website/public/vendor/duckdb/**",
     "apps/website/public/vendor/edgejs/**",
+    "apps/website/public/ai-assets/**",
     "docs/research/edgejs-live-opfs/**",
     "docs/benchmarks/react-sdk/issue-89-relay-probe/probe.mjs",
     "**/.packed/**"

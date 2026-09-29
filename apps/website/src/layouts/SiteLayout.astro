@@ -77,7 +77,7 @@ const activeLink = links.find(([href]) => href !== '/#plugins' && Astro.url.path
   window.addEventListener('scroll', updateHeader, { passive: true });
   const menu = document.querySelector<HTMLDetailsElement>('.mobile-navigation');
   document.querySelectorAll<HTMLElement>('[data-contact-trigger]').forEach((trigger) => trigger.addEventListener('click', () => {
-    menu && (menu.open = false);
+    if (menu) menu.open = false;
     window.dispatchEvent(new CustomEvent('opfs:contact', { detail: trigger }));
   }));
   if (menu) {
