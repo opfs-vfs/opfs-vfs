@@ -328,14 +328,21 @@ describe('Volume worker acquisition and sessions', () => {
     expect(client.closeCalls).toBe(1);
   });
 
-  it('surfaces late discovery cleanup failure in the scope cause', async () => {
+  it('preserves a parent-close failure and one late discovery cleanup failure', async () => {
     const parent = await Effect.runPromise(Scope.make());
     const started = await Effect.runPromise(Deferred.make<void>());
+    const closeStarted = await Effect.runPromise(Deferred.make<void>());
+    const finished = await Effect.runPromise(Deferred.make<void>());
     let resolveDiscovery!: (client: OpfsVfsWorkerClient) => void;
+    let rejectClose!: (error: Error) => void;
     let signal: AbortSignal | undefined;
     const closeFailure = new Error('late close failed');
     const client = new FakeWorkerClient();
-    client.onClose = () => Promise.reject(closeFailure);
+    client.onClose = () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectClose = reject;
+        void Effect.runPromise(Deferred.succeed(closeStarted, undefined));
+      });
     workerMocks.open.mockImplementation((_name, options) => {
       expect(options).toBeDefined();
       signal = options.signal;
@@ -344,19 +351,184 @@ describe('Volume worker acquisition and sessions', () => {
         resolveDiscovery = resolve;
       });
     });
-    const fiber = await Effect.runPromise(Scope.provide(parent)(Volume.make(mount()).pipe(Effect.forkDetach)));
+    const fiber = await Effect.runPromise(
+      Scope.provide(parent)(Volume.make(mount()).pipe(Effect.onExit(() => Deferred.succeed(finished, undefined)))).pipe(
+        Effect.forkDetach,
+      ),
+    );
     await Effect.runPromise(Deferred.await(started));
-    const close = Effect.runPromiseExit(Scope.close(parent, Exit.void));
+    const closeFiber = await Effect.runPromise(Scope.close(parent, Exit.void).pipe(Effect.forkDetach));
     await waitUntil(() => signal?.aborted === true);
     resolveDiscovery(clientAsCore(client));
-    const closeExit = await close;
+    await Effect.runPromise(Deferred.await(closeStarted));
+    expect(await Effect.runPromise(Deferred.isDone(finished))).toBe(false);
+    rejectClose(closeFailure);
     expect(client.closeCalls).toBe(1);
     const acquireExit = await Effect.runPromise(Fiber.await(fiber));
+    await Effect.runPromise(Fiber.await(closeFiber));
     expect(Exit.isFailure(acquireExit)).toBe(true);
-    const closeDied = closeExit._tag === 'Failure' && closeExit.cause.reasons.some((reason) => reason._tag === 'Die');
-    const acquireDied =
-      acquireExit._tag === 'Failure' && acquireExit.cause.reasons.some((reason) => reason._tag === 'Die');
-    expect(closeDied || acquireDied).toBe(true);
+    if (Exit.isFailure(acquireExit)) {
+      expect(
+        acquireExit.cause.reasons.filter(
+          (reason) =>
+            reason._tag === 'Fail' && reason.error instanceof VolumeError && reason.error.operation === 'acquire',
+        ),
+      ).toHaveLength(1);
+      expect(
+        acquireExit.cause.reasons.filter(
+          (reason) =>
+            reason._tag === 'Die' &&
+            (reason.defect as { details?: { message?: string } }).details?.message === closeFailure.message,
+        ),
+      ).toHaveLength(1);
+    }
+  });
+
+  it('preserves interruption and one late discovery cleanup failure', async () => {
+    const parent = await Effect.runPromise(Scope.make());
+    const started = await Effect.runPromise(Deferred.make<void>());
+    const closeStarted = await Effect.runPromise(Deferred.make<void>());
+    const finished = await Effect.runPromise(Deferred.make<void>());
+    const closeFailure = new Error('late close failed');
+    const client = new FakeWorkerClient();
+    let resolveDiscovery!: (client: OpfsVfsWorkerClient) => void;
+    let rejectClose!: (error: Error) => void;
+    let signal: AbortSignal | undefined;
+    client.onClose = () =>
+      new Promise<void>((_resolve, reject) => {
+        rejectClose = reject;
+        void Effect.runPromise(Deferred.succeed(closeStarted, undefined));
+      });
+    workerMocks.open.mockImplementation((_name, options) => {
+      signal = options.signal;
+      void Effect.runPromise(Deferred.succeed(started, undefined));
+      return new Promise((resolve) => {
+        resolveDiscovery = resolve;
+      });
+    });
+    const fiber = await Effect.runPromise(
+      Scope.provide(parent)(Volume.make(mount()).pipe(Effect.onExit(() => Deferred.succeed(finished, undefined)))).pipe(
+        Effect.forkDetach,
+      ),
+    );
+    await Effect.runPromise(Deferred.await(started));
+    const interrupt = Effect.runPromise(Fiber.interrupt(fiber));
+    await waitUntil(() => signal?.aborted === true);
+    resolveDiscovery(clientAsCore(client));
+    await Effect.runPromise(Deferred.await(closeStarted));
+    expect(await Effect.runPromise(Deferred.isDone(finished))).toBe(false);
+    rejectClose(closeFailure);
+    await interrupt;
+    const exit = await Effect.runPromise(Fiber.await(fiber));
+    expect(client.closeCalls).toBe(1);
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      expect(exit.cause.reasons.filter((reason) => reason._tag === 'Interrupt')).toHaveLength(1);
+      expect(
+        exit.cause.reasons.filter(
+          (reason) =>
+            reason._tag === 'Die' &&
+            (reason.defect as { details?: { message?: string } }).details?.message === closeFailure.message,
+        ),
+      ).toHaveLength(1);
+    }
+    await Effect.runPromise(Scope.close(parent, Exit.void));
+  });
+
+  it('waits for a held parent-close cleanup after worker ready rejects', async () => {
+    const parent = await Effect.runPromise(Scope.make());
+    const closeStarted = await Effect.runPromise(Deferred.make<void>());
+    const releaseClose = await Effect.runPromise(Deferred.make<void>());
+    const finished = await Effect.runPromise(Deferred.make<void>());
+    const client = new FakeWorkerClient(status({ state: 'opening', role: null, ownerGeneration: null }));
+    client.onClose = () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* Deferred.succeed(closeStarted, undefined);
+          yield* Deferred.await(releaseClose);
+        }),
+      );
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const acquisition = Scope.provide(parent)(
+      Volume.make(mount()).pipe(Effect.onExit(() => Deferred.succeed(finished, undefined))),
+    );
+    const acquisitionFiber = await Effect.runPromise(acquisition.pipe(Effect.forkDetach));
+    await waitUntil(() => client.listeners.size === 1);
+    const closeFiber = await Effect.runPromise(Scope.close(parent, Exit.void).pipe(Effect.forkDetach));
+    await Effect.runPromise(Deferred.await(closeStarted));
+    client.rejectReady(new Error('init failed'));
+    await Effect.runPromise(Effect.yieldNow);
+    expect(await Effect.runPromise(Deferred.isDone(finished))).toBe(false);
+    await Effect.runPromise(Deferred.succeed(releaseClose, undefined));
+    const exit = await Effect.runPromise(Fiber.await(acquisitionFiber));
+    await Effect.runPromise(Fiber.await(closeFiber));
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(client.closeCalls).toBe(1);
+  });
+
+  it('preserves worker ready, close, and configuration cleanup failures once', async () => {
+    const parent = await Effect.runPromise(Scope.make());
+    const configFinalizerStarted = await Effect.runPromise(Deferred.make<void>());
+    const releaseConfigFinalizer = await Effect.runPromise(Deferred.make<void>());
+    const finished = await Effect.runPromise(Deferred.make<void>());
+    const readyFailure = new Error('init failed');
+    const closeFailure = new Error('close failed');
+    const configFailure = new Error('configuration cleanup failed');
+    const order: string[] = [];
+    const client = new FakeWorkerClient(status({ state: 'opening', role: null, ownerGeneration: null }));
+    client.onClose = () => {
+      order.push('backend');
+      return Promise.reject(closeFailure);
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const config = Effect.gen(function* () {
+      yield* Effect.addFinalizer(() =>
+        Effect.gen(function* () {
+          order.push('configuration');
+          yield* Deferred.succeed(configFinalizerStarted, undefined);
+          yield* Deferred.await(releaseConfigFinalizer);
+          return yield* Effect.die(configFailure);
+        }),
+      );
+      return mount();
+    });
+    try {
+      const fiber = await Effect.runPromise(
+        Scope.provide(parent)(
+          Volume.make(config).pipe(Effect.onExit(() => Deferred.succeed(finished, undefined))),
+        ).pipe(Effect.forkDetach),
+      );
+      await waitUntil(() => client.listeners.size === 1);
+      const closeFiber = await Effect.runPromise(Scope.close(parent, Exit.void).pipe(Effect.forkDetach));
+      await Effect.runPromise(Deferred.await(configFinalizerStarted));
+      expect(client.closeCalls).toBe(1);
+      expect(order).toEqual(['backend', 'configuration']);
+      client.rejectReady(readyFailure);
+      await Effect.runPromise(Effect.yieldNow);
+      expect(await Effect.runPromise(Deferred.isDone(finished))).toBe(false);
+      await Effect.runPromise(Deferred.succeed(releaseConfigFinalizer, undefined));
+      const exit = await Effect.runPromise(Fiber.await(fiber));
+      await Effect.runPromise(Fiber.await(closeFiber));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(exit.cause.reasons).toContainEqual(
+          expect.objectContaining({
+            _tag: 'Fail',
+            error: expect.objectContaining({ details: { message: readyFailure.message } }),
+          }),
+        );
+        expect(
+          exit.cause.reasons.filter(
+            (reason) =>
+              reason._tag === 'Die' &&
+              (reason.defect as { details?: { message?: string } }).details?.message === closeFailure.message,
+          ),
+        ).toHaveLength(1);
+        expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ _tag: 'Die', defect: configFailure }));
+      }
+    } finally {
+      await Effect.runPromise(Scope.close(parent, Exit.void));
+    }
   });
 
   it('returns a service after ready and reads the current worker persistence snapshot', async () => {

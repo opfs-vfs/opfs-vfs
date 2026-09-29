@@ -259,7 +259,8 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const parent = yield* Effect.scope;
-      const child = yield* Scope.fork(parent, 'sequential');
+      const owner = yield* Scope.fork(parent, 'sequential');
+      const resource = yield* Scope.make('sequential');
       let closed = false;
       let client: OpfsVfsWorkerClient | undefined;
       let releasedClient: OpfsVfsWorkerClient | undefined;
@@ -269,8 +270,8 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
       let service: VolumeService | undefined;
       let terminal: VolumeError | undefined;
       const abort = new AbortController();
-      const ensureOpen = (fileName: string) =>
-        closed
+      const ensureOpen = (fileName: string | null) =>
+        closed || owner.state._tag === 'Closed'
           ? Effect.fail(
               volumeError(new Error('Volume scope is closed'), fileName, 'acquire', 'lifecycle', 'not-applied'),
             )
@@ -295,24 +296,34 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
           () => undefined,
         ));
       };
+      let firstCloseExit: Exit.Exit<unknown, unknown> | undefined;
+      const cachedClose: Effect.Effect<void, never> = yield* Effect.cached(
+        Effect.suspend(() => Scope.close(resource, firstCloseExit!)),
+      );
+      const closeResource = (exit: Exit.Exit<unknown, unknown>): Effect.Effect<void, never> => {
+        firstCloseExit ??= exit;
+        return cachedClose;
+      };
+      yield* Scope.addFinalizerExit(owner, closeResource);
       yield* Scope.addFinalizer(
-        child,
+        resource,
         Effect.tryPromise({
           try: joinDiscovery,
           catch: (error) => mountError(error, null, 'close', 'lifecycle'),
         }).pipe(Effect.catch((error) => Effect.die(error))),
       );
       yield* Scope.addFinalizer(
-        child,
+        resource,
         Effect.sync(() => {
           closed = true;
           abort.abort();
         }),
       );
+      yield* ensureOpen(null);
 
       const acquire = Effect.gen(function* () {
         const scopedInput = Effect.isEffect(input)
-          ? Effect.provideService(input, Scope.Scope, child)
+          ? Effect.provideService(input, Scope.Scope, resource)
           : Effect.succeed(input);
         const options = yield* restore(scopedInput);
         yield* ensureOpen(options.fileName);
@@ -350,9 +361,6 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
         discovery = Promise.resolve().then(() =>
           openOpfsVfsWorker(fileName, { ...workerOptions, worker, sharedWorker, plugins, signal: abort.signal }),
         );
-        const discoveryCleanup = Effect.tryPromise({ try: joinDiscovery, catch: (error) => error }).pipe(
-          Effect.catch((error) => Effect.die(mountError(error, fileName, 'close', 'lifecycle'))),
-        );
         client = yield* restore(
           Effect.tryPromise({
             try: () => discovery!,
@@ -360,19 +368,11 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
               typeof error === 'object' && error !== null && 'code' in error && error.code === 'EINVAL'
                 ? volumeError(error, fileName, 'mount', 'configuration')
                 : mountError(error, fileName, 'mount', 'filesystem'),
-          }).pipe(Effect.onInterrupt(() => discoveryCleanup)),
+          }),
         );
-        if (closed) {
-          yield* Effect.tryPromise({
-            try: () => closeClient(client!),
-            catch: (error) => mountError(error, fileName, 'close', 'lifecycle'),
-          }).pipe(Effect.catch((error) => Effect.die(error)));
-          return yield* Effect.fail(
-            volumeError(new Error('Volume scope is closed'), fileName, 'acquire', 'lifecycle', 'not-applied'),
-          );
-        }
+        yield* ensureOpen(fileName);
         yield* Scope.addFinalizer(
-          child,
+          resource,
           Effect.tryPromise({
             try: () => {
               closed = true;
@@ -389,7 +389,7 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
             terminal = terminalError(status, fileName, 'worker');
         };
         const unsubscribe = client.subscribeStatus(latchStatus);
-        yield* Scope.addFinalizer(child, Effect.sync(unsubscribe));
+        yield* Scope.addFinalizer(resource, Effect.sync(unsubscribe));
         latchStatus();
         yield* restore(
           Effect.tryPromise({
@@ -425,7 +425,15 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
       });
 
       return yield* acquire.pipe(
-        Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(child, exit) : Effect.void)),
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit)
+            ? Effect.gen(function* () {
+                const resourceExit = yield* Effect.exit(closeResource(exit));
+                yield* Effect.exit(Scope.close(owner, exit));
+                if (Exit.isFailure(resourceExit)) return yield* Effect.failCause(resourceExit.cause);
+              })
+            : Effect.void,
+        ),
       );
     }),
   );
