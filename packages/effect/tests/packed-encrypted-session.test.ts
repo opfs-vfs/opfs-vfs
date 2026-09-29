@@ -1,6 +1,6 @@
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import type { Exit } from 'effect';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 const examplePath = (import.meta as unknown as { env?: Record<string, string> }).env
   ?.VITE_PACKED_EFFECT_ENCRYPTED_SESSION;
@@ -623,6 +623,194 @@ it.skipIf(!examplePath)(
       await dispose(example, cache);
       await deleteVolume(documentsName);
       await deleteVolume(cacheName);
+    }
+  },
+  60_000,
+);
+
+it.skipIf(!examplePath)(
+  'reopens an enrolled passkey volume and refuses create-new when occupied',
+  async () => {
+    const example = await load();
+    const name = fileName('passkey-reopen');
+    const passkey = new Uint8Array(32).fill(0x71);
+    const created = example.ManagedRuntime.make(
+      example.createEncryptedLayer(name, secret(example, 'recovery-secret'), passkey),
+    );
+    let reopened: Runtime | undefined;
+    try {
+      await start(example, created);
+      await created.runPromise(
+        example.Effect.gen(function* () {
+          const fs = yield* example.FileSystem.FileSystem;
+          yield* fs.writeFileString('/proof', 'passkey-readable');
+          yield* (yield* example.Volume.Volume).sync;
+        }),
+      );
+      await dispose(example, created);
+      reopened = example.makeSessionRuntime({
+        fileName: name,
+        profile: 'encrypted',
+        openMode: 'open-existing',
+        secret: example.Redacted.make(passkey),
+      });
+      await start(example, reopened);
+      expect(
+        await reopened.runPromise(
+          example.Effect.gen(function* () {
+            return yield* (yield* example.FileSystem.FileSystem).readFileString('/proof');
+          }),
+        ),
+      ).toBe('passkey-readable');
+
+      const occupied = await example.startSessionRuntime(
+        example.makeSessionRuntime({
+          fileName: name,
+          profile: 'encrypted',
+          openMode: 'create-new',
+          secret: secret(example, 'another-recovery-secret'),
+        }),
+      );
+      expect(occupied._tag).toBe('StartFailed');
+      if (occupied._tag === 'StartFailed' && occupied.startExit._tag === 'Failure') {
+        const reason = occupied.startExit.cause.reasons.find(
+          (entry) => entry._tag === 'Fail' && example.Schema.is(example.VolumeError)(entry.error),
+        );
+        expect(
+          reason?._tag === 'Fail' && example.Schema.is(example.VolumeError)(reason.error)
+            ? reason.error.code
+            : undefined,
+        ).toBe('EEXIST');
+      }
+    } finally {
+      if (reopened) await dispose(example, reopened);
+      await dispose(example, created);
+      await deleteVolume(name);
+    }
+  },
+  60_000,
+);
+
+it.skipIf(!examplePath)(
+  'rejects an import reservation before opening',
+  async () => {
+    const example = await load();
+    const name = fileName('importing');
+    const marker = name.replace(/\.bin$/, '.importing');
+    const root = await navigator.storage.getDirectory();
+    await root.getFileHandle(marker, { create: true });
+    try {
+      const started = await example.startSessionRuntime(
+        example.makeSessionRuntime({ fileName: name, profile: 'plain', openMode: 'open-existing' }),
+      );
+      expect(started._tag).toBe('StartFailed');
+      if (started._tag === 'StartFailed' && started.startExit._tag === 'Failure') {
+        const reason = started.startExit.cause.reasons.find(
+          (entry) => entry._tag === 'Fail' && example.Schema.is(example.VolumeError)(entry.error),
+        );
+        expect(
+          reason?._tag === 'Fail' && example.Schema.is(example.VolumeError)(reason.error)
+            ? reason.error.code
+            : undefined,
+        ).toBe('VOLUME_IMPORTING');
+      }
+    } finally {
+      await root.removeEntry(marker);
+      await deleteVolume(name);
+    }
+  },
+  60_000,
+);
+
+it.skipIf(!examplePath)(
+  'keeps all exits when a terminal follower rejects replacement credentials',
+  async () => {
+    const example = await load();
+    const name = fileName('failed-replacement');
+    const owner = example.makeSessionRuntime({
+      fileName: name,
+      profile: 'combined',
+      openMode: 'create-new',
+      secret: secret(example, 'correct-secret'),
+    });
+    let follower: Runtime | undefined;
+    let controller: ReturnType<Example['makeSessionController']> | undefined;
+    let releaseClose = () => {};
+    try {
+      await start(example, owner);
+      await owner.runPromise(
+        example.Effect.gen(function* () {
+          yield* (yield* example.FileSystem.FileSystem).writeFileString('/session-save.txt', 'unchanged');
+          yield* (yield* example.Volume.Volume).sync;
+        }),
+      );
+      follower = example.makeSessionRuntime({
+        fileName: name,
+        profile: 'combined',
+        openMode: 'open-existing',
+        secret: secret(example, 'wrong-secret'),
+      });
+      await start(example, follower);
+      const backend = await follower.runPromise(
+        example.Effect.gen(function* () {
+          return example.Volume.unsafeBackend(yield* example.Volume.Volume);
+        }),
+      );
+      await dispose(example, owner);
+      await vi.waitFor(
+        async () => {
+          const exit = await follower!.runPromiseExit(
+            example.Effect.gen(function* () {
+              return yield* (yield* example.FileSystem.FileSystem).readFileString('/session-save.txt');
+            }),
+          );
+          expect(credentialCause(example, exit)).toBeDefined();
+        },
+        { timeout: 20_000, interval: 20 },
+      );
+      const originalClose = backend.closeVfs.bind(backend);
+      let enterClose = () => {};
+      const closeEntered = new Promise<void>((resolve) => (enterClose = resolve));
+      const closeReleased = new Promise<void>((resolve) => (releaseClose = resolve));
+      let closed = false;
+      Object.assign(backend, {
+        closeVfs: async () => {
+          enterClose();
+          await closeReleased;
+          await originalClose();
+          closed = true;
+        },
+      });
+      let prompts = 0;
+      controller = example.makeSessionController(follower, { fileName: name, profile: 'combined' }, async () => {
+        prompts++;
+        expect(closed).toBe(true);
+        return secret(example, 'still-wrong');
+      });
+      const replacement = controller.save('must-not-write');
+      await closeEntered;
+      expect(prompts).toBe(0);
+      expect(controller.runtime()).toBeUndefined();
+      const duringClose = controller.save('must-not-queue-across-session');
+      releaseClose();
+      const result = await replacement;
+      expect(result._tag).toBe('ReplacementFailed');
+      if (result._tag === 'ReplacementFailed') {
+        expect(credentialCause(example, result.useExit)).toBeDefined();
+        expect(result.disposeExit._tag).toBe('Success');
+        expect(result.startExit._tag).toBe('Failure');
+        expect(result.replacementDisposeExit._tag).toBe('Success');
+      }
+      expect(prompts).toBe(1);
+      expect(controller.runtime()).toBeUndefined();
+      expect((await duringClose)._tag).toBe('Unavailable');
+      expect((await controller.save('after-failed-build'))._tag).toBe('Unavailable');
+    } finally {
+      releaseClose();
+      if (controller) await controller.close();
+      else if (follower) await dispose(example, follower);
+      await dispose(example, owner);
+      await deleteVolume(name);
     }
   },
   60_000,
