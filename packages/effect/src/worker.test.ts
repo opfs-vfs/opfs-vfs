@@ -4,6 +4,7 @@ import { VfsCommandError } from '@opfs-vfs/opfs-vfs/worker';
 import type { OpfsVfsWorkerClient, ClientStatus } from '@opfs-vfs/opfs-vfs/worker-client';
 import type { VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
 import { Volume } from './index.js';
+import { OpfsFileSystem } from './filesystem.js';
 import type { WorkerMountOptions } from './volume.js';
 import { EncryptionError, VolumeError } from './errors.js';
 
@@ -33,6 +34,11 @@ class FakeWorkerClient {
   onSubscribe: (() => void) | undefined;
   onClose: (() => Promise<void>) | undefined;
   onSync: (() => Promise<void>) | undefined;
+  onWriteFileBuffer: ((generation: string, path: string, bytes: Uint8Array) => Promise<void>) | undefined;
+  onReadFileBuffer: ((generation: string, path: string) => Promise<Uint8Array>) | undefined;
+  writes: Array<{ generation: string; path: string }> = [];
+  reads: Array<{ generation: string; path: string; limit: number }> = [];
+  syncCalls = 0;
   readonly ready: Promise<void>;
   resolveReady!: () => void;
   rejectReady!: (error: unknown) => void;
@@ -66,7 +72,20 @@ class FakeWorkerClient {
 
   forGeneration(generation: string) {
     this.generations.push(generation);
-    return { sync: () => this.onSync?.() ?? Promise.resolve() };
+    return {
+      sync: () => {
+        this.syncCalls++;
+        return this.onSync?.() ?? Promise.resolve();
+      },
+      writeFileBuffer: (path: string, bytes: Uint8Array) => {
+        this.writes.push({ generation, path });
+        return this.onWriteFileBuffer?.(generation, path, bytes) ?? Promise.resolve();
+      },
+      readFileBuffer: (path: string, limit = 16 * 1024 * 1024) => {
+        this.reads.push({ generation, path, limit });
+        return this.onReadFileBuffer?.(generation, path) ?? Promise.resolve(new Uint8Array());
+      },
+    };
   }
 
   closeVfs() {
@@ -608,6 +627,22 @@ describe('Volume worker acquisition and sessions', () => {
     expect(client.closeCalls).toBe(1);
   });
 
+  it('keeps pending-write uncertainty when SYNC admission times out', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const error = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount({ initTimeout: 10 }));
+          yield* OpfsFileSystem.make(service).writeFile('/note.txt', new Uint8Array([1]));
+          client.publish({ state: 'recovering', ownerGeneration: null });
+          return yield* Effect.flip(service.sync);
+        }),
+      ),
+    );
+    expect(error).toMatchObject({ code: 'VFS_OWNER_READY_TIMEOUT', outcome: 'unknown' });
+  });
+
   it('exposes a terminal crypto cause directly from initial worker readiness', async () => {
     const cause = Object.assign(new Error('vault rejected'), { code: 'EVOLUMELOCKED' });
     const client = new FakeWorkerClient(
@@ -864,5 +899,549 @@ describe('Volume worker acquisition and sessions', () => {
       ),
     );
     expect(client.closeCalls).toBe(1);
+  });
+
+  it('retains the oldest unsaved generation across later writes and requires a fresh acknowledgment barrier', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(service);
+          yield* fs.writeFile('/note.txt', new Uint8Array([1]));
+          client.publish({ ownerGeneration: 'generation-2' });
+          const lost = yield* Effect.result(service.sync);
+          expect(lost).toMatchObject({
+            _tag: 'Failure',
+            failure: { _tag: 'VolumeError', code: 'VFS_SYNC_OWNER_CHANGED' },
+          });
+          yield* fs.writeFile('/note.txt', new Uint8Array([2]));
+          const stillLost = yield* Effect.result(service.sync);
+          expect(stillLost).toMatchObject({
+            _tag: 'Failure',
+            failure: { _tag: 'VolumeError', code: 'VFS_SYNC_OWNER_CHANGED' },
+          });
+          yield* service.acknowledgeOwnerChange;
+          client.publish({ ownerGeneration: 'generation-3' });
+          const afterAckTakeover = yield* Effect.result(service.sync);
+          expect(afterAckTakeover).toMatchObject({
+            _tag: 'Failure',
+            failure: { _tag: 'VolumeError', code: 'VFS_SYNC_OWNER_CHANGED', outcome: 'unknown' },
+          });
+        }),
+      ),
+    );
+    expect(client.writes.map(({ generation }) => generation)).toEqual(['generation-1', 'generation-2']);
+  });
+
+  it('keeps a lost G1 barrier after acknowledging G2 without a G2 write', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(service).writeFile('/note.txt', new Uint8Array([1]));
+          client.publish({ ownerGeneration: 'generation-2' });
+          yield* Effect.result(service.sync);
+          yield* service.acknowledgeOwnerChange;
+          client.publish({ ownerGeneration: 'generation-3' });
+          const result = yield* Effect.result(service.sync);
+          expect(result).toMatchObject({
+            _tag: 'Failure',
+            failure: { _tag: 'VolumeError', code: 'VFS_SYNC_OWNER_CHANGED', outcome: 'unknown' },
+          });
+        }),
+      ),
+    );
+    expect(client.writes.map(({ generation }) => generation)).toEqual(['generation-1']);
+  });
+
+  it('pins whole-file reads and keeps a successful old-owner SYNC receipt after a later status change', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onReadFileBuffer = async () => new TextEncoder().encode('note');
+    client.onSync = async () => {
+      client.publish({ ownerGeneration: 'generation-2' });
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(service);
+          expect(yield* fs.readFileString('/note.txt')).toBe('note');
+          yield* fs.writeFile('/note.txt', new Uint8Array([1]));
+          yield* service.sync;
+          yield* service.sync;
+        }),
+      ),
+    );
+    expect(client.reads).toEqual([{ generation: 'generation-1', path: '/note.txt', limit: 16 * 1024 * 1024 }]);
+    expect(client.syncCalls).toBe(2);
+  });
+
+  it('recaptures one locally refused whole-file write and pins the retry to the new owner', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    let calls = 0;
+    client.onWriteFileBuffer = async (generation) => {
+      if (calls++ === 0) {
+        client.publish({ ownerGeneration: 'generation-2' });
+        throw new VfsCommandError(
+          Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }),
+          'refused',
+        );
+      }
+      expect(generation).toBe('generation-2');
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.writeFile('/note.txt', new Uint8Array([1]));
+          yield* volume.sync;
+        }),
+      ),
+    );
+    expect(client.writes.map(({ generation }) => generation)).toEqual(['generation-1', 'generation-2']);
+  });
+
+  it('does not recapture a same-generation facade refusal', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          const result = yield* Effect.result(fs.writeFile('/note.txt', new Uint8Array([1])));
+          expect(result).toMatchObject({
+            _tag: 'Failure',
+            failure: {
+              reason: {
+                _tag: 'Unknown',
+                cause: { _tag: 'VolumeError', code: 'VFS_ATTACHMENT_LOST', outcome: 'not-applied' },
+              },
+            },
+          });
+        }),
+      ),
+    );
+    expect(client.writes).toHaveLength(1);
+  });
+
+  it('does not replay a facade refusal after recovery returns to the same generation', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      client.publish({ state: 'recovering', ownerGeneration: null });
+      queueMicrotask(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }));
+      throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(client.writes).toHaveLength(1);
+  });
+
+  it('does not recapture a SharedWorker facade refusal', async () => {
+    const client = new FakeWorkerClient(status({ transport: 'shared-worker', role: 'follower' }));
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      client.publish({ ownerGeneration: 'generation-2' });
+      throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount({ transport: 'shared-worker' }));
+          yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(client.writes).toHaveLength(1);
+  });
+
+  it('preserves possibly-applied for a sent attachment-loss write', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      throw new VfsCommandError(Object.assign(new Error('lost'), { code: 'VFS_ATTACHMENT_LOST' }), 'sent');
+    };
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: { reason: { cause: { code: 'VFS_ATTACHMENT_LOST', outcome: 'possibly-applied' } } },
+    });
+  });
+
+  it('keeps initiating dispatch evidence when a sent write collides with terminal crypto failure', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      client.publish({
+        state: 'failed',
+        role: null,
+        ownerGeneration: null,
+        error: { message: 'integrity failed', code: 'ECRYPTOINTEGRITY' },
+      });
+      throw new VfsCommandError(Object.assign(new Error('lost'), { code: 'VFS_ATTACHMENT_LOST' }), 'sent');
+    };
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: {
+        reason: {
+          _tag: 'Unknown',
+          cause: {
+            _tag: 'VolumeError',
+            kind: 'lifecycle',
+            outcome: 'possibly-applied',
+            cause: { _tag: 'EncryptionError', reason: 'IntegrityFailure' },
+          },
+        },
+      },
+    });
+    if (result._tag === 'Failure') expect(Volume.errorOf(result.failure)).toMatchObject({ reason: 'IntegrityFailure' });
+  });
+
+  it.each([
+    ['EVAULTCORRUPT', 'VaultCorrupt'],
+    ['ECRYPTSIDECAR', 'SidecarCorrupt'],
+  ])('maps nonterminal %s failures to InvalidData', async (code, reason) => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      throw new VfsCommandError(Object.assign(new Error('corrupt'), { code }), 'sent');
+    };
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: { reason: { _tag: 'InvalidData', cause: { _tag: 'EncryptionError', reason } } },
+    });
+  });
+
+  it('does not replay a replied attachment-loss write', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onWriteFileBuffer = async () => {
+      throw new VfsCommandError(Object.assign(new Error('lost'), { code: 'VFS_ATTACHMENT_LOST' }), 'replied');
+    };
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: { reason: { cause: { code: 'VFS_ATTACHMENT_LOST', outcome: 'unknown' } } },
+    });
+    expect(client.writes).toHaveLength(1);
+  });
+
+  it('keeps a held readonly read interrupted without synthesizing a platform failure', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onReadFileBuffer = async () => {
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(resume));
+      return new Uint8Array();
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          const reader = yield* Effect.forkChild(Effect.exit(fs.readFile('/note.txt')));
+          yield* Deferred.await(entered);
+          yield* Fiber.interrupt(reader);
+          const exit = yield* Fiber.await(reader);
+          expect(exit._tag).toBe('Failure');
+          if (exit._tag === 'Failure') {
+            expect(exit.cause.reasons.some((reason) => reason._tag === 'Interrupt')).toBe(true);
+            expect(exit.cause.reasons.some((reason) => reason._tag === 'Fail')).toBe(false);
+          }
+          yield* Deferred.succeed(resume, undefined);
+        }),
+      ),
+    );
+    expect(client.reads).toHaveLength(1);
+  });
+
+  it('uses one recapture allowance across a queued local change and facade refusal', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async (_generation, _path, bytes) => {
+      if (bytes[0] === 1) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      } else {
+        client.publish({ ownerGeneration: 'generation-3' });
+        throw new VfsCommandError(Object.assign(new Error('lost'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+      }
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          const first = yield* Effect.forkChild(fs.writeFile('/first.txt', new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const second = yield* Effect.forkChild(Effect.result(fs.writeFile('/second.txt', new Uint8Array([2]))));
+          yield* Effect.sleep(0);
+          client.publish({ ownerGeneration: 'generation-2' });
+          yield* Deferred.succeed(resume, undefined);
+          yield* Fiber.join(first);
+          const result = yield* Fiber.join(second);
+          expect(result._tag).toBe('Failure');
+        }),
+      ),
+    );
+    expect(client.writes).toHaveLength(2);
+  });
+
+  it('does not spend readiness budget while a recapture waits for the gate', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async (_generation, _path, bytes) => {
+      if (bytes[0] === 1) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount({ initTimeout: 1 })));
+          const first = yield* Effect.forkChild(fs.writeFile('/first.txt', new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const second = yield* Effect.forkChild(fs.writeFile('/second.txt', new Uint8Array([2])));
+          yield* Effect.sleep(0);
+          client.publish({ ownerGeneration: 'generation-2' });
+          yield* Effect.sleep(10);
+          yield* Deferred.succeed(resume, undefined);
+          yield* Fiber.join(first);
+          yield* Fiber.join(second);
+        }),
+      ),
+    );
+    expect(client.writes.map(({ generation }) => generation)).toEqual(['generation-1', 'generation-2']);
+  });
+
+  it('keeps a pending marker when a later write is locally refused', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    let calls = 0;
+    client.onWriteFileBuffer = async () => {
+      if (calls++ === 1)
+        throw new VfsCommandError(Object.assign(new Error('refused'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(service);
+          yield* fs.writeFile('/first.txt', new Uint8Array([1]));
+          yield* Effect.result(fs.writeFile('/second.txt', new Uint8Array([2])));
+          client.publish({ ownerGeneration: 'generation-2' });
+          const result = yield* Effect.result(service.sync);
+          expect(result).toMatchObject({
+            _tag: 'Failure',
+            failure: { _tag: 'VolumeError', code: 'VFS_SYNC_OWNER_CHANGED', outcome: 'unknown' },
+          });
+        }),
+      ),
+    );
+    expect(client.syncCalls).toBe(0);
+  });
+
+  it('keeps an interrupted holder permit until its write settles', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async (_generation, _path, bytes) => {
+      if (bytes[0] === 1) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          const first = yield* Effect.forkChild(fs.writeFile('/first.txt', new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const interrupted = yield* Effect.forkChild(Fiber.interrupt(first));
+          const second = yield* Effect.forkChild(fs.writeFile('/second.txt', new Uint8Array([2])));
+          yield* Effect.sleep(0);
+          expect(client.writes).toHaveLength(1);
+          yield* Deferred.succeed(resume, undefined);
+          yield* Fiber.join(interrupted);
+          yield* Fiber.join(second);
+        }),
+      ),
+    );
+    expect(client.writes).toHaveLength(2);
+  });
+
+  it('does not give a healthy SYNC an init-timeout deadline while a write waits', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onSync = async () => {
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(resume));
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount({ initTimeout: 1 }));
+          const fs = OpfsFileSystem.make(service);
+          const syncing = yield* Effect.forkChild(service.sync);
+          yield* Deferred.await(entered);
+          const writing = yield* Effect.forkChild(fs.writeFile('/note.txt', new Uint8Array([1])));
+          yield* Effect.sleep(10);
+          expect(client.writes).toHaveLength(0);
+          yield* Deferred.succeed(resume, undefined);
+          yield* Fiber.join(syncing);
+          yield* Fiber.join(writing);
+        }),
+      ),
+    );
+    expect(client.syncCalls).toBe(1);
+    expect(client.writes).toHaveLength(1);
+  });
+
+  it('cancels a queued writer without releasing the in-flight writer permit', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async (_generation, _path, bytes) => {
+      if (bytes[0] === 1) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(service);
+          const first = yield* Effect.forkChild(fs.writeFile('/note.txt', new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const queued = yield* Effect.forkChild(fs.writeFile('/note.txt', new Uint8Array([2])));
+          yield* Effect.sleep(0);
+          yield* Fiber.interrupt(queued);
+          yield* Deferred.succeed(resume, undefined);
+          yield* Fiber.join(first);
+          expect(client.writes.map(({ path }) => path)).toEqual(['/note.txt']);
+        }),
+      ),
+    );
+  });
+
+  it('cancels queued SYNC before dispatch while an earlier writer still owns the permit', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async () => {
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(resume));
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(service);
+          const writer = yield* Effect.forkChild(fs.writeFile('/note.txt', new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const syncing = yield* Effect.forkChild(service.sync);
+          yield* Effect.sleep(0);
+          yield* Fiber.interrupt(syncing);
+          yield* Deferred.succeed(resume, undefined);
+          yield* Fiber.join(writer);
+          expect(client.syncCalls).toBe(0);
+          expect(client.writes).toHaveLength(1);
+        }),
+      ),
+    );
+  });
+
+  it('wakes a queued writer on terminal worker status without dispatching it', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async (_generation, _path, bytes) => {
+      if (bytes[0] === 1) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(service);
+          const writer = yield* Effect.forkChild(fs.writeFile('/note.txt', new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const queued = yield* Effect.forkChild(Effect.result(fs.writeFile('/note.txt', new Uint8Array([2]))));
+          yield* Effect.sleep(0);
+          client.publish({
+            state: 'failed',
+            role: null,
+            ownerGeneration: null,
+            error: { message: 'crash', code: 'VFS_WORKER_FAILED' },
+          });
+          yield* Deferred.succeed(resume, undefined);
+          const result = yield* Fiber.join(queued);
+          expect(result._tag).toBe('Failure');
+          yield* Fiber.join(writer);
+          expect(client.writes).toHaveLength(1);
+        }),
+      ),
+    );
   });
 });

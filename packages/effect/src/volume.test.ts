@@ -1,6 +1,7 @@
 import { Deferred, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Volume } from './index.js';
+import { OpfsFileSystem } from './filesystem.js';
 import type { DirectMountOptions, VolumeService } from './volume.js';
 import {
   EncryptionError,
@@ -22,7 +23,10 @@ const state = vi.hoisted(() => ({
   close: () => Promise.resolve(),
   onConstruct: () => {},
   closeCalls: 0,
+  onRead: () => {},
+  onCloseFd: () => {},
   bytes: new Uint8Array(),
+  writes: [] as Array<{ path: string; options: unknown }>,
 }));
 
 vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
@@ -46,10 +50,41 @@ vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
         return bytes.byteLength;
       }
       readSync(_fd: number, size: number) {
+        state.onRead();
         const buffer = state.bytes.slice(0, size);
         return { buffer, read: buffer.byteLength };
       }
-      closeSync() {}
+      fstatSync() {
+        return {
+          mode: 0o100666,
+          size: state.bytes.length,
+          ino: 1,
+          nlink: 1,
+          blksize: 4096,
+          blocks: 1,
+          is_dir: false,
+          is_file: true,
+        };
+      }
+      writeFileBufferSync(path: string, bytes: Uint8Array, options: { exclusive?: boolean; append?: boolean } = {}) {
+        state.writes.push({ path, options });
+        state.bytes = options.append ? Uint8Array.from([...state.bytes, ...bytes]) : Uint8Array.from(bytes);
+      }
+      statSync() {
+        return {
+          mode: 0o100666,
+          size: state.bytes.length,
+          ino: 1,
+          nlink: 1,
+          blksize: 4096,
+          blocks: 1,
+          is_dir: false,
+          is_file: true,
+        };
+      }
+      closeSync() {
+        state.onCloseFd();
+      }
       closeVfs() {
         state.closeCalls++;
         return state.close();
@@ -64,7 +99,10 @@ describe('Volume direct acquisition', () => {
     state.close = () => Promise.resolve();
     state.onConstruct = () => {};
     state.closeCalls = 0;
+    state.onRead = () => {};
+    state.onCloseFd = () => {};
     state.bytes = new Uint8Array();
+    state.writes = [];
   });
 
   it('infers direct mount types for options, effects, and union inputs', () => {
@@ -211,6 +249,96 @@ describe('Volume direct acquisition', () => {
       _tag: 'VolumeError',
       kind: 'lifecycle',
     });
+  });
+
+  it('provides bounded whole-file access and writes through FileSystem', async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'filesystem.bin' });
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.writeFileString('/note.txt', 'first');
+          expect(yield* fs.readFileString('/note.txt')).toBe('first');
+          yield* fs.writeFile('/note.txt', new TextEncoder().encode('second'), { flag: 'w' });
+          expect(yield* fs.readFileString('/note.txt')).toBe('second');
+          yield* fs.writeFile('/note.txt', new TextEncoder().encode('!'), { flag: 'ax' });
+          expect(new TextDecoder().decode(state.bytes)).toBe('second!');
+          const unsupportedAppend = yield* Effect.result(
+            fs.writeFile('/note.txt', new TextEncoder().encode('ignored'), { flag: 'a' }),
+          );
+          expect(unsupportedAppend).toMatchObject({
+            _tag: 'Failure',
+            failure: { reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'unsupported' } } },
+          });
+          const relativeWrite = yield* Effect.result(fs.writeFile('relative.txt', new Uint8Array([0])));
+          expect(relativeWrite).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
+          yield* volume.sync;
+        }),
+      ),
+    );
+    expect(state.writes.map(({ options }) => options)).toEqual([
+      { exclusive: false, append: false },
+      { exclusive: false, append: false },
+      { exclusive: true, append: true },
+    ]);
+  });
+
+  it('preserves a direct read failure when descriptor cleanup also fails', async () => {
+    const read = Object.assign(new Error('read failed'), { code: 'EIO' });
+    const close = Object.assign(new Error('close failed'), { code: 'EIO' });
+    let closed = false;
+    state.onRead = () => {
+      throw read;
+    };
+    state.onCloseFd = () => {
+      closed = true;
+      throw close;
+    };
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'read-cleanup.bin' });
+          return yield* OpfsFileSystem.make(volume).readFile('/note.txt');
+        }),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(closed).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+      expect(failure).toBeDefined();
+      if (failure?._tag === 'Fail')
+        expect(
+          (failure.error as { reason: { cause: { details: { message: string } } } }).reason.cause.details.message,
+        ).toBe(read.message);
+      const cleanup = exit.cause.reasons.find((reason) => reason._tag === 'Die');
+      expect(cleanup).toBeDefined();
+      if (cleanup?._tag === 'Die')
+        expect((cleanup.defect as { operation: string; details: { message: string } }).details.message).toBe(
+          close.message,
+        );
+    }
+  });
+
+  it('rejects relative paths and marks unfinished methods unsupported', async () => {
+    let fs!: ReturnType<typeof OpfsFileSystem.make>;
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'filesystem-errors.bin' });
+          fs = OpfsFileSystem.make(volume);
+          const badPath = yield* Effect.result(fs.readFile('relative.txt'));
+          expect(badPath._tag).toBe('Failure');
+          if (badPath._tag === 'Failure') expect(badPath.failure).toMatchObject({ reason: { _tag: 'BadArgument' } });
+          const unavailable = yield* Effect.result(fs.glob('/**/*.txt'));
+          expect(unavailable._tag).toBe('Failure');
+          if (unavailable._tag === 'Failure')
+            expect(unavailable.failure).toMatchObject({
+              reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'unsupported', code: 'ENOTSUP' } },
+            });
+        }),
+      ),
+    );
   });
 
   it('keeps configuration scope resources alive through use and releases them after the backend', async () => {

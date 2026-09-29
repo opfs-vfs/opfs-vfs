@@ -4,6 +4,7 @@ import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import type { OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
 import { Volume } from './index.js';
 import type { WorkerMountOptions } from './volume.js';
+import { OpfsFileSystem } from './filesystem.js';
 
 const fileNames: string[] = [];
 const sharedWorkerAvailable = /AppleWebKit/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
@@ -29,10 +30,12 @@ const exercise = (options: WorkerMountOptions) =>
       Effect.gen(function* () {
         const volume = yield* Volume.make(options);
         const backend = Volume.unsafeBackend(volume) as OpfsVfsWorkerClient;
+        const fs = OpfsFileSystem.make(volume);
         yield* Effect.tryPromise({
           try: () => backend.writeFileBuffer('/roundtrip', new TextEncoder().encode('custom worker session')),
           catch: (error) => (error instanceof Error ? error : new Error(String(error))),
         });
+        yield* fs.writeFileString('/effect-roundtrip', 'custom Effect FileSystem');
         yield* volume.sync;
         const content = new TextDecoder().decode(
           yield* Effect.tryPromise({
@@ -40,7 +43,11 @@ const exercise = (options: WorkerMountOptions) =>
             catch: (error) => (error instanceof Error ? error : new Error(String(error))),
           }),
         );
-        return { status: backend.getStatus(), content };
+        return {
+          status: backend.getStatus(),
+          content,
+          fileSystemContent: yield* fs.readFileString('/effect-roundtrip'),
+        };
       }),
     ),
   );
@@ -50,6 +57,7 @@ it('runs the Effect session through an application-owned worker under auto trans
   expect(result.status.transport).toBe('dedicated');
   expect(result.status.state).toBe('ready');
   expect(result.content).toBe('custom worker session');
+  expect(result.fileSystemContent).toBe('custom Effect FileSystem');
 });
 
 it('keeps an injected worker crash terminal at the Effect service boundary', async () => {
@@ -110,5 +118,6 @@ it.skipIf(typeof SharedWorker === 'undefined' || !sharedWorkerAvailable)(
     expect(result.status.transport).toBe('shared-worker');
     expect(result.status.state).toBe('ready');
     expect(result.content).toBe('custom worker session');
+    expect(result.fileSystemContent).toBe('custom Effect FileSystem');
   },
 );

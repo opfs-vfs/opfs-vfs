@@ -13,6 +13,26 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 ```
 
+`OpfsFileSystem.layer` builds the standard `FileSystem` service on a mounted
+`Volume`. Current support includes absolute-path `access` and whole-file reads
+up to 16 MiB. Writes are limited to 16 MiB, with flags `w`, `wx`, or `ax` and
+no explicit `mode`. The remaining required methods fail with a typed
+unsupported error. See `examples/filesystem-save.ts` for handling errors from
+`volume.sync`. A successful write does not mean the data is durable; await
+`volume.sync` at save boundaries.
+
+```ts
+import { Effect, FileSystem, Layer } from 'effect';
+import { OpfsFileSystem, Volume } from '@opfs-vfs/effect';
+
+const FileSystemLive = Layer.provide(OpfsFileSystem.layer, Volume.layer({ fileName: 'app.bin' }));
+
+const app = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.writeFileString('/note.txt', 'Hello');
+}).pipe(Effect.provide(FileSystemLive));
+```
+
 `make` and `layer` own a worker client in the current `Scope`. The bundled
 dedicated worker registers the subscriptions plugin; request it with
 `plugins: () => [subscriptionsRequest()]`. Other plugin requests require a
