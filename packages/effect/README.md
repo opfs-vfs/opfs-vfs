@@ -139,6 +139,13 @@ accepts an initial passkey. The paired
 `examples/encrypted-session.worker.ts` is application code; the base adapter
 does not depend on the premium encryption package.
 
+An existing unlocked owner can accept a follower without authenticating that
+follower's secret. The secret is checked only if the follower takes ownership,
+which can then fail. `Redacted` protects display while wrapped, but requests
+and layers can retain revealed secrets and do not zeroize them. Mounting does
+not encrypt or migrate existing plaintext storage; no format migration is
+introduced here.
+
 The encrypted packed check is explicit and requires a reviewed local candidate:
 
 ```sh
