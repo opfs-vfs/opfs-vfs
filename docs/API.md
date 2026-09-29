@@ -84,6 +84,8 @@ Pass configured instances through `new OpfsVfs(name, { plugins: [...] })`. An em
 
 The supported author types live in `@opfs-vfs/opfs-vfs/plugins`. A `ConfiguredVfsPlugin` declares its `id`, `contractVersion: 1`, non-secret `compatibilityKey`, optional `requiredOpenMode: 'create-new'`, and `storage: { factory, sidecars }`. Only one storage contribution is supported. Sidecars may be `.vault`, `.crypt`, or `.crypt.log`; all existing protected markers must be declared by the selected provider. `.importing` belongs to core lifecycle checks and cannot be declared. The declaration describes trusted plugin ownership, not a security sandbox.
 
+Mounting a volume with an undeclared protection marker fails with `VFS_STORAGE_PLUGIN_REQUIRED` (errno 22). If your code previously checked `EINVAL` to detect a protected volume, switch that check to the new code; other invalid arguments still use `EINVAL`.
+
 The factory receives tracked raw storage and a declared-sidecar opener. A returned record codec must supply both WAL cycle hooks. The pre-data-commit hook runs synchronously before the data barrier and must finish its own required journal/sidecar flushes before returning. Throwing aborts that barrier. Core owns handle cleanup and invokes the returned idempotent `destroy()` on close or later initialization failure. Factories must destroy any key state themselves if they fail before returning. Promise-returning synchronous hooks are unsupported.
 
 The `/storage` API is internal and may change with package versions. Premium pins exactly the tested core version; do not replace that pin with an untested range.

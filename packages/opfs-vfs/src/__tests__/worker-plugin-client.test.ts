@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { OpfsVfsWorker } from '../index_internal';
 import { inspectWorker } from '../worker-client';
 import { peekVolume } from '../peek-volume';
+import { deleteVolume } from '../volume-files';
 import { registryTestRequest } from './registry-test-plugin';
 
 const name = () => `plugin-client-${crypto.randomUUID()}.bin`;
@@ -141,6 +142,32 @@ it('preserves typed worker errors through the leader and follower relay', async 
   } finally {
     follower.dispose();
     await owner.closeVfs();
+  }
+});
+
+it('preserves the protected-volume error code through worker INIT serialization', async () => {
+  const root = await navigator.storage.getDirectory();
+  for (const sidecar of ['.vault', '.crypt', '.crypt.log']) {
+    const fileName = name();
+    const marker = await root.getFileHandle(fileName.replace(/\.bin$/, sidecar), { create: true });
+    const writer = await marker.createWritable();
+    await writer.write(new Uint8Array([1]));
+    await writer.close();
+    const client = new OpfsVfsWorker(fileName);
+    try {
+      await expect(client.ready).rejects.toMatchObject({
+        code: 'VFS_STORAGE_PLUGIN_REQUIRED',
+        errno: 22,
+        name: 'StoragePluginRequiredError',
+      });
+      expect(client.getStatus()).toMatchObject({
+        state: 'failed',
+        error: { code: 'VFS_STORAGE_PLUGIN_REQUIRED', errno: 22, name: 'StoragePluginRequiredError' },
+      });
+    } finally {
+      client.dispose();
+      await deleteVolume(fileName);
+    }
   }
 });
 
