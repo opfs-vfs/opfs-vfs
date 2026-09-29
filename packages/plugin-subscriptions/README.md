@@ -71,6 +71,18 @@ const subscription = await subscribe(
 
 `subscriptions()` and `subscriptionsRequest()` accept no configuration. A compatible follower must request the same active profile; a follower cannot add the plugin to an owner that did not register it.
 
+## Renames
+
+A rename emits `delete` at every old path, then `create` at every new path, each subtree entry with its own `kind`. Renaming a directory therefore reports every descendant, not just the directory: deletes run deepest first (`/a/sub/y.txt`, `/a/sub`, `/a/x.txt`, `/a`), creates run parent first (`/b`, `/b/sub`, `/b/x.txt`, `/b/sub/y.txt`). Each subscriber receives only the events its `path`, `scope`, `recursive`, `events`, and `match` select:
+
+- A recursive subscription on the old directory sees only the deletes; one on the new parent sees only the creates; a recursive subscription on `/` sees both.
+- A non-recursive directory subscription on the parent sees only the directory's own `delete` and `create`.
+- A `scope: 'file'` subscription on `/a/x.txt` receives `delete /a/x.txt`. A file subscription on `/b/x.txt` receives `create /b/x.txt`.
+- `match` filters descendant paths like any other event.
+- Renaming over an existing empty directory first emits `delete` for the replaced directory, then the rename events above.
+
+A current-view reconciler does not need to infer subtree removal from a single directory delete, but it must treat each `delete` as removal of that path and each `create` as a path to reread.
+
 ## Content and recovery
 
 `content: false` is the default and performs no content read. With `content: { maxBytes }`, an included payload is a copied final regular-file version from the completed mutation. It can be older than a later normal filesystem read, so do not use it as an upsert for a current view. Omissions distinguish disabled content, deletion, non-file entries, oversize files, and unavailable capture.

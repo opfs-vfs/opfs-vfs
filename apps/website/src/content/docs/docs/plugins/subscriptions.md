@@ -107,7 +107,7 @@ Use the same volume name and compatible plugin profile in each tab. This shares 
 | `signal`    | Optional `AbortSignal` for cancellation.                                                                                                                                                             |
 | `onError`   | Required terminal-error callback.                                                                                                                                                                    |
 
-Events describe completed logical filesystem operations, not storage block writes. Reads, sync, checkpointing, and encryption housekeeping do not emit file-change events. A rename reports deletion at the old path and creation at the new path. Cursors order events within one mount generation; they are not replay tokens or proof that a write is durable.
+Events describe completed logical filesystem operations, not storage block writes. Reads, sync, checkpointing, and encryption housekeeping do not emit file-change events. A rename reports deletion at each old path and creation at each new path; renaming a directory reports every descendant too (deletes deepest first, then creates parent first), filtered by each subscription's path, scope, recursion, and `match`. A file subscription on a descendant sees the delete at its old path, not a rename event. Cursors order events within one mount generation; they are not replay tokens or proof that a write is durable.
 
 Callbacks run serially for each subscription and may return a promise. Keep them short: a slow listener can fill its bounded queue. Throwing or rejecting from a listener terminates that subscription.
 
