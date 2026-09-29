@@ -47,6 +47,7 @@ const sysTag = (
   | 'PermissionDenied'
   | 'TimedOut'
   | 'Unknown' => {
+  if (decoded instanceof VolumeError && decoded.kind === 'lifecycle' && decoded.cause !== undefined) return 'Unknown';
   const code = details.code ?? '';
   if (code === 'ENOENT') return 'NotFound';
   if (code === 'EEXIST') return 'AlreadyExists';

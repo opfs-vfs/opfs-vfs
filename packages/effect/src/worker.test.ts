@@ -834,6 +834,52 @@ describe('Volume worker acquisition and sessions', () => {
     });
   });
 
+  it.each(['ENOENT', 'EACCES', 'EBADF', 'LEADER_RESPONSE_TIMEOUT'])(
+    'maps terminal %s status to Unknown',
+    async (code) => {
+      const client = new FakeWorkerClient();
+      workerMocks.open.mockResolvedValue(clientAsCore(client));
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const service = yield* Volume.make(mount());
+            client.publish({
+              state: 'failed',
+              role: null,
+              ownerGeneration: null,
+              error: { message: 'terminal', code },
+            });
+            const result = yield* Effect.result(
+              OpfsFileSystem.make(service).writeFile('/note.txt', new Uint8Array([1])),
+            );
+            expect(result).toMatchObject({
+              _tag: 'Failure',
+              failure: { reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'lifecycle', code } } },
+            });
+          }),
+        ),
+      );
+    },
+  );
+
+  it('keeps a live filesystem admission timeout as TimedOut', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount({ initTimeout: 10 }));
+          client.publish({ state: 'recovering', ownerGeneration: null });
+          const result = yield* Effect.result(OpfsFileSystem.make(service).writeFile('/note.txt', new Uint8Array([1])));
+          expect(result).toMatchObject({
+            _tag: 'Failure',
+            failure: { reason: { _tag: 'TimedOut', cause: { code: 'VFS_OWNER_READY_TIMEOUT' } } },
+          });
+        }),
+      ),
+    );
+  });
+
   it('exposes a terminal crypto cause when failure arrives during ready admission', async () => {
     const client = new FakeWorkerClient();
     workerMocks.open.mockResolvedValue(clientAsCore(client));
@@ -1038,9 +1084,11 @@ describe('Volume worker acquisition and sessions', () => {
   it('does not replay a facade refusal after recovery returns to the same generation', async () => {
     const client = new FakeWorkerClient();
     workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onSubscribe = () => {
+      if (client.current.state === 'recovering') client.publish({ state: 'ready', ownerGeneration: 'generation-1' });
+    };
     client.onWriteFileBuffer = async () => {
       client.publish({ state: 'recovering', ownerGeneration: null });
-      queueMicrotask(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }));
       throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
     };
     await Effect.runPromise(
