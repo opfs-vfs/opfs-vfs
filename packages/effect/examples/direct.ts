@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { Volume } from '../src/index.js';
+import { Volume } from '@opfs-vfs/effect';
 
 export const save = Effect.gen(function* () {
   const volume = yield* Volume.makeDirect({ fileName: 'app.bin' });

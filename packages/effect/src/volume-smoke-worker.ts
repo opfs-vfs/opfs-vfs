@@ -3,7 +3,7 @@ import { deleteVolume, OpenFlags } from '@opfs-vfs/opfs-vfs';
 import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
 import { Volume } from './index.js';
 
-self.onmessage = async () => {
+self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
   const fileName = `effect-${crypto.randomUUID()}.bin`;
   let pluginFile: string | undefined;
   try {
@@ -47,9 +47,13 @@ self.onmessage = async () => {
     if (reused._tag !== 'VolumeError' || reused.kind !== 'configuration' || reused.code !== 'EINVAL') {
       throw new Error('A configured direct plugin was reused without rejection');
     }
+    const example = data.example ? await import(/* @vite-ignore */ data.example) : undefined;
+    const exampleResult = example
+      ? await Effect.runPromise((example as typeof import('../examples/direct.js')).save)
+      : undefined;
     await deleteVolume(fileName);
     await deleteVolume(pluginFile);
-    self.postMessage({ ok: true, before, after, first, reopened });
+    self.postMessage({ ok: true, before, after, first, reopened, example: exampleResult });
   } catch (error) {
     await deleteVolume(fileName).catch(() => {});
     if (pluginFile) await deleteVolume(pluginFile).catch(() => {});

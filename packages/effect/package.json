@@ -36,6 +36,7 @@
   "scripts": {
     "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
     "test": "vitest run",
+    "test:packed": "node scripts/test-packed.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
