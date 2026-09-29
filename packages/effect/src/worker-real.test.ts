@@ -130,6 +130,151 @@ it('runs the Effect session through an application-owned worker under auto trans
   });
 });
 
+it('copies trees without following symlinks and cleans only scoped temporary roots', async () => {
+  const result = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const volume = yield* Volume.make({ fileName: fileName(), transport: 'auto', worker });
+        const fs = OpfsFileSystem.make(volume);
+        const large = new Uint8Array(140_000);
+        for (let i = 0; i < large.length; i++) large[i] = i % 251;
+        yield* fs.makeDirectory('/copy-source/nested', { recursive: true, mode: 0o755 });
+        yield* fs.writeFile('/copy-source/nested/large.bin', large);
+        yield* fs.utimes('/copy-source/nested/large.bin', 1_234, 1_234);
+        yield* fs.symlink('../nested/large.bin', '/copy-source/link');
+        yield* fs.symlink('missing-target', '/copy-source/dangling');
+        yield* fs.copy('/copy-source', '/copy-destination', { overwrite: true, preserveTimestamps: true });
+        yield* fs.copy('/copy-source', '/copy-parent/missing/nested/destination', { overwrite: true });
+        yield* fs.symlink('/copy-source', '/copy-link-parent');
+        const symlinkParentSelfCopy = yield* Effect.result(
+          fs.copy('/copy-source', '/copy-link-parent/new-child', { overwrite: true }),
+        );
+        const rejectedSelfChildExists = yield* fs.exists('/copy-source/new-child');
+
+        const copiedBytes = yield* fs.readFile('/copy-destination/nested/large.bin');
+        const copiedTime = yield* fs.stat('/copy-destination/nested/large.bin');
+        const copiedLink = yield* fs.readLink('/copy-destination/link');
+        const copiedDanglingLink = yield* fs.readLink('/copy-destination/dangling');
+        yield* fs.writeFileString('/copy-source/skip.txt', 'source');
+        yield* fs.writeFileString('/copy-destination/skip.txt', 'destination');
+        yield* fs.copy('/copy-source', '/copy-destination', { overwrite: false });
+        const skipped = yield* fs.readFileString('/copy-destination/skip.txt');
+
+        yield* fs.writeFileString('/copy-regular', 'replacement');
+        const missingCopyFileParent = yield* Effect.result(fs.copyFile('/copy-regular', '/missing-parent/file'));
+        const missingCopyFileParentCreated = yield* fs.exists('/missing-parent');
+        yield* fs.writeFileString('/copy-target', 'keep');
+        yield* fs.symlink('/copy-target', '/copy-output');
+        yield* fs.symlink('/copy-target', '/copy-skip-link');
+        yield* fs.copy('/copy-regular', '/copy-skip-link', { overwrite: false });
+        const skippedSymlinkTarget = yield* fs.readLink('/copy-skip-link');
+        yield* fs.copy('/copy-regular', '/copy-output', { overwrite: true });
+        const replacedLink = yield* fs.stat('/copy-output');
+        const untouchedTarget = yield* fs.readFileString('/copy-target');
+        yield* fs.symlink('/copy-target', '/copy-source-link');
+        const symlinkToFileConflict = yield* Effect.result(
+          fs.copy('/copy-source-link', '/copy-target', { overwrite: true }),
+        );
+        yield* fs.symlink('/missing-target', '/copy-dangling-output');
+        yield* fs.copy('/copy-regular', '/copy-dangling-output', { overwrite: true });
+        const danglingTargetSurvived = yield* Effect.result(fs.readFile('/missing-target'));
+
+        yield* fs.link('/copy-regular', '/copy-hardlink');
+        const sameInode = yield* Effect.result(fs.copyFile('/copy-regular', '/copy-hardlink'));
+        const directoryConflict = yield* Effect.result(fs.copy('/copy-source', '/copy-regular', { overwrite: true }));
+        const directoryConflictWithoutOverwrite = yield* Effect.result(
+          fs.copy('/copy-source', '/copy-regular', { overwrite: false }),
+        );
+        const selfCopy = yield* Effect.result(fs.copy('/copy-source', '/copy-source/child', { overwrite: true }));
+
+        yield* fs.makeDirectory('/tmp/copy-temp', { recursive: true });
+        yield* fs.writeFileString('/tmp/copy-temp/sibling', 'caller-owned');
+        const tempDirectory = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const path = yield* fs.makeTempDirectoryScoped({ directory: '/tmp/copy-temp', prefix: 'owned-' });
+            yield* fs.writeFileString(`${path}/inside`, 'temporary');
+            return path;
+          }),
+        );
+        const defaultTempDirectory = yield* Effect.scoped(
+          Effect.gen(function* () {
+            return yield* fs.makeTempDirectoryScoped({ prefix: 'default-' });
+          }),
+        );
+        const tempFile = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const path = yield* fs.makeTempFileScoped({ directory: '/tmp/copy-temp', prefix: 'file-', suffix: '.txt' });
+            yield* fs.writeFileString(path, 'temporary');
+            return path;
+          }),
+        );
+        const sibling = yield* fs.readFileString('/tmp/copy-temp/sibling');
+        const tempDirectoryRemains = yield* fs.exists(tempDirectory);
+        const tempFileRemains = yield* fs.exists(tempFile);
+        const tempFileParentRemains = yield* fs.exists(tempFile.slice(0, tempFile.lastIndexOf('/')));
+        const unscoped = yield* fs.makeTempFile({ directory: '/tmp/copy-temp', prefix: 'caller-', suffix: '.dat' });
+        const unscopedExists = yield* fs.exists(unscoped);
+        yield* fs.remove(unscoped.slice(0, unscoped.lastIndexOf('/')), { recursive: true });
+
+        return {
+          copiedBytes,
+          nestedDestination: yield* fs.readFile('/copy-parent/missing/nested/destination/nested/large.bin'),
+          symlinkParentSelfCopy,
+          rejectedSelfChildExists,
+          copiedTime,
+          copiedLink,
+          copiedDanglingLink,
+          skipped,
+          replacedLink,
+          untouchedTarget,
+          symlinkToFileConflict,
+          skippedSymlinkTarget,
+          missingCopyFileParent,
+          missingCopyFileParentCreated,
+          danglingTargetSurvived,
+          sameInode,
+          directoryConflict,
+          directoryConflictWithoutOverwrite,
+          selfCopy,
+          sibling,
+          defaultTempDirectory,
+          tempDirectoryRemains,
+          tempFileRemains,
+          tempFileParentRemains,
+          unscopedExists,
+        };
+      }),
+    ),
+  );
+  expect(result.copiedBytes).toEqual(Uint8Array.from({ length: 140_000 }, (_, i) => i % 251));
+  expect(result.nestedDestination).toEqual(result.copiedBytes);
+  expect(result.symlinkParentSelfCopy._tag).toBe('Failure');
+  expect(result.rejectedSelfChildExists).toBe(false);
+  expect(result.copiedTime.mtime).toMatchObject({ value: new Date(1_234_000) });
+  expect(result.copiedLink).toBe('../nested/large.bin');
+  expect(result.copiedDanglingLink).toBe('missing-target');
+  expect(result.skipped).toBe('destination');
+  expect(result.replacedLink.type).toBe('File');
+  expect(result.untouchedTarget).toBe('keep');
+  expect(result.symlinkToFileConflict._tag).toBe('Failure');
+  if (result.symlinkToFileConflict._tag === 'Failure')
+    expect(result.symlinkToFileConflict.failure.reason._tag).toBe('AlreadyExists');
+  expect(result.skippedSymlinkTarget).toBe('/copy-target');
+  expect(result.missingCopyFileParent._tag).toBe('Failure');
+  expect(result.missingCopyFileParentCreated).toBe(false);
+  expect(result.danglingTargetSurvived._tag).toBe('Failure');
+  expect(result.sameInode._tag).toBe('Failure');
+  expect(result.directoryConflict._tag).toBe('Failure');
+  expect(result.directoryConflictWithoutOverwrite._tag).toBe('Failure');
+  expect(result.selfCopy._tag).toBe('Failure');
+  expect(result.sibling).toBe('caller-owned');
+  expect(result.defaultTempDirectory.startsWith('/tmp/default-')).toBe(true);
+  expect(result.tempDirectoryRemains).toBe(false);
+  expect(result.tempFileRemains).toBe(false);
+  expect(result.tempFileParentRemains).toBe(false);
+  expect(result.unscopedExists).toBe(true);
+});
+
 it('keeps an injected worker crash terminal at the Effect service boundary', async () => {
   let actualWorker: Worker | undefined;
   const error = await Effect.runPromise(

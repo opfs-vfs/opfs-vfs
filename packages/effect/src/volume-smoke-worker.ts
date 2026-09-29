@@ -20,6 +20,41 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           backend.closeSync(fd);
           const fs = OpfsFileSystem.make(volume);
           yield* fs.writeFileString('/effect-fs.txt', 'scoped Effect FileSystem');
+          const copyBytes = new Uint8Array(96_000);
+          for (let i = 0; i < copyBytes.length; i++) copyBytes[i] = i % 239;
+          yield* fs.makeDirectory('/copy-source/nested', { recursive: true });
+          yield* fs.writeFile('/copy-source/nested/data.bin', copyBytes);
+          yield* fs.copyFile('/copy-source/nested/data.bin', '/copy-file.bin');
+          yield* fs.copy('/copy-source', '/copy-parent/missing/destination', { overwrite: true });
+          const directCopy =
+            sameBytes(yield* fs.readFile('/copy-file.bin'), copyBytes) &&
+            sameBytes(yield* fs.readFile('/copy-parent/missing/destination/nested/data.bin'), copyBytes);
+          yield* fs.makeDirectory('/tmp/copy-temp', { recursive: true });
+          yield* fs.writeFileString('/tmp/copy-temp/sibling', 'owned by caller');
+          const scopedTempDirectory = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempDirectoryScoped({ directory: '/tmp/copy-temp', prefix: 'direct-' });
+              yield* fs.writeFileString(`${path}/inside`, 'temporary');
+              return path;
+            }),
+          );
+          const scopedTempFile = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempFileScoped({
+                directory: '/tmp/copy-temp',
+                prefix: 'direct-',
+                suffix: '.tmp',
+              });
+              yield* fs.writeFileString(path, 'temporary');
+              return path;
+            }),
+          );
+          const copyTemp = {
+            directCopy,
+            scopedTempDirectoryRemoved: !(yield* fs.exists(scopedTempDirectory)),
+            scopedTempFileRemoved: !(yield* fs.exists(scopedTempFile)),
+            siblingSurvived: (yield* fs.readFileString('/tmp/copy-temp/sibling')) === 'owned by caller',
+          };
           yield* fs.makeDirectory('/namespace/tree/sub', { recursive: true, mode: 0o750 });
           yield* fs.writeFileString('/namespace/tree/sub/note', 'linked');
           yield* fs.symlink('sub/note', '/namespace/tree/link');
@@ -61,6 +96,7 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           yield* volume.sync;
           return {
             persistence: yield* volume.persistence,
+            copyTemp,
             namespace: {
               relativeLink,
               danglingLink,
@@ -136,3 +172,6 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
     self.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 };
+
+const sameBytes = (left: Uint8Array, right: Uint8Array) =>
+  left.byteLength === right.byteLength && left.every((value, index) => value === right[index]);

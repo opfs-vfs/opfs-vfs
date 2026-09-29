@@ -22,9 +22,12 @@ descriptor I/O. Use `stream` and `sink` for bounded-memory transfers. See
 write does not mean the data is durable; await `volume.sync` at save boundaries.
 
 The adapter also supports path metadata, permissions, links, directory creation,
-listing, removal and rename. Filesystem operands must be absolute paths; relative
-symlink targets are preserved. `chown` and `glob` return typed unsupported
-errors, as do copy, temporary-path and watch operations in this slice.
+listing, removal, rename, recursive copy and volume-local temporary paths.
+Filesystem operands must be absolute paths; relative symlink targets are
+preserved. Recursive copy does not follow symlinks, is not atomic, and does not
+preserve hard-link topology. `chown`, `glob` and `watch` return typed unsupported
+errors in this slice. Scoped temporary paths remove only their private directory
+when the scope closes; the default parent is `/tmp` inside the volume.
 
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';

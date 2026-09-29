@@ -142,6 +142,7 @@ const execute = <A>(
   recapture = true,
   expectedGeneration?: string,
   readinessBudget?: { remaining: number },
+  interruptibleGate = true,
 ): Effect.Effect<A, PlatformError.PlatformError> => {
   const pathFailure = invalidPath(method, path);
   if (pathFailure) return Effect.fail(pathFailure);
@@ -174,21 +175,21 @@ const execute = <A>(
       const makeAttempt = () =>
         Effect.scoped(
           Effect.gen(function* () {
-            if (mutate)
-              yield* Effect.interruptible(
-                Effect.asVoid(
-                  Effect.raceFirst(
-                    Effect.acquireRelease(Semaphore.take(state.gate, 1), () => Semaphore.release(state.gate, 1), {
-                      interruptible: true,
-                    }),
-                    Deferred.await(state.terminalSignal).pipe(
-                      Effect.flatMap((terminal) =>
-                        Effect.fail(terminalCommandError(terminal, state.fileName, method, 'not-applied')),
-                      ),
+            if (mutate) {
+              const gate = Effect.asVoid(
+                Effect.raceFirst(
+                  Effect.acquireRelease(Semaphore.take(state.gate, 1), () => Semaphore.release(state.gate, 1), {
+                    interruptible: true,
+                  }),
+                  Deferred.await(state.terminalSignal).pipe(
+                    Effect.flatMap((terminal) =>
+                      Effect.fail(terminalCommandError(terminal, state.fileName, method, 'not-applied')),
                     ),
                   ),
                 ),
               );
+              yield* interruptibleGate ? Effect.interruptible(gate) : Effect.uninterruptible(gate);
+            }
             const terminal = state.terminal();
             const current = state.currentGeneration();
             if (state.isClosed() || terminal)
@@ -402,11 +403,19 @@ const handleEffect = <A>(
   barrier = false,
 ) => takeCursor(handle, method, () => executeHandle(handle, method, () => run(handle.state.backend), mutate, barrier));
 
-const openHandle = (state: Coordinator, path: string, flag: FileSystem.OpenFlag, mode?: number) => {
+const openHandle = (
+  state: Coordinator,
+  path: string,
+  flag: FileSystem.OpenFlag,
+  mode?: number,
+  expectedGeneration?: string,
+  flagsOverride?: number,
+  readinessBudget?: { remaining: number },
+) => {
   if (!Object.hasOwn(openFlags, flag)) return Effect.fail(badArgument('open', 'unsupported file flag'));
   if (mode !== undefined && !validMode(mode))
     return Effect.fail(badArgument('open', 'mode must be an unsigned 32-bit integer'));
-  const flags = openFlags[flag];
+  const flags = flagsOverride ?? openFlags[flag];
   const mutates = (flags & (OpenFlags.O_CREAT | OpenFlags.O_TRUNC)) !== 0;
   return Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
@@ -483,6 +492,8 @@ const openHandle = (state: Coordinator, path: string, flag: FileSystem.OpenFlag,
             },
             mutates,
             false,
+            expectedGeneration,
+            readinessBudget,
           ),
         ),
       );
@@ -509,8 +520,11 @@ const file = (
   flag: FileSystem.OpenFlag,
   mode?: number,
   aggregateMutatingOpen = false,
+  expectedGeneration?: string,
+  flagsOverride?: number,
+  readinessBudget?: { remaining: number },
 ): Effect.Effect<FileSystem.File, PlatformError.PlatformError, import('effect').Scope.Scope> =>
-  Effect.flatMap(openHandle(state, path, flag, mode), (handle) =>
+  Effect.flatMap(openHandle(state, path, flag, mode, expectedGeneration, flagsOverride, readinessBudget), (handle) =>
     handle.closed
       ? Effect.fail(PlatformError.systemError({ _tag: 'BadResource', module: moduleName, method: 'open' }))
       : Effect.succeed({
@@ -696,13 +710,13 @@ const fileReadAlloc = (handle: FileHandle, size: number) =>
     }),
   );
 
-const partialWriteFailure = (state: Coordinator, path: string, error: unknown) => {
+const partialWriteFailure = (state: Coordinator, path: string, error: unknown, operation = 'writeAll') => {
   const original = PlatformError.isPlatformError(error) ? error.reason.cause : undefined;
   const cause = Schema.is(VolumeError)(original)
     ? new VolumeError({
         kind: original.kind,
         fileName: original.fileName,
-        operation: 'writeAll',
+        operation,
         path,
         ...(original.code === undefined ? {} : { code: original.code }),
         outcome: 'possibly-applied',
@@ -713,7 +727,7 @@ const partialWriteFailure = (state: Coordinator, path: string, error: unknown) =
       ? new EncryptionError({
           reason: original.reason,
           fileName: original.fileName,
-          operation: 'writeAll',
+          operation,
           path,
           ...(original.code === undefined ? {} : { code: original.code }),
           outcome: 'possibly-applied',
@@ -723,7 +737,7 @@ const partialWriteFailure = (state: Coordinator, path: string, error: unknown) =
       : new VolumeError({
           kind: 'filesystem',
           fileName: state.fileName,
-          operation: 'writeAll',
+          operation,
           path,
           outcome: 'possibly-applied',
           details: remoteDetails(error),
@@ -737,10 +751,721 @@ const partialWriteFailure = (state: Coordinator, path: string, error: unknown) =
   return PlatformError.systemError({
     _tag: tag,
     module: moduleName,
-    method: 'writeAll',
+    method: operation,
     pathOrDescriptor: path,
     ...(details.message ? { description: details.message } : {}),
     cause,
+  });
+};
+
+const joinPath = (directory: string, name: string) =>
+  directory === '/' ? `/${name}` : `${directory.replace(/\/$/, '')}/${name}`;
+const parentPath = (path: string) => {
+  const trimmed = path.replace(/\/$/, '');
+  const slash = trimmed.lastIndexOf('/');
+  return slash <= 0 ? '/' : trimmed.slice(0, slash);
+};
+const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+const isSymlink = (value: Stat) => (value.mode & 0o170000) === 0o120000;
+const pinned = <A>(
+  state: Coordinator,
+  generation: string,
+  method: string,
+  path: string,
+  run: (backend: Backend) => A | Promise<A> | Effect.Effect<A, unknown>,
+  mutate = false,
+  budget?: { remaining: number },
+  interruptibleGate = true,
+) => execute(state, method, path, (backend) => run(backend), mutate, false, generation, budget, interruptibleGate);
+const pinnedLstat = (state: Coordinator, generation: string, path: string, budget?: { remaining: number }) =>
+  pinned(
+    state,
+    generation,
+    'lstat',
+    path,
+    (backend) => ('forGeneration' in backend ? backend.forGeneration(generation).lstat(path) : backend.lstatSync(path)),
+    false,
+    budget,
+  );
+const pinnedRealPath = (state: Coordinator, generation: string, path: string, budget?: { remaining: number }) =>
+  pinned(
+    state,
+    generation,
+    'realPath',
+    path,
+    (backend) =>
+      'forGeneration' in backend ? backend.forGeneration(generation).realpath(path) : backend.realpathSync(path),
+    false,
+    budget,
+  );
+const pinnedStat = (state: Coordinator, generation: string, path: string, budget?: { remaining: number }) =>
+  pinned(
+    state,
+    generation,
+    'stat',
+    path,
+    (backend) => ('forGeneration' in backend ? backend.forGeneration(generation).stat(path) : backend.statSync(path)),
+    false,
+    budget,
+  );
+const pinnedRemove = (state: Coordinator, generation: string, path: string, budget?: { remaining: number }) =>
+  pinned(
+    state,
+    generation,
+    'remove',
+    path,
+    (backend) =>
+      'forGeneration' in backend ? backend.forGeneration(generation).remove(path) : backend.removeSync(path),
+    true,
+    budget,
+    false,
+  );
+const pinnedLookup = (state: Coordinator, generation: string, path: string, budget?: { remaining: number }) =>
+  Effect.result(pinnedLstat(state, generation, path, budget)).pipe(
+    Effect.flatMap((result) =>
+      result._tag === 'Success'
+        ? Effect.succeed(Option.some(result.success))
+        : result.failure.reason._tag === 'NotFound'
+          ? Effect.succeed(Option.none<Stat>())
+          : Effect.fail(result.failure),
+    ),
+  );
+
+const resolveCopyParent = (state: Coordinator, generation: string, path: string, budget: { remaining: number }) =>
+  Effect.gen(function* () {
+    let cursor = path;
+    const missing: Array<string> = [];
+    while (true) {
+      const entry = yield* pinnedLookup(state, generation, cursor, budget);
+      if (Option.isSome(entry)) {
+        const realPath = yield* pinnedRealPath(state, generation, cursor, budget);
+        const resolved = yield* pinnedStat(state, generation, realPath, budget);
+        if (!resolved.is_dir) return yield* Effect.fail(badArgument('copy', 'destination parent is not a directory'));
+        return { realPath, missing: missing.reverse() };
+      }
+      if (cursor === '/') return yield* Effect.fail(badArgument('copy', 'destination parent does not exist'));
+      missing.push(baseName(cursor));
+      cursor = parentPath(cursor);
+    }
+  });
+
+const copyFilePinned = (
+  state: Coordinator,
+  generation: string,
+  fromPath: string,
+  toPath: string,
+  budget: { remaining: number },
+) => {
+  let possiblyChanged = false;
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const source = yield* file(state, fromPath, 'r', undefined, false, generation, undefined, budget);
+      const destination = yield* file(
+        state,
+        toPath,
+        'w',
+        undefined,
+        false,
+        generation,
+        OpenFlags.O_WRONLY | OpenFlags.O_CREAT,
+        budget,
+      );
+      possiblyChanged = true;
+      const [sourceInfo, destinationInfo] = yield* Effect.all([source.stat, destination.stat]);
+      const sourceIno = sourceInfo.ino._tag === 'Some' ? sourceInfo.ino.value : undefined;
+      const destinationIno = destinationInfo.ino._tag === 'Some' ? destinationInfo.ino.value : undefined;
+      if (sourceIno === undefined || destinationIno === undefined)
+        return yield* Effect.fail(invalidResult(state, 'copyFile', fromPath));
+      if (sourceIno === destinationIno) {
+        possiblyChanged = false;
+        return yield* Effect.fail(badArgument('copyFile', 'source and destination refer to the same file'));
+      }
+      yield* destination.truncate(0);
+      while (true) {
+        const chunk = yield* source.readAlloc(64 * 1024);
+        if (Option.isNone(chunk)) return;
+        yield* destination.writeAll(chunk.value);
+      }
+    }).pipe(
+      Effect.catchCause((cause) =>
+        !possiblyChanged
+          ? Effect.failCause(cause)
+          : Effect.failCause(
+              Cause.map(cause, (error) => {
+                return partialWriteFailure(state, toPath, error, 'copyFile');
+              }),
+            ),
+      ),
+    ),
+  );
+};
+
+const copyPinned = (
+  state: Coordinator,
+  generation: string,
+  fromPath: string,
+  toPath: string,
+  overwrite: boolean,
+  preserveTimestamps: boolean,
+  budget: { remaining: number },
+) => {
+  let changed = false;
+  return Effect.gen(function* () {
+    const sourceRoot = yield* pinnedLstat(state, generation, fromPath, budget);
+    const sourceReal = sourceRoot.is_dir
+      ? yield* pinnedRealPath(state, generation, fromPath, budget)
+      : joinPath(yield* pinnedRealPath(state, generation, parentPath(fromPath), budget), baseName(fromPath));
+    const destinationParent = yield* resolveCopyParent(state, generation, parentPath(toPath), budget);
+    const existingDestination = yield* pinnedLookup(state, generation, toPath, budget);
+    const destinationReal =
+      Option.isSome(existingDestination) && existingDestination.value.is_dir && !isSymlink(existingDestination.value)
+        ? yield* pinnedRealPath(state, generation, toPath, budget)
+        : joinPath(destinationParent.missing.reduce(joinPath, destinationParent.realPath), baseName(toPath));
+    if (
+      destinationReal === sourceReal ||
+      (sourceRoot.is_dir && destinationReal.startsWith(`${sourceReal.replace(/\/$/, '')}/`))
+    )
+      return yield* Effect.fail(badArgument('copy', 'destination is the source or is inside it'));
+    if (destinationParent.missing.length > 0) {
+      yield* pinned(
+        state,
+        generation,
+        'makeDirectory',
+        parentPath(toPath),
+        (backend) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).mkdir(parentPath(toPath), { recursive: true })
+            : backend.mkdirSync(parentPath(toPath), { recursive: true }),
+        true,
+        budget,
+      );
+      changed = true;
+    }
+
+    const timestamps = (stat: Stat, destinationPath: string): Effect.Effect<void, PlatformError.PlatformError> => {
+      if (!preserveTimestamps) return Effect.void;
+      const atime = stat.atimeMs ?? stat.timestampMs;
+      const mtime = stat.mtimeMs ?? stat.timestampMs;
+      if (atime === undefined || mtime === undefined) return Effect.void;
+      return pinned(
+        state,
+        generation,
+        'utimes',
+        destinationPath,
+        (backend) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).utimes(destinationPath, atime, mtime)
+            : backend.utimesSync(destinationPath, atime, mtime),
+        true,
+        budget,
+      ).pipe(Effect.tap(() => Effect.sync(() => (changed = true))));
+    };
+    const copyEntry = (sourcePath: string, destinationPath: string): Effect.Effect<void, PlatformError.PlatformError> =>
+      Effect.gen(function* () {
+        const source = yield* pinnedLstat(state, generation, sourcePath, budget);
+        const destinationResult = yield* pinnedLookup(state, generation, destinationPath, budget);
+        const destination = Option.getOrUndefined(destinationResult);
+        const sourceLink = isSymlink(source);
+        const compatible =
+          destination !== undefined &&
+          ((source.is_dir && destination.is_dir) ||
+            (source.is_file && (destination.is_file || isSymlink(destination))) ||
+            (sourceLink && isSymlink(destination)));
+        if (destination && !compatible)
+          if (sourceLink && !isSymlink(destination))
+            return yield* Effect.fail(
+              platform(
+                Object.assign(new Error('Destination already exists'), { code: 'EEXIST' }),
+                'copy',
+                destinationPath,
+                state.fileName,
+              ),
+            );
+        if (destination && !compatible)
+          return yield* Effect.fail(badArgument('copy', 'source and destination have incompatible types'));
+        if (destination && !overwrite && !source.is_dir) return;
+
+        if (sourceLink) {
+          if (destination && overwrite) {
+            yield* pinned(
+              state,
+              generation,
+              'remove',
+              destinationPath,
+              (backend) =>
+                'forGeneration' in backend
+                  ? backend.forGeneration(generation).unlink(destinationPath)
+                  : backend.unlinkSync(destinationPath),
+              true,
+              budget,
+            );
+            changed = true;
+          }
+          if (!destination || overwrite) {
+            const target = yield* pinned(
+              state,
+              generation,
+              'readLink',
+              sourcePath,
+              (backend) =>
+                'forGeneration' in backend
+                  ? backend.forGeneration(generation).readlink(sourcePath)
+                  : backend.readlinkSync(sourcePath),
+              false,
+              budget,
+            );
+            yield* pinned(
+              state,
+              generation,
+              'symlink',
+              destinationPath,
+              (backend) =>
+                'forGeneration' in backend
+                  ? backend.forGeneration(generation).symlink(target, destinationPath)
+                  : backend.symlinkSync(target, destinationPath),
+              true,
+              budget,
+            );
+            changed = true;
+          }
+          return;
+        }
+        if (source.is_dir) {
+          if (!destination)
+            yield* pinned(
+              state,
+              generation,
+              'makeDirectory',
+              destinationPath,
+              (backend) =>
+                'forGeneration' in backend
+                  ? backend.forGeneration(generation).mkdir(destinationPath, { mode: (source.mode & 0o7777) | 0o700 })
+                  : backend.mkdirSync(destinationPath, { mode: (source.mode & 0o7777) | 0o700 }),
+              true,
+              budget,
+            );
+          if (!destination) changed = true;
+          const entries = yield* pinned(
+            state,
+            generation,
+            'readDirectory',
+            sourcePath,
+            (backend) =>
+              'forGeneration' in backend
+                ? backend.forGeneration(generation).readdirEntries(sourcePath)
+                : backend.readdirEntriesSync(sourcePath),
+            false,
+            budget,
+          );
+          for (const entry of [...entries].sort((left, right) => left.name.localeCompare(right.name)))
+            yield* copyEntry(joinPath(sourcePath, entry.name), joinPath(destinationPath, entry.name));
+          if (!destination || overwrite) {
+            yield* pinned(
+              state,
+              generation,
+              'chmod',
+              destinationPath,
+              (backend) =>
+                'forGeneration' in backend
+                  ? backend.forGeneration(generation).chmod(destinationPath, source.mode & 0o7777)
+                  : backend.chmodSync(destinationPath, source.mode & 0o7777),
+              true,
+              budget,
+            );
+            changed = true;
+            yield* timestamps(source, destinationPath);
+          }
+          return;
+        }
+        if (source.is_file) {
+          if (!destination || overwrite) {
+            if (destination && isSymlink(destination))
+              yield* pinned(
+                state,
+                generation,
+                'remove',
+                destinationPath,
+                (backend) =>
+                  'forGeneration' in backend
+                    ? backend.forGeneration(generation).unlink(destinationPath)
+                    : backend.unlinkSync(destinationPath),
+                true,
+                budget,
+              );
+            if (destination && isSymlink(destination)) changed = true;
+            yield* copyFilePinned(state, generation, sourcePath, destinationPath, budget);
+            changed = true;
+            yield* pinned(
+              state,
+              generation,
+              'chmod',
+              destinationPath,
+              (backend) =>
+                'forGeneration' in backend
+                  ? backend.forGeneration(generation).chmod(destinationPath, source.mode & 0o7777)
+                  : backend.chmodSync(destinationPath, source.mode & 0o7777),
+              true,
+              budget,
+            );
+            changed = true;
+            yield* timestamps(source, destinationPath);
+          }
+          return;
+        }
+        return yield* Effect.fail(badArgument('copy', 'unsupported source entry type'));
+      });
+    if (sourceRoot.is_dir && Option.isSome(existingDestination) && existingDestination.value.is_dir) {
+      for (const entry of yield* pinned(
+        state,
+        generation,
+        'readDirectory',
+        fromPath,
+        (backend) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).readdirEntries(fromPath)
+            : backend.readdirEntriesSync(fromPath),
+        false,
+        budget,
+      ))
+        yield* copyEntry(joinPath(fromPath, entry.name), joinPath(toPath, entry.name));
+      if (overwrite) {
+        yield* pinned(
+          state,
+          generation,
+          'chmod',
+          toPath,
+          (backend) =>
+            'forGeneration' in backend
+              ? backend.forGeneration(generation).chmod(toPath, sourceRoot.mode & 0o7777)
+              : backend.chmodSync(toPath, sourceRoot.mode & 0o7777),
+          true,
+          budget,
+        );
+        changed = true;
+        yield* timestamps(sourceRoot, toPath);
+      }
+    } else {
+      yield* copyEntry(fromPath, toPath);
+    }
+  }).pipe(
+    Effect.catchCause((cause) =>
+      changed
+        ? Effect.failCause(Cause.map(cause, (error) => partialWriteFailure(state, toPath, error, 'copy')))
+        : Effect.failCause(cause),
+    ),
+  );
+};
+
+const validTempPart = (value: unknown) => typeof value === 'string' && !value.includes('/') && !value.includes('\0');
+const randomHex = () => {
+  const bytes = new Uint8Array(8);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+const alreadyExists = (error: PlatformError.PlatformError) => error.reason._tag === 'AlreadyExists';
+
+interface TempResource {
+  readonly path: string;
+  readonly root: string;
+  readonly generation: string;
+  readonly owner: TempOwner;
+}
+
+interface TempOwner {
+  readonly child: Scope.Closeable;
+  readonly state: Coordinator;
+  generation: string;
+  root?: string;
+  created: boolean;
+  started: boolean;
+  detached: boolean;
+  closing: boolean;
+  allocationDone: Promise<void>;
+  finishAllocation: () => void;
+  readonly release: () => Effect.Effect<void>;
+  readonly detach: Effect.Effect<void, PlatformError.PlatformError>;
+}
+
+const makeTempOwner = (
+  state: Coordinator,
+  generation: string,
+  parent: Scope.Scope,
+): Effect.Effect<TempOwner, PlatformError.PlatformError> =>
+  Effect.gen(function* () {
+    if (parent.state._tag === 'Closed') return yield* Effect.fail(staleHandle(state, 'makeTemp'));
+    const child = yield* Scope.fork(parent, 'sequential');
+    let finishAllocation!: () => void;
+    const allocationDone = new Promise<void>((resolve) => {
+      finishAllocation = resolve;
+    });
+    let owner!: TempOwner;
+    let cachedRelease!: Effect.Effect<void>;
+    let release!: () => Effect.Effect<void>;
+    const releaseBase = Effect.uninterruptibleMask(() =>
+      Effect.gen(function* () {
+        owner.closing = true;
+        if (owner.started) yield* Effect.tryPromise({ try: () => allocationDone, catch: (error) => error });
+        if (owner.created && owner.root && !owner.detached)
+          yield* pinnedRemove(state, generation, owner.root, { remaining: state.readinessTimeout });
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            state.files.delete(release);
+          }),
+        ),
+        Effect.orDie,
+      ),
+    );
+    release = () => cachedRelease;
+    cachedRelease = yield* Effect.cached(releaseBase);
+    const detach = Effect.uninterruptible(
+      Effect.gen(function* () {
+        if (child.state._tag === 'Closed' || owner.closing) return yield* Effect.fail(staleHandle(state, 'makeTemp'));
+        owner.detached = true;
+        owner.created = false;
+        owner.root = undefined;
+        state.files.delete(release);
+        const finalizers = Scope.closeUnsafe(child, Exit.succeed(undefined));
+        if (finalizers) yield* finalizers;
+      }),
+    );
+    owner = {
+      child,
+      state,
+      generation,
+      created: false,
+      started: false,
+      detached: false,
+      closing: false,
+      get allocationDone() {
+        return allocationDone;
+      },
+      finishAllocation: () => finishAllocation(),
+      release,
+      detach,
+    };
+    state.files.add(release);
+    yield* Scope.addFinalizer(child, release());
+    if (child.state._tag === 'Closed') return yield* Effect.fail(staleHandle(state, 'makeTemp'));
+    return owner;
+  });
+
+const allocateTemp = (
+  state: Coordinator,
+  method: string,
+  directory: string,
+  parent: Scope.Scope,
+  scoped: boolean,
+  budget: { remaining: number },
+  allocate: (generation: string, owner: TempOwner) => Effect.Effect<TempResource, PlatformError.PlatformError>,
+): Effect.Effect<TempResource, PlatformError.PlatformError> =>
+  Effect.suspend(() =>
+    execute(
+      state,
+      method,
+      directory,
+      (_backend, generation) =>
+        Effect.uninterruptibleMask((restore) =>
+          Effect.gen(function* () {
+            const owner = yield* makeTempOwner(state, generation, parent);
+            owner.generation = generation;
+            owner.started = true;
+            const allocation = yield* Effect.exit(
+              restore(allocate(generation, owner)).pipe(Effect.ensuring(Effect.sync(owner.finishAllocation))),
+            );
+            if (Exit.isFailure(allocation)) {
+              const cleanup = yield* Effect.exit(owner.release());
+              yield* Effect.exit(Scope.close(owner.child, allocation));
+              return Exit.isFailure(cleanup)
+                ? yield* Effect.failCause(Cause.combine(allocation.cause, cleanup.cause))
+                : yield* Effect.failCause(allocation.cause);
+            }
+            if (state.isClosed() || owner.child.state._tag === 'Closed' || owner.closing) {
+              const failureCause = Cause.fail(staleHandle(state, method));
+              const cleanup = yield* Effect.exit(owner.release());
+              yield* Effect.exit(Scope.close(owner.child, Exit.failCause(failureCause)));
+              return Exit.isFailure(cleanup)
+                ? yield* Effect.failCause(Cause.combine(failureCause, cleanup.cause))
+                : yield* Effect.failCause(failureCause);
+            }
+            if (!scoped) yield* owner.detach;
+            return allocation.value;
+          }),
+        ),
+      false,
+      false,
+      undefined,
+      budget,
+    ),
+  );
+
+const tempDirectoryResource = (
+  state: Coordinator,
+  method: string,
+  options: { readonly directory?: string; readonly prefix?: string } | undefined,
+  parent: Scope.Scope,
+  scoped: boolean,
+): Effect.Effect<TempResource, PlatformError.PlatformError> => {
+  const directory = options?.directory ?? '/tmp';
+  const prefix = options?.prefix ?? '';
+  const invalid =
+    invalidPath(method, directory) ??
+    (!validTempPart(prefix) ? badArgument(method, 'prefix must be a single path component') : undefined);
+  if (invalid) return Effect.fail(invalid);
+  return Effect.suspend(() => {
+    const budget = { remaining: state.readinessTimeout };
+    return allocateTemp(state, method, directory, parent, scoped, budget, (generation, owner) =>
+      Effect.gen(function* () {
+        yield* pinned(
+          state,
+          generation,
+          'makeDirectory',
+          directory,
+          (backend) =>
+            'forGeneration' in backend
+              ? backend.forGeneration(generation).mkdir(directory, { recursive: true })
+              : backend.mkdirSync(directory, { recursive: true }),
+          true,
+          budget,
+        );
+        let lastError: PlatformError.PlatformError | undefined;
+        for (let attempt = 0; attempt < 128; attempt++) {
+          const path = joinPath(directory, `${prefix}${randomHex()}`);
+          const created = yield* Effect.result(
+            pinned(
+              state,
+              generation,
+              method,
+              path,
+              (backend) => {
+                if ('forGeneration' in backend)
+                  return backend
+                    .forGeneration(generation)
+                    .mkdir(path)
+                    .then(() => {
+                      owner.root = path;
+                      owner.created = true;
+                    });
+                backend.mkdirSync(path);
+                owner.root = path;
+                owner.created = true;
+              },
+              true,
+              budget,
+            ),
+          );
+          if (created._tag === 'Success') {
+            owner.root = path;
+            owner.created = true;
+            return { path, root: path, generation, owner };
+          }
+          lastError = created.failure;
+          if (!alreadyExists(lastError)) return yield* Effect.fail(lastError);
+        }
+        return yield* Effect.fail(lastError!);
+      }),
+    );
+  });
+};
+
+const tempFileResource = (
+  state: Coordinator,
+  method: string,
+  options: { readonly directory?: string; readonly prefix?: string; readonly suffix?: string } | undefined,
+  parent: Scope.Scope,
+  scoped: boolean,
+): Effect.Effect<TempResource, PlatformError.PlatformError> => {
+  const directory = options?.directory ?? '/tmp';
+  const prefix = options?.prefix ?? '';
+  const suffix = options?.suffix ?? '';
+  const invalid =
+    invalidPath(method, directory) ??
+    (!validTempPart(prefix) || !validTempPart(suffix)
+      ? badArgument(method, 'prefix and suffix must be single path components')
+      : undefined);
+  if (invalid) return Effect.fail(invalid);
+  return Effect.suspend(() => {
+    const budget = { remaining: state.readinessTimeout };
+    return allocateTemp(state, method, directory, parent, scoped, budget, (generation, owner) =>
+      Effect.gen(function* () {
+        yield* pinned(
+          state,
+          generation,
+          'makeDirectory',
+          directory,
+          (backend) =>
+            'forGeneration' in backend
+              ? backend.forGeneration(generation).mkdir(directory, { recursive: true })
+              : backend.mkdirSync(directory, { recursive: true }),
+          true,
+          budget,
+        );
+        let lastError: PlatformError.PlatformError | undefined;
+        for (let attempt = 0; attempt < 128; attempt++) {
+          const root = joinPath(directory, `${prefix}${randomHex()}`);
+          const madeDirectory = yield* Effect.result(
+            pinned(
+              state,
+              generation,
+              method,
+              root,
+              (backend) => {
+                if ('forGeneration' in backend)
+                  return backend
+                    .forGeneration(generation)
+                    .mkdir(root)
+                    .then(() => {
+                      owner.root = root;
+                      owner.created = true;
+                    });
+                backend.mkdirSync(root);
+                owner.root = root;
+                owner.created = true;
+              },
+              true,
+              budget,
+            ),
+          );
+          if (madeDirectory._tag === 'Failure') {
+            lastError = madeDirectory.failure;
+            if (alreadyExists(lastError)) continue;
+            return yield* Effect.fail(lastError);
+          }
+          owner.root = root;
+          owner.created = true;
+          const path = joinPath(root, `${randomHex()}${suffix}`);
+          const opened = yield* Effect.exit(
+            Effect.scoped(
+              Effect.asVoid(
+                file(
+                  state,
+                  path,
+                  'wx',
+                  undefined,
+                  false,
+                  generation,
+                  OpenFlags.O_WRONLY | OpenFlags.O_CREAT | OpenFlags.O_EXCL,
+                  budget,
+                ),
+              ),
+            ),
+          );
+          if (Exit.isSuccess(opened)) return { path, root, generation, owner };
+          const openFailure =
+            opened.cause.reasons.length === 1 && opened.cause.reasons[0]._tag === 'Fail'
+              ? opened.cause.reasons[0].error
+              : undefined;
+          if (!PlatformError.isPlatformError(openFailure) || !alreadyExists(openFailure))
+            return yield* Effect.failCause(opened.cause);
+          const cleanup = yield* Effect.exit(pinnedRemove(state, generation, root, budget));
+          if (Exit.isFailure(cleanup)) return yield* Effect.failCause(Cause.combine(opened.cause, cleanup.cause));
+          owner.root = undefined;
+          owner.created = false;
+          lastError = openFailure;
+        }
+        return yield* Effect.fail(lastError!);
+      }),
+    );
   });
 };
 
@@ -813,14 +1538,6 @@ const readFileDescriptor = (state: Coordinator, backend: Backend, generation: st
       return bytes;
     }),
   );
-
-const unsupportedMethod =
-  (method: string, fileName: string) =>
-  (...args: ReadonlyArray<unknown>) => {
-    const path = typeof args[0] === 'string' ? args[0] : undefined;
-    const pathFailure = path === undefined ? undefined : invalidPath(method, path);
-    return Effect.fail(pathFailure ?? unsupported(method, path, fileName));
-  };
 
 const openFlags: Record<FileSystem.OpenFlag, number> = {
   r: OpenFlags.O_RDONLY,
@@ -993,10 +1710,24 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         true,
       );
     },
-    makeTempDirectory: unsupportedMethod('makeTempDirectory', state.fileName),
-    makeTempDirectoryScoped: unsupportedMethod('makeTempDirectoryScoped', state.fileName),
-    makeTempFile: unsupportedMethod('makeTempFile', state.fileName),
-    makeTempFileScoped: unsupportedMethod('makeTempFileScoped', state.fileName),
+    makeTempDirectory: (options) =>
+      Effect.map(
+        tempDirectoryResource(state, 'makeTempDirectory', options, state.scope!, false),
+        (resource) => resource.path,
+      ),
+    makeTempDirectoryScoped: (options) =>
+      Effect.flatMap(Effect.scope, (parent) =>
+        Effect.map(
+          tempDirectoryResource(state, 'makeTempDirectoryScoped', options, parent, true),
+          (resource) => resource.path,
+        ),
+      ),
+    makeTempFile: (options) =>
+      Effect.map(tempFileResource(state, 'makeTempFile', options, state.scope!, false), (resource) => resource.path),
+    makeTempFileScoped: (options) =>
+      Effect.flatMap(Effect.scope, (parent) =>
+        Effect.map(tempFileResource(state, 'makeTempFileScoped', options, parent, true), (resource) => resource.path),
+      ),
     readFile: (path) =>
       execute(
         state,
@@ -1061,8 +1792,55 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         true,
       );
     },
-    copy: unsupportedMethod('copy', state.fileName),
-    copyFile: unsupportedMethod('copyFile', state.fileName),
+    copy: (fromPath, toPath, options) => {
+      const fromFailure = invalidPath('copy', fromPath);
+      const toFailure = invalidPath('copy', toPath);
+      if (fromFailure || toFailure) return Effect.fail(fromFailure ?? toFailure!);
+      if (options?.overwrite !== undefined && typeof options.overwrite !== 'boolean')
+        return Effect.fail(badArgument('copy', 'overwrite must be a boolean'));
+      if (options?.preserveTimestamps !== undefined && typeof options.preserveTimestamps !== 'boolean')
+        return Effect.fail(badArgument('copy', 'preserveTimestamps must be a boolean'));
+      return Effect.suspend(() => {
+        const budget = { remaining: state.readinessTimeout };
+        return execute(
+          state,
+          'copy',
+          fromPath,
+          (_backend, generation) =>
+            copyPinned(
+              state,
+              generation,
+              fromPath,
+              toPath,
+              options?.overwrite ?? false,
+              options?.preserveTimestamps ?? false,
+              budget,
+            ),
+          false,
+          false,
+          undefined,
+          budget,
+        );
+      });
+    },
+    copyFile: (fromPath, toPath) => {
+      const fromFailure = invalidPath('copyFile', fromPath);
+      const toFailure = invalidPath('copyFile', toPath);
+      if (fromFailure || toFailure) return Effect.fail(fromFailure ?? toFailure!);
+      return Effect.suspend(() => {
+        const budget = { remaining: state.readinessTimeout };
+        return execute(
+          state,
+          'copyFile',
+          fromPath,
+          (_backend, generation) => copyFilePinned(state, generation, fromPath, toPath, budget),
+          false,
+          false,
+          undefined,
+          budget,
+        );
+      });
+    },
     open: (path, options) => file(state, path, options?.flag ?? 'r', options?.mode),
     readDirectory: (path, options) => {
       if (options?.recursive !== undefined && typeof options.recursive !== 'boolean')

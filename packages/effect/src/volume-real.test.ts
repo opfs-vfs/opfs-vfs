@@ -9,6 +9,12 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
       ok: boolean;
       first?: {
         persistence: { state: string };
+        copyTemp: {
+          directCopy: boolean;
+          scopedTempDirectoryRemoved: boolean;
+          scopedTempFileRemoved: boolean;
+          siblingSurvived: boolean;
+        };
         namespace: {
           relativeLink: string;
           danglingLink: string;
@@ -48,6 +54,12 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
     expect(result.after?.exists).toBe(true);
     expect(result.first).toMatchObject({
       persistence: { state: 'clean' },
+      copyTemp: {
+        directCopy: true,
+        scopedTempDirectoryRemoved: true,
+        scopedTempFileRemoved: true,
+        siblingSurvived: true,
+      },
       namespace: {
         relativeLink: 'sub/note',
         danglingLink: 'missing',

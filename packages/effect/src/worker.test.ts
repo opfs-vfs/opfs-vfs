@@ -27,6 +27,18 @@ const status = (overrides: Partial<ClientStatus> = {}): ClientStatus => ({
   ...overrides,
 });
 
+const fakeStat = (overrides: Partial<VfsStat> = {}): VfsStat => ({
+  mode: 0o100666,
+  size: 0,
+  ino: 1,
+  nlink: 1,
+  blksize: 4096,
+  blocks: 1,
+  is_file: true,
+  is_dir: false,
+  ...overrides,
+});
+
 class FakeWorkerClient {
   current: ClientStatus;
   listeners = new Set<() => void>();
@@ -52,8 +64,10 @@ class FakeWorkerClient {
   directoryEntries = new Map<string, Array<VfsDirEntry>>();
   linkTarget = '../target';
   bytes = new Uint8Array();
+  pathBytes = new Map<string, Uint8Array>();
   nextFd = 1;
   openFlags = new Map<number, number>();
+  fdPaths = new Map<number, string>();
   syncCalls = 0;
   readonly ready: Promise<void>;
   resolveReady!: () => void;
@@ -144,24 +158,28 @@ class FakeWorkerClient {
       remove: async (path: string) => namespace('remove', path),
       rename: async (oldPath: string, newPath: string) => namespace('rename', oldPath, newPath),
       truncate: async (path: string, size: number) => namespace('truncate', path, size),
-      open: async (_path: string, flags = 0) => {
+      open: async (path: string, flags = 0) => {
         ensureOwner();
         this.descriptorCalls.push({ generation, method: 'open' });
         await this.onDescriptorOpen?.();
         const fd = this.nextFd++;
         this.openFlags.set(fd, flags);
+        this.fdPaths.set(fd, path);
         return fd;
       },
       close: async (fd: number) => {
         this.descriptorCalls.push({ generation, method: 'close' });
         this.openFlags.delete(fd);
+        this.fdPaths.delete(fd);
       },
-      fstat: async (_fd: number) => {
+      fstat: async (fd: number) => {
         this.descriptorCalls.push({ generation, method: 'fstat' });
+        const path = this.fdPaths.get(fd);
+        const stat = path === undefined ? undefined : this.pathStats.get(path);
         return {
-          mode: 0o100666,
-          size: this.bytes.length,
-          ino: 1,
+          mode: stat?.mode ?? 0o100666,
+          size: this.pathBytes.get(path ?? '')?.length ?? this.bytes.length,
+          ino: stat?.ino ?? 1,
           nlink: 1,
           blksize: 4096,
           blocks: 1,
@@ -169,11 +187,12 @@ class FakeWorkerClient {
           is_dir: false,
         };
       },
-      read: async (_fd: number, size: number, offset = 0) => {
+      read: async (fd: number, size: number, offset = 0) => {
         ensureOwner();
         await this.onDescriptorRead?.();
         this.descriptorCalls.push({ generation, method: 'read' });
-        const buffer = this.bytes.slice(offset, offset + size);
+        const path = this.fdPaths.get(fd) ?? '';
+        const buffer = (this.pathBytes.get(path) ?? this.bytes).slice(offset, offset + size);
         return { buffer, read: buffer.length };
       },
       write: async (fd: number, data: Uint8Array, offset?: number) => {
@@ -181,24 +200,29 @@ class FakeWorkerClient {
         await this.onDescriptorWrite?.();
         this.descriptorCalls.push({ generation, method: 'write' });
         this.descriptorWriteLengths.push(data.byteLength);
+        const path = this.fdPaths.get(fd) ?? '';
+        const previous = this.pathBytes.get(path) ?? this.bytes;
         const part = data.subarray(0, Math.min(data.byteLength, this.maxWrite));
-        if ((this.openFlags.get(fd) ?? 0) & 1024) this.bytes = Uint8Array.from([...this.bytes, ...part]);
+        if ((this.openFlags.get(fd) ?? 0) & 1024) this.bytes = Uint8Array.from([...previous, ...part]);
         else {
           const at = offset ?? 0;
-          const result = new Uint8Array(Math.max(this.bytes.length, at + part.length));
-          result.set(this.bytes);
+          const result = new Uint8Array(Math.max(previous.length, at + part.length));
+          result.set(previous);
           result.set(part, at);
           this.bytes = result;
         }
+        this.pathBytes.set(path, Uint8Array.from(this.bytes));
         this.afterDescriptorWrite?.();
         return part.length;
       },
-      ftruncate: async (_fd: number, size: number) => {
+      ftruncate: async (fd: number, size: number) => {
         ensureOwner();
         this.descriptorCalls.push({ generation, method: 'ftruncate' });
         const result = new Uint8Array(size);
         result.set(this.bytes.subarray(0, size));
         this.bytes = result;
+        const path = this.fdPaths.get(fd) ?? '';
+        this.pathBytes.set(path, Uint8Array.from(result));
       },
       fsync: async (_fd: number) => {
         ensureOwner();
@@ -397,6 +421,427 @@ describe('Volume worker acquisition and sessions', () => {
     expect(result.at(-1)).toBe(23);
     expect(client.descriptorCalls.filter(({ method }) => method === 'read')).toHaveLength(257);
     expect(client.descriptorCalls.at(-1)?.method).toBe('close');
+  });
+
+  it('rejects descriptor aliases before truncating and pins both copy opens to one owner generation', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const sameInode = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.copyFile('/source', '/alias'));
+        }),
+      ),
+    );
+    expect(sameInode._tag).toBe('Failure');
+    expect(client.descriptorCalls.map(({ method }) => method)).not.toContain('ftruncate');
+
+    const changed = new FakeWorkerClient();
+    let opened = 0;
+    changed.onDescriptorOpen = async () => {
+      if (++opened === 1) changed.publish({ ownerGeneration: 'generation-2' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(changed));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.copyFile('/source', '/destination'));
+        }),
+      ),
+    );
+    expect(result._tag).toBe('Failure');
+    expect(changed.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'open'],
+      ['generation-1', 'close'],
+    ]);
+
+    const shortWrites = new FakeWorkerClient();
+    const callerBytes = Uint8Array.from([1, 2, 3, 4, 5, 6, 7]);
+    shortWrites.pathBytes.set('/source', callerBytes);
+    shortWrites.pathStats.set('/source', { ...fakeStat(), ino: 10, size: callerBytes.length });
+    shortWrites.pathStats.set('/destination', { ...fakeStat(), ino: 11, size: 0 });
+    shortWrites.maxWrite = 2;
+    workerMocks.open.mockResolvedValue(clientAsCore(shortWrites));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          yield* fs.copyFile('/source', '/destination');
+        }),
+      ),
+    );
+    expect(shortWrites.pathBytes.get('/destination')).toEqual(callerBytes);
+    expect(shortWrites.pathBytes.get('/source')).toEqual(callerBytes);
+    expect(callerBytes.buffer.byteLength).toBe(7);
+    expect(shortWrites.descriptorCalls.filter(({ method }) => method === 'write')).toHaveLength(4);
+
+    const zeroWrites = new FakeWorkerClient();
+    zeroWrites.pathBytes.set('/source', callerBytes);
+    zeroWrites.pathStats.set('/source', fakeStat({ ino: 30, size: callerBytes.length }));
+    zeroWrites.pathStats.set('/destination', fakeStat({ ino: 31 }));
+    zeroWrites.maxWrite = 0;
+    workerMocks.open.mockResolvedValue(clientAsCore(zeroWrites));
+    const zero = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.copyFile('/source', '/destination'));
+        }),
+      ),
+    );
+    expect(zero._tag).toBe('Failure');
+    expect(zeroWrites.descriptorCalls.map(({ method }) => method)).toContain('ftruncate');
+  });
+
+  it('holds volume close until an in-flight temporary allocation settles', async () => {
+    const client = new FakeWorkerClient();
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    const closeEntered = await Effect.runPromise(Deferred.make<void>());
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'mkdir' && typeof args[0] === 'string' && args[0].includes('held-')) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const volumeScope = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const volume = yield* Effect.provideService(Volume.make(mount()), Scope.Scope, volumeScope);
+        const allocation = yield* Effect.forkChild(
+          Effect.exit(OpfsFileSystem.make(volume).makeTempDirectory({ directory: '/tmp', prefix: 'held-' })),
+        );
+        yield* Deferred.await(entered);
+        const closeStarted = yield* Effect.forkChild(
+          Effect.gen(function* () {
+            yield* Deferred.succeed(closeEntered, undefined);
+            return yield* Effect.exit(Scope.close(volumeScope, Exit.void));
+          }),
+        );
+        yield* Deferred.await(closeEntered);
+        yield* Effect.sleep(20);
+        expect(client.closeCalls).toBe(0);
+        yield* Deferred.succeed(resume, undefined);
+        const allocationExit = yield* Fiber.await(allocation);
+        const closeExit = yield* Fiber.await(closeStarted);
+        expect(allocationExit._tag).toBe('Success');
+        if (Exit.isSuccess(allocationExit)) expect(allocationExit.value._tag).toBe('Failure');
+        expect(closeExit._tag).toBe('Success');
+        if (Exit.isSuccess(closeExit)) expect(closeExit.value._tag).toBe('Success');
+      }),
+    );
+    expect(client.closeCalls).toBe(1);
+    const ownedRoot = client.namespaceCalls.find(
+      ({ method, args }) => method === 'mkdir' && typeof args[0] === 'string' && args[0].includes('held-'),
+    )?.args[0];
+    expect(ownedRoot).toBeDefined();
+    expect(client.namespaceCalls).toContainEqual({ generation: 'generation-1', method: 'remove', args: [ownedRoot] });
+  }, 10_000);
+
+  it('reports a partial tree copy when a later directory read fails', async () => {
+    const client = new FakeWorkerClient();
+    client.pathStats.set('/', fakeStat({ mode: 0o040755, is_dir: true, is_file: false }));
+    client.pathStats.set('/source', fakeStat({ mode: 0o040755, is_dir: true, is_file: false }));
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'lstat' && args[0] === '/destination')
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      if (method === 'readdirEntries' && args[0] === '/source')
+        throw Object.assign(new Error('late read failure'), { code: 'EIO' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.copy('/source', '/destination'));
+        }),
+      ),
+    );
+    expect(result._tag).toBe('Failure');
+    if (result._tag === 'Failure')
+      expect(result.failure.reason.cause).toMatchObject({
+        _tag: 'VolumeError',
+        operation: 'copy',
+        outcome: 'possibly-applied',
+      });
+    expect(client.namespaceCalls.map(({ method, args }) => [method, args[0]])).toContainEqual([
+      'mkdir',
+      '/destination',
+    ]);
+
+    const copyFileClient = new FakeWorkerClient();
+    copyFileClient.pathBytes.set('/source-file', new Uint8Array([1, 2, 3]));
+    copyFileClient.pathStats.set('/source-file', fakeStat({ ino: 20, size: 3 }));
+    copyFileClient.pathStats.set('/destination-file', fakeStat({ ino: 21 }));
+    copyFileClient.onDescriptorRead = async () => {
+      throw Object.assign(new Error('integrity read failed'), { code: 'EIO' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(copyFileClient));
+    const copyFileResult = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.copyFile('/source-file', '/destination-file'));
+        }),
+      ),
+    );
+    expect(copyFileResult._tag).toBe('Failure');
+    if (copyFileResult._tag === 'Failure')
+      expect(copyFileResult.failure.reason.cause).toMatchObject({
+        _tag: 'VolumeError',
+        operation: 'copyFile',
+        outcome: 'possibly-applied',
+      });
+    expect(copyFileClient.descriptorCalls.map(({ method }) => method)).toContain('ftruncate');
+  });
+
+  it('retries only exclusive temp name collisions and stops after its bounded attempts', async () => {
+    const directoryClient = new FakeWorkerClient();
+    let directoryAttempts = 0;
+    directoryClient.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/retry-')) {
+        if (++directoryAttempts < 3) throw Object.assign(new Error('collision'), { code: 'EEXIST' });
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(directoryClient));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          yield* fs.makeTempDirectory({ directory: '/tmp', prefix: 'retry-' });
+        }),
+      ),
+    );
+    expect(directoryAttempts).toBe(3);
+
+    const fileClient = new FakeWorkerClient();
+    let fileOpens = 0;
+    fileClient.onDescriptorOpen = async () => {
+      if (fileOpens++ === 0) throw Object.assign(new Error('dangling entry collision'), { code: 'EEXIST' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(fileClient));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          yield* fs.makeTempFile({ directory: '/tmp', prefix: 'file-retry-', suffix: '.tmp' });
+        }),
+      ),
+    );
+    expect(fileOpens).toBe(2);
+    const ownedRoots = fileClient.namespaceCalls
+      .filter(
+        ({ method, args }) =>
+          method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/file-retry-'),
+      )
+      .map(({ args }) => args[0]);
+    expect(ownedRoots).toHaveLength(2);
+    expect(fileClient.namespaceCalls).toContainEqual({
+      generation: 'generation-1',
+      method: 'remove',
+      args: [ownedRoots[0]],
+    });
+
+    const capClient = new FakeWorkerClient();
+    let cappedAttempts = 0;
+    capClient.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/cap-')) {
+        cappedAttempts++;
+        throw Object.assign(new Error('collision'), { code: 'EEXIST' });
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(capClient));
+    const capped = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.makeTempDirectory({ directory: '/tmp', prefix: 'cap-' }));
+        }),
+      ),
+    );
+    expect(capped._tag).toBe('Failure');
+    expect(cappedAttempts).toBe(128);
+  });
+
+  it('cleans only the owned temp root after file allocation fails', async () => {
+    const client = new FakeWorkerClient();
+    client.onDescriptorOpen = async () => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.makeTempFile({ directory: '/tmp', prefix: 'failed-' }));
+        }),
+      ),
+    );
+    expect(result._tag).toBe('Failure');
+    const created = client.namespaceCalls.find(
+      ({ method, args }) => method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/failed-'),
+    )?.args[0];
+    expect(created).toBeDefined();
+    expect(client.namespaceCalls).toContainEqual({ generation: 'generation-1', method: 'remove', args: [created] });
+    expect(client.namespaceCalls.some(({ method, args }) => method === 'remove' && args[0] === '/tmp')).toBe(false);
+  });
+
+  it('preserves a temp cleanup Cause and does not replay a failed removal', async () => {
+    const client = new FakeWorkerClient();
+    let removals = 0;
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'remove' && typeof args[0] === 'string' && args[0].startsWith('/tmp/cleanup-')) {
+        removals++;
+        throw Object.assign(new Error('cleanup denied'), { code: 'EPERM' });
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const volumeScope = Scope.makeUnsafe('sequential');
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const callerScope = Scope.makeUnsafe('sequential');
+        const volume = yield* Effect.provideService(Volume.make(mount()), Scope.Scope, volumeScope);
+        const fs = OpfsFileSystem.make(volume);
+        yield* Effect.provideService(
+          fs.makeTempDirectoryScoped({ directory: '/tmp', prefix: 'cleanup-' }),
+          Scope.Scope,
+          callerScope,
+        );
+        const cleanup = yield* Effect.exit(Scope.close(callerScope, Exit.void));
+        const repeated = yield* Effect.exit(Scope.close(callerScope, Exit.void));
+        const volumeClose = yield* Effect.exit(Scope.close(volumeScope, Exit.void));
+        return { cleanup, repeated, volumeClose };
+      }),
+    );
+    expect(result.cleanup._tag).toBe('Failure');
+    expect(result.repeated._tag).toBe('Success');
+    expect(result.volumeClose._tag).toBe('Success');
+    expect(removals).toBe(1);
+  });
+
+  it('wakes temp cleanup waiting on the mutation gate when the worker becomes terminal', async () => {
+    const client = new FakeWorkerClient();
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onWriteFileBuffer = async () => {
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(resume));
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const volumeScope = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const callerScope = Scope.makeUnsafe('sequential');
+        const volume = yield* Effect.provideService(Volume.make(mount()), Scope.Scope, volumeScope);
+        const fs = OpfsFileSystem.make(volume);
+        yield* Effect.provideService(
+          fs.makeTempDirectoryScoped({ directory: '/tmp', prefix: 'gate-' }),
+          Scope.Scope,
+          callerScope,
+        );
+        const writer = yield* Effect.forkChild(fs.writeFile('/held', new Uint8Array([1])));
+        yield* Deferred.await(entered);
+        const cleanup = yield* Effect.forkChild(Effect.exit(Scope.close(callerScope, Exit.void)));
+        yield* Effect.sleep(0);
+        client.publish({
+          state: 'failed',
+          role: null,
+          ownerGeneration: null,
+          error: { message: 'crash', code: 'VFS_WORKER_FAILED' },
+        });
+        const cleanupExit = yield* Fiber.join(cleanup);
+        yield* Deferred.succeed(resume, undefined);
+        const writerExit = yield* Fiber.await(writer);
+        expect(writerExit._tag).toBe('Success');
+        expect(cleanupExit._tag).toBe('Failure');
+      }),
+    );
+  });
+
+  it('does not dispatch when a temp resource is requested in a closed caller scope', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const closedScope = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(Scope.close(closedScope, Exit.void));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(
+            Effect.provideService(
+              fs.makeTempDirectoryScoped({ directory: '/tmp', prefix: 'closed-' }),
+              Scope.Scope,
+              closedScope,
+            ),
+          );
+        }),
+      ),
+    );
+    expect(result._tag).toBe('Failure');
+    expect(
+      client.namespaceCalls.some(({ method, args }) => method === 'mkdir' && String(args[0]).includes('closed-')),
+    ).toBe(false);
+  });
+
+  it('interrupts temp readiness waiting before any allocation command', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          client.publish({ state: 'recovering', ownerGeneration: null });
+          const allocation = yield* Effect.forkChild(
+            Effect.exit(fs.makeTempDirectory({ directory: '/tmp', prefix: 'waiting-' })),
+          );
+          yield* Effect.sleep(0);
+          yield* Fiber.interrupt(allocation);
+          const exit = yield* Fiber.await(allocation);
+          expect(exit._tag).toBe('Failure');
+        }),
+      ),
+    );
+    expect(
+      client.namespaceCalls.some(({ method, args }) => method === 'mkdir' && String(args[0]).includes('waiting-')),
+    ).toBe(false);
+  });
+
+  it('cleans an owned root when its caller interrupts a held mkdir', async () => {
+    const client = new FakeWorkerClient();
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/cancel-')) {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          const allocation = yield* Effect.forkChild(
+            fs.makeTempDirectoryScoped({ directory: '/tmp', prefix: 'cancel-' }),
+          );
+          yield* Deferred.await(entered);
+          const interrupting = yield* Effect.forkChild(Fiber.interrupt(allocation));
+          yield* Effect.sleep(0);
+          yield* Deferred.succeed(resume, undefined);
+          const interrupted = yield* Fiber.await(allocation);
+          expect(interrupted._tag).toBe('Failure');
+          yield* Fiber.join(interrupting);
+        }),
+      ),
+    );
+    const ownedRoot = client.namespaceCalls.find(
+      ({ method, args }) => method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/cancel-'),
+    )?.args[0];
+    expect(ownedRoot).toBeDefined();
+    expect(client.namespaceCalls).toContainEqual({ generation: 'generation-1', method: 'remove', args: [ownedRoot] });
   });
 
   it('lets a queued cursor operation be interrupted while an earlier read is held', async () => {
@@ -722,6 +1167,38 @@ describe('Volume worker acquisition and sessions', () => {
         }),
       ),
     );
+  });
+
+  it('shares one readiness budget across a compound copy', async () => {
+    const client = new FakeWorkerClient();
+    client.pathStats.set('/', fakeStat({ mode: 0o040755, is_dir: true, is_file: false }));
+    client.pathStats.set('/source', fakeStat({ ino: 10 }));
+    let stage = 0;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'lstat' && args[0] === '/source' && stage === 0) {
+        stage++;
+        client.publish({ state: 'recovering', ownerGeneration: null });
+        timers.push(setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), 50));
+      } else if (method === 'realpath' && args[0] === '/' && stage === 1) {
+        stage++;
+        client.publish({ state: 'recovering', ownerGeneration: null });
+        timers.push(setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), 50));
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount({ initTimeout: 80 })));
+          return yield* Effect.result(fs.copy('/source', '/destination'));
+        }),
+      ),
+    );
+    timers.forEach(clearTimeout);
+    expect(result._tag).toBe('Failure');
+    if (result._tag === 'Failure') expect(result.failure.reason._tag).toBe('TimedOut');
+    expect(stage).toBe(2);
   });
 
   it('keeps force removal narrow and refuses a delete after takeover between lstat and unlink', async () => {
