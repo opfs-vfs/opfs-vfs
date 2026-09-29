@@ -420,10 +420,6 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
       );
       yield* Scope.addFinalizer(
         resource,
-        Effect.suspend(() => closeFiles(coordinator)),
-      );
-      yield* Scope.addFinalizer(
-        resource,
         Effect.sync(() => {
           closed = true;
           abort.abort();
@@ -488,14 +484,26 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
         yield* ensureOpen(fileName);
         yield* Scope.addFinalizer(
           resource,
-          Effect.tryPromise({
-            try: () => {
-              closed = true;
-              if (service) closedBackends.add(service);
-              return closeClient(client!);
-            },
-            catch: (error) => mountError(error, fileName, 'close', 'lifecycle'),
-          }).pipe(Effect.catch((error) => Effect.die(error))),
+          Effect.gen(function* () {
+            closed = true;
+            abort.abort();
+            if (coordinator)
+              latchTerminal(
+                coordinator,
+                volumeError(new Error('Volume is closed'), null, 'close', 'lifecycle', 'unknown'),
+              );
+            const filesExit = yield* Effect.exit(closeFiles(coordinator));
+            const backendExit = yield* Effect.exit(
+              Effect.tryPromise({
+                try: () => {
+                  if (service) closedBackends.add(service);
+                  return closeClient(client!);
+                },
+                catch: (error) => mountError(error, fileName, 'close', 'lifecycle'),
+              }).pipe(Effect.catch((error) => Effect.die(error))),
+            );
+            return yield* combineCleanup(filesExit, backendExit);
+          }),
         );
         yield* ensureOpen(fileName);
         const latchStatus = () => {

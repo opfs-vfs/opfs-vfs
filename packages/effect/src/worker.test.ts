@@ -199,7 +199,8 @@ describe('Volume worker acquisition and sessions', () => {
       ),
     );
     expect(source.byteLength).toBe(16 * 1024 * 1024 + 1);
-    expect(client.bytes).toEqual(source);
+    expect(client.bytes.byteLength).toBe(source.byteLength);
+    expect(client.bytes.every((value, index) => value === source[index])).toBe(true);
     expect(client.writes).toEqual([]);
     expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
       ['generation-1', 'open'],
@@ -418,6 +419,714 @@ describe('Volume worker acquisition and sessions', () => {
       ['generation-1', 'write'],
       ['generation-1', 'close'],
     ]);
+  });
+
+  it('preserves an integrity failure through partial writeAll aggregation', async () => {
+    const client = new FakeWorkerClient();
+    client.maxWrite = 1;
+    let writes = 0;
+    client.onDescriptorWrite = async () => {
+      if (++writes === 2)
+        throw new VfsCommandError(Object.assign(new Error('integrity'), { code: 'ECRYPTOINTEGRITY' }), 'replied');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'w' });
+          yield* opened.writeAll(new Uint8Array([1, 2]));
+        }),
+      ),
+    );
+    if (!Exit.isFailure(exit)) throw new Error('Expected partial write failure');
+    const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+    if (failure?._tag !== 'Fail') throw new Error('Expected typed partial write failure');
+    expect(failure.error).toMatchObject({ reason: { _tag: 'InvalidData' } });
+    expect(Volume.errorOf(failure.error as never) as EncryptionError | undefined).toMatchObject({
+      _tag: 'EncryptionError',
+      reason: 'IntegrityFailure',
+      code: 'ECRYPTOINTEGRITY',
+      outcome: 'possibly-applied',
+    });
+  });
+
+  it('preserves corruption details through partial writeAll aggregation', async () => {
+    const client = new FakeWorkerClient();
+    client.maxWrite = 1;
+    let writes = 0;
+    client.onDescriptorWrite = async () => {
+      if (++writes === 2)
+        throw new VfsCommandError(
+          Object.assign(new Error('corrupt'), { code: 'EIO', category: 'meta-log', name: 'VfsCorruptionError' }),
+          'replied',
+        );
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'w' });
+          yield* opened.writeAll(new Uint8Array([1, 2]));
+        }),
+      ),
+    );
+    if (!Exit.isFailure(exit)) throw new Error('Expected partial write failure');
+    const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+    if (failure?._tag !== 'Fail') throw new Error('Expected typed partial write failure');
+    expect(failure.error).toMatchObject({ reason: { _tag: 'InvalidData' } });
+    expect(Volume.errorOf(failure.error as never) as VolumeError | undefined).toMatchObject({
+      kind: 'corruption',
+      code: 'EIO',
+      outcome: 'possibly-applied',
+      details: { category: 'meta-log' },
+    });
+  });
+
+  it('preserves a terminal lifecycle wrapper through partial writeAll aggregation', async () => {
+    const client = new FakeWorkerClient();
+    client.maxWrite = 1;
+    const inner = new EncryptionError({
+      reason: 'IntegrityFailure',
+      fileName: 'worker.bin',
+      operation: 'worker',
+      code: 'ECRYPTOINTEGRITY',
+      outcome: 'unknown',
+      details: { message: 'integrity', code: 'ECRYPTOINTEGRITY' },
+    });
+    const terminal = new VolumeError({
+      kind: 'lifecycle',
+      fileName: 'worker.bin',
+      operation: 'worker',
+      code: 'VFS_WORKER_FAILED',
+      outcome: 'unknown',
+      details: { message: 'worker failed', code: 'VFS_WORKER_FAILED' },
+      cause: inner,
+    });
+    let writes = 0;
+    client.onDescriptorWrite = async () => {
+      if (++writes === 2) throw new VfsCommandError(terminal, 'replied');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'w' });
+          yield* opened.writeAll(new Uint8Array([1, 2]));
+        }),
+      ),
+    );
+    if (!Exit.isFailure(exit)) throw new Error('Expected partial write failure');
+    const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+    if (failure?._tag !== 'Fail') throw new Error('Expected typed partial write failure');
+    expect(failure.error).toMatchObject({
+      reason: {
+        _tag: 'Unknown',
+        cause: {
+          _tag: 'VolumeError',
+          kind: 'lifecycle',
+          outcome: 'possibly-applied',
+          cause: { _tag: 'VolumeError', kind: 'lifecycle', cause: inner },
+        },
+      },
+    });
+  });
+
+  it('rejects an existing handle immediately while its owner is unavailable', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount({ initTimeout: 500 }));
+          const opened = yield* OpfsFileSystem.make(volume).open('/note');
+          client.publish({ state: 'recovering', ownerGeneration: null });
+          const result = yield* Effect.timeout(Effect.result(opened.readAlloc(1)), 30);
+          expect(result).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadResource' } } });
+        }),
+      ),
+    );
+  });
+
+  it('rejects local handle operations after its generation changes', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note');
+          client.publish({ ownerGeneration: 'generation-2' });
+          const results = yield* Effect.all([
+            Effect.result(opened.seek(0n, 'start')),
+            Effect.result(opened.readAlloc(0)),
+            Effect.result(opened.writeAll(new Uint8Array())),
+          ]);
+          for (const result of results)
+            expect(result).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadResource' } } });
+        }),
+      ),
+    );
+    expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'open'],
+      ['generation-1', 'close'],
+    ]);
+  });
+
+  it('does not replay an EFBIG fallback on a successor generation', async () => {
+    const client = new FakeWorkerClient();
+    client.onReadFileBuffer = async (generation) => {
+      if (generation === 'generation-1') {
+        client.publish({ ownerGeneration: 'generation-2' });
+        throw Object.assign(new Error('helper limit'), { code: 'EFBIG' });
+      }
+      return new Uint8Array([9]);
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* OpfsFileSystem.make(volume).readFile('/note');
+        }),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(client.reads.map(({ generation }) => generation)).toEqual(['generation-1']);
+  });
+
+  it('keeps a successful mutating OPEN uncertain when its first write is refused', async () => {
+    const client = new FakeWorkerClient();
+    client.onDescriptorWrite = async () => {
+      throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).writeFile('/note', new Uint8Array([1]), { mode: 0o100644 });
+        }),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+      expect(failure?._tag).toBe('Fail');
+      if (failure?._tag === 'Fail')
+        expect((Volume.errorOf(failure.error as never) as VolumeError | undefined)?.outcome).toBe('possibly-applied');
+    }
+  });
+
+  it('rejects malformed read buffers without advancing the cursor', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    let malformed = true;
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      read: async () =>
+        malformed ? { read: 2, buffer: new Uint8Array([1]) } : { read: 1, buffer: new Uint8Array([7]) },
+    }));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note');
+          const failure = yield* Effect.result(opened.read(new Uint8Array(2)));
+          expect(failure).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'Unknown' } } });
+          malformed = false;
+          expect(yield* opened.readAlloc(1)).toMatchObject({ _tag: 'Some', value: new Uint8Array([7]) });
+        }),
+      ),
+    );
+  });
+
+  it('rejects malformed write counts as typed unknown failures without advancing the cursor', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    const offsets: Array<number | undefined> = [];
+    let malformed = true;
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      write: async (_fd: number, bytes: Uint8Array, offset?: number) => {
+        offsets.push(offset);
+        if (malformed) return bytes.byteLength + 1;
+        return bytes.byteLength;
+      },
+    }));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'r+' });
+          const failure = yield* Effect.result(opened.write(new Uint8Array([1])));
+          expect(failure).toMatchObject({
+            _tag: 'Failure',
+            failure: { reason: { cause: { outcome: 'unknown' } } },
+          });
+          malformed = false;
+          yield* opened.write(new Uint8Array([2]));
+        }),
+      ),
+    );
+    expect(offsets).toEqual([0, 0]);
+  });
+
+  it('validates flags and modes before descriptor dispatch', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          const invalidFlag = yield* Effect.result(fs.open('/note', { flag: 'toString' as never }));
+          const invalidMode = yield* Effect.result(fs.open('/note', { flag: 'w', mode: Number.POSITIVE_INFINITY }));
+          expect(invalidFlag._tag).toBe('Failure');
+          expect(invalidMode._tag).toBe('Failure');
+          expect(client.descriptorCalls).toEqual([]);
+          yield* fs.open('/note', { flag: 'w', mode: 0o100644 });
+        }),
+      ),
+    );
+    expect(client.descriptorCalls.map(({ method }) => method)).toEqual(['open', 'close']);
+  });
+
+  it('does not dispatch a mutating OPEN after its caller scope has closed', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(Scope.close(caller, Exit.void));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const result = yield* Effect.result(
+            OpfsFileSystem.make(volume).open('/note', { flag: 'w' }).pipe(Effect.provideService(Scope.Scope, caller)),
+          );
+          expect(result).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadResource' } } });
+        }),
+      ),
+    );
+    expect(client.descriptorCalls).toEqual([]);
+  });
+
+  it('restores clean continuity when a queued mutating OPEN is closed before dispatch', async () => {
+    const client = new FakeWorkerClient();
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const release = await Effect.runPromise(Deferred.make<void>());
+    let held = true;
+    client.onSync = async () => {
+      if (!held) return;
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(release));
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const syncing = yield* Effect.forkChild(volume.sync);
+          yield* Deferred.await(entered);
+          const opening = yield* Effect.forkChild(
+            OpfsFileSystem.make(volume).open('/note', { flag: 'w' }).pipe(Effect.provideService(Scope.Scope, caller)),
+          );
+          yield* Effect.sleep(0);
+          yield* Scope.close(caller, Exit.void);
+          held = false;
+          yield* Deferred.succeed(release, undefined);
+          yield* Fiber.join(syncing);
+          expect((yield* Fiber.await(opening))._tag).toBe('Failure');
+          expect(client.descriptorCalls).toEqual([]);
+          client.publish({ ownerGeneration: 'generation-2' });
+          yield* volume.sync;
+        }),
+      ),
+    );
+  });
+
+  it('joins a caller close with an OPEN that has already reached the backend', async () => {
+    const client = new FakeWorkerClient();
+    let finishOpen!: () => void;
+    let started = false;
+    client.onDescriptorOpen = () => {
+      started = true;
+      return new Promise<void>((resolve) => {
+        finishOpen = resolve;
+      });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opening = yield* Effect.forkChild(
+            OpfsFileSystem.make(volume).open('/note').pipe(Effect.provideService(Scope.Scope, caller)),
+          );
+          yield* Effect.promise(() => waitUntil(() => started));
+          const closing = yield* Effect.forkChild(Scope.close(caller, Exit.void));
+          yield* Effect.sleep(0);
+          expect(closing.pollUnsafe()).toBeUndefined();
+          finishOpen();
+          yield* Fiber.await(opening);
+          yield* Fiber.join(closing);
+        }),
+      ).pipe(Effect.orDie),
+    );
+    expect(client.descriptorCalls.map(({ method }) => method)).toEqual(['open', 'close']);
+  });
+
+  it('cancels a pending OPEN admission without dispatching it', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount({ initTimeout: 500 }));
+          client.publish({ state: 'recovering', ownerGeneration: null });
+          const opening = yield* Effect.forkChild(
+            OpfsFileSystem.make(volume).open('/note', { flag: 'w' }).pipe(Effect.provideService(Scope.Scope, caller)),
+          );
+          yield* Effect.promise(() => waitUntil(() => client.listeners.size > 1));
+          yield* Fiber.interrupt(opening);
+          expect(client.descriptorCalls).toEqual([]);
+        }),
+      ),
+    );
+    await Effect.runPromise(Scope.close(caller, Exit.void));
+  });
+
+  it('closes a late descriptor when an interrupted OPEN settles', async () => {
+    const client = new FakeWorkerClient();
+    let finishOpen!: () => void;
+    client.onDescriptorOpen = () =>
+      new Promise<void>((resolve) => {
+        finishOpen = resolve;
+      });
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opening = yield* Effect.forkChild(
+            OpfsFileSystem.make(volume).open('/note').pipe(Effect.provideService(Scope.Scope, caller)),
+          );
+          yield* Effect.promise(() => waitUntil(() => client.descriptorCalls.some(({ method }) => method === 'open')));
+          const interrupting = yield* Effect.forkChild(Fiber.interrupt(opening));
+          yield* Effect.sleep(0);
+          finishOpen();
+          yield* Fiber.join(interrupting);
+          expect(client.descriptorCalls.filter(({ method }) => method === 'close')).toHaveLength(1);
+        }),
+      ),
+    );
+    await Effect.runPromise(Scope.close(caller, Exit.void));
+  });
+
+  it('keeps one late close defect with the primary failed OPEN', async () => {
+    const client = new FakeWorkerClient();
+    let finishOpen!: () => void;
+    client.onDescriptorOpen = () =>
+      new Promise<void>((resolve) => {
+        finishOpen = resolve;
+      });
+    const closeFailure = new Error('late descriptor close failed');
+    const facade = client.forGeneration.bind(client);
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      close: async () => {
+        throw closeFailure;
+      },
+    }));
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opening = Effect.runPromiseExit(
+            OpfsFileSystem.make(volume).open('/note').pipe(Effect.provideService(Scope.Scope, caller)),
+          );
+          yield* Effect.promise(() => waitUntil(() => client.descriptorCalls.some(({ method }) => method === 'open')));
+          const callerClose = Effect.runPromiseExit(Scope.close(caller, Exit.void));
+          finishOpen();
+          const exit = yield* Effect.promise(() => opening);
+          yield* Effect.promise(() => callerClose);
+          expect(Exit.isFailure(exit)).toBe(true);
+          if (Exit.isFailure(exit)) {
+            const primary = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+            expect(primary?._tag).toBe('Fail');
+            if (primary?._tag === 'Fail')
+              expect((primary.error as { reason?: { _tag?: string } }).reason?._tag).toBe('BadResource');
+            expect(
+              exit.cause.reasons.filter(
+                (reason) =>
+                  reason._tag === 'Die' &&
+                  (reason.defect as { details?: { message?: string } }).details?.message === closeFailure.message,
+              ),
+            ).toHaveLength(1);
+          }
+        }),
+      ),
+    );
+  });
+
+  it('does not recapture a refused descriptor OPEN on a successor owner', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    const generations: string[] = [];
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      open: async () => {
+        generations.push(generation);
+        if (generation === 'generation-1') {
+          client.publish({ ownerGeneration: 'generation-2' });
+          throw new VfsCommandError(
+            Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }),
+            'refused',
+          );
+        }
+        return 7;
+      },
+    }));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* OpfsFileSystem.make(volume).open('/note', { flag: 'w' });
+        }),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(generations).toEqual(['generation-1']);
+  });
+
+  it('does not fold a separately completed OPEN into public writeAll uncertainty', async () => {
+    const client = new FakeWorkerClient();
+    client.onDescriptorWrite = async () => {
+      throw new VfsCommandError(Object.assign(new Error('refused'), { code: 'EBADF' }), 'refused');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'w' });
+          yield* opened.writeAll(new Uint8Array([1]));
+        }),
+      ),
+    );
+    if (!Exit.isFailure(exit)) throw new Error('Expected writeAll failure');
+    const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
+    if (failure?._tag !== 'Fail') throw new Error('Expected typed writeAll failure');
+    expect((Volume.errorOf(failure.error as never) as VolumeError | undefined)?.outcome).toBe('not-applied');
+  });
+
+  it('joins a held caller file close before backend release', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const release = await Effect.runPromise(Deferred.make<void>());
+    const facade = client.forGeneration.bind(client);
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      open: async () => 7,
+      close: async () => {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(release));
+      },
+    }));
+    const volumeScope = Scope.makeUnsafe('sequential');
+    const caller = Scope.makeUnsafe('sequential');
+    const volume = await Effect.runPromise(Volume.make(mount()).pipe(Effect.provideService(Scope.Scope, volumeScope)));
+    await Effect.runPromise(OpfsFileSystem.make(volume).open('/note').pipe(Effect.provideService(Scope.Scope, caller)));
+    const callerClosing = Effect.runPromise(Scope.close(caller, Exit.void));
+    await Effect.runPromise(Deferred.await(entered));
+    let volumeClosed = false;
+    const volumeClosing = Effect.runPromise(Scope.close(volumeScope, Exit.void)).then(() => {
+      volumeClosed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(client.closeCalls).toBe(0);
+    expect(volumeClosed).toBe(false);
+    await Effect.runPromise(Deferred.succeed(release, undefined));
+    await Promise.all([callerClosing, volumeClosing]);
+    expect(client.closeCalls).toBe(1);
+  });
+
+  it('keeps an original failure and one decoded file-close defect', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const closeFailure = new Error('descriptor close failed');
+    const facade = client.forGeneration.bind(client);
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      close: async () => {
+        throw closeFailure;
+      },
+    }));
+    const original = new Error('use failed');
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).open('/note');
+          return yield* Effect.fail(original);
+        }),
+      ),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ _tag: 'Fail', error: original }));
+      expect(
+        exit.cause.reasons.filter(
+          (reason) =>
+            reason._tag === 'Die' &&
+            (reason.defect as { details?: { message?: string } }).details?.message === closeFailure.message,
+        ),
+      ).toHaveLength(1);
+    }
+  });
+
+  it('keeps truncate cursor rules across default, failure, and append operations', async () => {
+    const client = new FakeWorkerClient();
+    client.bytes = new Uint8Array([1, 2, 3, 4]);
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          const regular = yield* fs.open('/note', { flag: 'r+' });
+          yield* regular.seek(3n, 'start');
+          yield* regular.truncate();
+          expect(yield* regular.seek(0n, 'current')).toBe(0n);
+          const facade = client.forGeneration.bind(client);
+          vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+            ...facade(generation),
+            ftruncate: async () => {
+              throw new Error('truncate failed');
+            },
+          }));
+          yield* regular.seek(2n, 'start');
+          expect((yield* Effect.result(regular.truncate(1)))._tag).toBe('Failure');
+          expect(yield* regular.seek(0n, 'current')).toBe(2n);
+          const appended = yield* fs.open('/note', { flag: 'a+' });
+          yield* appended.seek(2n, 'start');
+          expect((yield* Effect.result(appended.truncate(1)))._tag).toBe('Failure');
+          expect(yield* appended.seek(0n, 'current')).toBe(2n);
+        }),
+      ),
+    );
+  });
+
+  it('keeps an escaped closed handle from using a reused descriptor', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    const reads: number[] = [];
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      open: async () => 7,
+      read: async (fd: number) => {
+        reads.push(fd);
+        return { read: 0, buffer: new Uint8Array() };
+      },
+    }));
+    const caller = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          const first = yield* fs.open('/first', { flag: 'r' }).pipe(Effect.provideService(Scope.Scope, caller));
+          yield* Scope.close(caller, Exit.void);
+          const second = yield* fs.open('/second', { flag: 'r' });
+          expect((yield* Effect.result(first.readAlloc(1)))._tag).toBe('Failure');
+          yield* second.readAlloc(1);
+        }),
+      ),
+    );
+    expect(reads).toEqual([7]);
+  });
+
+  it('holds File.sync behind writes and retains an older lost continuity obligation', async () => {
+    const client = new FakeWorkerClient();
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const release = await Effect.runPromise(Deferred.make<void>());
+    client.onDescriptorWrite = async () => {
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(release));
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          const first = yield* fs.open('/first', { flag: 'r+' });
+          const writing = yield* Effect.forkChild(first.write(new Uint8Array([1])));
+          yield* Deferred.await(entered);
+          const syncing = yield* Effect.forkChild(first.sync);
+          yield* Effect.sleep(0);
+          expect(syncing.pollUnsafe()).toBeUndefined();
+          yield* Deferred.succeed(release, undefined);
+          yield* Fiber.join(writing);
+          yield* Fiber.join(syncing);
+          yield* first.write(new Uint8Array([2]));
+          client.publish({ ownerGeneration: 'generation-2' });
+          const second = yield* fs.open('/second', { flag: 'r+' });
+          yield* second.sync;
+          const lost = yield* Effect.result(volume.sync);
+          expect(lost).toMatchObject({
+            _tag: 'Failure',
+            failure: { code: 'VFS_SYNC_OWNER_CHANGED', outcome: 'unknown' },
+          });
+        }),
+      ),
+    );
+  });
+
+  it('reuses a write effect without transferring its caller buffer', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    const writes: number[][] = [];
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      write: async (_fd: number, bytes: Uint8Array) => {
+        const copied = Array.from(bytes);
+        writes.push(copied);
+        structuredClone(bytes, { transfer: [bytes.buffer] });
+        return copied.length;
+      },
+    }));
+    const input = new Uint8Array([1, 2, 3]);
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'r+' });
+          const write = opened.write(input);
+          yield* write;
+          yield* write;
+        }),
+      ),
+    );
+    expect(writes).toEqual([
+      [1, 2, 3],
+      [1, 2, 3],
+    ]);
+    expect(Array.from(input)).toEqual([1, 2, 3]);
   });
 
   it('passes reusable plugin requests, transport settings and an acquisition signal once', async () => {
