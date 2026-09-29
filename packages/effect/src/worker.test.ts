@@ -524,13 +524,22 @@ describe('Volume worker acquisition and sessions', () => {
         yield* Deferred.await(closeEntered);
         yield* Effect.sleep(20);
         expect(client.closeCalls).toBe(0);
+        const afterClose = yield* Effect.result(OpfsFileSystem.make(volume).stat('/after-close'));
+        expect(afterClose._tag).toBe('Failure');
+        expect(client.namespaceCalls.some(({ method, args }) => method === 'stat' && args[0] === '/after-close')).toBe(
+          false,
+        );
         yield* Deferred.succeed(resume, undefined);
         const allocationExit = yield* Fiber.await(allocation);
         const closeExit = yield* Fiber.await(closeStarted);
         expect(allocationExit._tag).toBe('Success');
         if (Exit.isSuccess(allocationExit)) expect(allocationExit.value._tag).toBe('Failure');
         expect(closeExit._tag).toBe('Success');
-        if (Exit.isSuccess(closeExit)) expect(closeExit.value._tag).toBe('Success');
+        if (Exit.isSuccess(closeExit)) {
+          expect(closeExit.value._tag).toBe('Failure');
+          if (Exit.isFailure(closeExit.value))
+            expect(closeExit.value.cause.reasons.some((reason) => reason._tag === 'Die')).toBe(true);
+        }
       }),
     );
     expect(client.closeCalls).toBe(1);
@@ -538,7 +547,7 @@ describe('Volume worker acquisition and sessions', () => {
       ({ method, args }) => method === 'mkdir' && typeof args[0] === 'string' && args[0].includes('held-'),
     )?.args[0];
     expect(ownedRoot).toBeDefined();
-    expect(client.namespaceCalls).toContainEqual({ generation: 'generation-1', method: 'remove', args: [ownedRoot] });
+    expect(client.namespaceCalls.filter(({ method }) => method === 'remove')).toEqual([]);
   }, 10_000);
 
   it('reports a partial tree copy when a later directory read fails', async () => {
@@ -664,6 +673,36 @@ describe('Volume worker acquisition and sessions', () => {
     );
     expect(capped._tag).toBe('Failure');
     expect(cappedAttempts).toBe(128);
+
+    const refusedAfterCollision = new FakeWorkerClient();
+    let collisionOpenAttempts = 0;
+    refusedAfterCollision.onDescriptorOpen = async () => {
+      if (collisionOpenAttempts++ === 0)
+        throw new VfsCommandError(Object.assign(new Error('collision'), { code: 'EEXIST' }), 'replied');
+      throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(refusedAfterCollision));
+    const refused = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.makeTempFile({ directory: '/tmp', prefix: 'collision-refusal-' }));
+        }),
+      ),
+    );
+    expect(refused).toMatchObject({
+      _tag: 'Failure',
+      failure: { reason: { cause: { code: 'VFS_ATTACHMENT_LOST', outcome: 'possibly-applied' } } },
+    });
+    const collisionRoots = refusedAfterCollision.namespaceCalls
+      .filter(
+        ({ method, args }) =>
+          method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/collision-refusal-'),
+      )
+      .map(({ args }) => args[0]);
+    expect(
+      refusedAfterCollision.namespaceCalls.filter(({ method }) => method === 'remove').map(({ args }) => args[0]),
+    ).toEqual(collisionRoots);
   });
 
   it('cleans only the owned temp root after file allocation fails', async () => {
@@ -687,6 +726,167 @@ describe('Volume worker acquisition and sessions', () => {
     expect(created).toBeDefined();
     expect(client.namespaceCalls).toContainEqual({ generation: 'generation-1', method: 'remove', args: [created] });
     expect(client.namespaceCalls.some(({ method, args }) => method === 'remove' && args[0] === '/tmp')).toBe(false);
+  });
+
+  it('rejects invalid copy and temporary-resource inputs before worker dispatch', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const results = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return [
+            yield* Effect.result(fs.copy('relative', '/destination')),
+            yield* Effect.result(fs.copy('/source', 'relative')),
+            yield* Effect.result(fs.copyFile('relative', '/destination')),
+            yield* Effect.result(fs.copyFile('/source', 'relative')),
+            yield* Effect.result(fs.makeTempDirectory({ directory: 'relative' })),
+            yield* Effect.result(fs.makeTempDirectoryScoped({ directory: 'relative' })),
+            yield* Effect.result(fs.makeTempFile({ directory: 'relative' })),
+            yield* Effect.result(fs.makeTempFileScoped({ directory: 'relative' })),
+            yield* Effect.result(fs.makeTempDirectory({ prefix: 'slash/name' })),
+            yield* Effect.result(fs.makeTempDirectoryScoped({ prefix: 'nul\0name' })),
+            yield* Effect.result(fs.makeTempFile({ prefix: 'slash/name' })),
+            yield* Effect.result(fs.makeTempFile({ suffix: 'nul\0suffix' })),
+            yield* Effect.result(fs.makeTempFileScoped({ prefix: 'nul\0name' })),
+            yield* Effect.result(fs.makeTempFileScoped({ suffix: 'slash/suffix' })),
+          ];
+        }),
+      ),
+    );
+    for (const result of results)
+      expect(result).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
+    expect(client.namespaceCalls).toEqual([]);
+    expect(client.descriptorCalls).toEqual([]);
+  });
+
+  it('reports a refused temp file open as possibly applied and cleans its exact root', async () => {
+    const client = new FakeWorkerClient();
+    client.onDescriptorOpen = async () => {
+      throw new VfsCommandError(Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.makeTempFile({ directory: '/tmp', prefix: 'refused-open-' }));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: { reason: { cause: { code: 'VFS_ATTACHMENT_LOST', outcome: 'possibly-applied' } } },
+    });
+    const root = client.namespaceCalls.find(
+      ({ method, args }) =>
+        method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/tmp/refused-open-'),
+    )?.args[0];
+    expect(client.namespaceCalls.filter(({ method }) => method === 'remove').map(({ args }) => args[0])).toEqual([
+      root,
+    ]);
+  });
+
+  it('keeps the failed temp allocation budget for cleanup and preserves both causes', async () => {
+    const client = new FakeWorkerClient();
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    client.onDescriptorOpen = async () => {
+      client.publish({ state: 'recovering', ownerGeneration: null });
+      timers.push(setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), 100));
+      throw new VfsCommandError(Object.assign(new Error('denied'), { code: 'EACCES' }), 'replied');
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    try {
+      const result = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const fs = OpfsFileSystem.make(yield* Volume.make(mount({ initTimeout: 200 })));
+            client.publish({ state: 'recovering', ownerGeneration: null });
+            timers.push(setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), 140));
+            return yield* Effect.exit(fs.makeTempFile({ prefix: 'shared-budget-' }));
+          }),
+        ),
+      );
+      expect(result._tag).toBe('Failure');
+      if (Exit.isFailure(result)) {
+        expect(result.cause.reasons).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              _tag: 'Fail',
+              error: expect.objectContaining({
+                reason: expect.objectContaining({ cause: expect.objectContaining({ code: 'EACCES' }) }),
+              }),
+            }),
+          ]),
+        );
+        expect(
+          result.cause.reasons.some(
+            (reason) =>
+              reason._tag === 'Die' && (reason.defect as { reason?: { _tag?: string } }).reason?._tag === 'TimedOut',
+          ),
+        ).toBe(true);
+      }
+      expect(client.namespaceCalls.filter(({ method }) => method === 'remove')).toEqual([]);
+    } finally {
+      for (const timer of timers) clearTimeout(timer);
+      client.publish({ state: 'ready', ownerGeneration: 'generation-1' });
+    }
+  });
+
+  it('reports a refused private temp root as possibly applied after creating its parent', async () => {
+    const client = new FakeWorkerClient();
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'mkdir' && typeof args[0] === 'string' && args[0].startsWith('/new-parent/owned-'))
+        throw new VfsCommandError(
+          Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }),
+          'refused',
+        );
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          return yield* Effect.result(fs.makeTempDirectory({ directory: '/new-parent', prefix: 'owned-' }));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: { reason: { cause: { code: 'VFS_ATTACHMENT_LOST', outcome: 'possibly-applied' } } },
+    });
+    expect(client.namespaceCalls.some(({ method, args }) => method === 'mkdir' && args[0] === '/new-parent')).toBe(
+      true,
+    );
+    expect(client.namespaceCalls.some(({ method }) => method === 'remove')).toBe(false);
+  });
+
+  it('uses a fresh readiness budget for a scoped temp finalizer after handoff', async () => {
+    const client = new FakeWorkerClient();
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    try {
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const fs = OpfsFileSystem.make(yield* Volume.make(mount({ initTimeout: 200 })));
+            yield* Effect.scoped(
+              Effect.gen(function* () {
+                client.publish({ state: 'recovering', ownerGeneration: null });
+                timers.push(setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), 140));
+                yield* fs.makeTempDirectoryScoped({ prefix: 'fresh-finalizer-' });
+                client.publish({ state: 'recovering', ownerGeneration: null });
+                timers.push(setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), 100));
+              }),
+            );
+          }),
+        ),
+      );
+    } finally {
+      for (const timer of timers) clearTimeout(timer);
+      client.publish({ state: 'ready', ownerGeneration: 'generation-1' });
+    }
+    expect(client.namespaceCalls.filter(({ method }) => method === 'remove')).toHaveLength(1);
   });
 
   it('preserves a temp cleanup Cause and does not replay a failed removal', async () => {

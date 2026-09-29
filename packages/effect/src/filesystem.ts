@@ -1177,9 +1177,11 @@ interface TempOwner {
   generation: string;
   root?: string;
   created: boolean;
+  mutated: boolean;
   started: boolean;
   detached: boolean;
   closing: boolean;
+  cleanupBudget?: { remaining: number };
   allocationDone: Promise<void>;
   finishAllocation: () => void;
   readonly release: () => Effect.Effect<void>;
@@ -1190,6 +1192,7 @@ const makeTempOwner = (
   state: Coordinator,
   generation: string,
   parent: Scope.Scope,
+  cleanupBudget: { remaining: number },
 ): Effect.Effect<TempOwner, PlatformError.PlatformError> =>
   Effect.gen(function* () {
     if (parent.state._tag === 'Closed') return yield* Effect.fail(staleHandle(state, 'makeTemp'));
@@ -1206,7 +1209,12 @@ const makeTempOwner = (
         owner.closing = true;
         if (owner.started) yield* Effect.tryPromise({ try: () => allocationDone, catch: (error) => error });
         if (owner.created && owner.root && !owner.detached)
-          yield* pinnedRemove(state, generation, owner.root, { remaining: state.readinessTimeout });
+          yield* pinnedRemove(
+            state,
+            generation,
+            owner.root,
+            owner.cleanupBudget ?? { remaining: state.readinessTimeout },
+          );
       }).pipe(
         Effect.ensuring(
           Effect.sync(() => {
@@ -1224,7 +1232,6 @@ const makeTempOwner = (
         owner.detached = true;
         owner.created = false;
         owner.root = undefined;
-        state.files.delete(release);
         const finalizers = Scope.closeUnsafe(child, Exit.succeed(undefined));
         if (finalizers) yield* finalizers;
       }),
@@ -1234,9 +1241,11 @@ const makeTempOwner = (
       state,
       generation,
       created: false,
+      mutated: false,
       started: false,
       detached: false,
       closing: false,
+      cleanupBudget,
       get allocationDone() {
         return allocationDone;
       },
@@ -1267,7 +1276,7 @@ const allocateTemp = (
       (_backend, generation) =>
         Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
-            const owner = yield* makeTempOwner(state, generation, parent);
+            const owner = yield* makeTempOwner(state, generation, parent, budget);
             owner.generation = generation;
             owner.started = true;
             const allocation = yield* Effect.exit(
@@ -1276,19 +1285,28 @@ const allocateTemp = (
             if (Exit.isFailure(allocation)) {
               const cleanup = yield* Effect.exit(owner.release());
               yield* Effect.exit(Scope.close(owner.child, allocation));
+              const primary = owner.mutated
+                ? Cause.map(allocation.cause, (error) =>
+                    partialWriteFailure(state, owner.root ?? directory, error, method),
+                  )
+                : allocation.cause;
               return Exit.isFailure(cleanup)
-                ? yield* Effect.failCause(Cause.combine(allocation.cause, cleanup.cause))
-                : yield* Effect.failCause(allocation.cause);
+                ? yield* Effect.failCause(Cause.combine(primary, cleanup.cause))
+                : yield* Effect.failCause(primary);
             }
             if (state.isClosed() || owner.child.state._tag === 'Closed' || owner.closing) {
               const failureCause = Cause.fail(staleHandle(state, method));
               const cleanup = yield* Effect.exit(owner.release());
               yield* Effect.exit(Scope.close(owner.child, Exit.failCause(failureCause)));
+              const primary = owner.mutated
+                ? Cause.map(failureCause, (error) => partialWriteFailure(state, owner.root ?? directory, error, method))
+                : failureCause;
               return Exit.isFailure(cleanup)
-                ? yield* Effect.failCause(Cause.combine(failureCause, cleanup.cause))
-                : yield* Effect.failCause(failureCause);
+                ? yield* Effect.failCause(Cause.combine(primary, cleanup.cause))
+                : yield* Effect.failCause(primary);
             }
             if (!scoped) yield* owner.detach;
+            else owner.cleanupBudget = undefined;
             return allocation.value;
           }),
         ),
@@ -1328,6 +1346,7 @@ const tempDirectoryResource = (
           true,
           budget,
         );
+        owner.mutated = true;
         let lastError: PlatformError.PlatformError | undefined;
         for (let attempt = 0; attempt < 128; attempt++) {
           const path = joinPath(directory, `${prefix}${randomHex()}`);
@@ -1357,6 +1376,7 @@ const tempDirectoryResource = (
           if (created._tag === 'Success') {
             owner.root = path;
             owner.created = true;
+            owner.mutated = true;
             return { path, root: path, generation, owner };
           }
           lastError = created.failure;
@@ -1400,6 +1420,7 @@ const tempFileResource = (
           true,
           budget,
         );
+        owner.mutated = true;
         let lastError: PlatformError.PlatformError | undefined;
         for (let attempt = 0; attempt < 128; attempt++) {
           const root = joinPath(directory, `${prefix}${randomHex()}`);
@@ -1433,6 +1454,7 @@ const tempFileResource = (
           }
           owner.root = root;
           owner.created = true;
+          owner.mutated = true;
           const path = joinPath(root, `${randomHex()}${suffix}`);
           const opened = yield* Effect.exit(
             Effect.scoped(
@@ -1711,9 +1733,13 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
       );
     },
     makeTempDirectory: (options) =>
-      Effect.map(
-        tempDirectoryResource(state, 'makeTempDirectory', options, state.scope!, false),
-        (resource) => resource.path,
+      Effect.scoped(
+        Effect.flatMap(Effect.scope, (parent) =>
+          Effect.map(
+            tempDirectoryResource(state, 'makeTempDirectory', options, parent, false),
+            (resource) => resource.path,
+          ),
+        ),
       ),
     makeTempDirectoryScoped: (options) =>
       Effect.flatMap(Effect.scope, (parent) =>
@@ -1723,7 +1749,11 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         ),
       ),
     makeTempFile: (options) =>
-      Effect.map(tempFileResource(state, 'makeTempFile', options, state.scope!, false), (resource) => resource.path),
+      Effect.scoped(
+        Effect.flatMap(Effect.scope, (parent) =>
+          Effect.map(tempFileResource(state, 'makeTempFile', options, parent, false), (resource) => resource.path),
+        ),
+      ),
     makeTempFileScoped: (options) =>
       Effect.flatMap(Effect.scope, (parent) =>
         Effect.map(tempFileResource(state, 'makeTempFileScoped', options, parent, true), (resource) => resource.path),
