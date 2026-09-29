@@ -126,7 +126,15 @@ const execute = <A>(
     while (true) {
       const admitted = yield* Effect.result(state.awaitReady(budget, method));
       if (admitted._tag === 'Failure')
-        return yield* Effect.fail(platform(refusal ?? admitted.failure, method, path, state.fileName, mutate));
+        return yield* Effect.fail(
+          platform(
+            refusal && remoteDetails(admitted.failure).code === 'VFS_OWNER_READY_TIMEOUT' ? refusal : admitted.failure,
+            method,
+            path,
+            state.fileName,
+            mutate,
+          ),
+        );
       const generation = admitted.success;
       if (differentGeneration === generation)
         return yield* Effect.fail(platform(refusal!, method, path, state.fileName, mutate));

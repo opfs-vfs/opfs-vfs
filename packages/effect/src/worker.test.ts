@@ -1004,6 +1004,35 @@ describe('Volume worker acquisition and sessions', () => {
     expect(client.writes.map(({ generation }) => generation)).toEqual(['generation-1']);
   });
 
+  it('keeps already-lost durability unknown through a ready-owner timeout', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount({ initTimeout: 10 }));
+          yield* OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1]));
+          client.publish({ ownerGeneration: 'generation-2' });
+          const lost = yield* Effect.result(volume.sync);
+          expect(lost).toMatchObject({
+            _tag: 'Failure',
+            failure: { code: 'VFS_SYNC_OWNER_CHANGED', outcome: 'unknown' },
+          });
+          client.publish({ state: 'recovering', ownerGeneration: null });
+          const timed = yield* Effect.result(volume.sync);
+          expect(timed).toMatchObject({ _tag: 'Failure', failure: { outcome: 'unknown' } });
+          client.publish({ state: 'ready', ownerGeneration: 'generation-2' });
+          const stillLost = yield* Effect.result(volume.sync);
+          expect(stillLost).toMatchObject({
+            _tag: 'Failure',
+            failure: { code: 'VFS_SYNC_OWNER_CHANGED', outcome: 'unknown' },
+          });
+        }),
+      ),
+    );
+    expect(client.syncCalls).toBe(0);
+  });
+
   it('pins whole-file reads and keeps a successful old-owner SYNC receipt after a later status change', async () => {
     const client = new FakeWorkerClient();
     workerMocks.open.mockResolvedValue(clientAsCore(client));
@@ -1099,6 +1128,41 @@ describe('Volume worker acquisition and sessions', () => {
         }),
       ),
     );
+    expect(client.writes).toHaveLength(1);
+  });
+
+  it('surfaces terminal crypto while recapturing a refused write', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    client.onSubscribe = () => {
+      if (client.current.state === 'recovering')
+        client.publish({
+          state: 'failed',
+          role: null,
+          ownerGeneration: null,
+          error: { message: 'locked', code: 'EVOLUMELOCKED' },
+        });
+    };
+    client.onWriteFileBuffer = async () => {
+      client.publish({ state: 'recovering', ownerGeneration: null });
+      throw new VfsCommandError(Object.assign(new Error('lost'), { code: 'VFS_ATTACHMENT_LOST' }), 'refused');
+    };
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).writeFile('/note.txt', new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: {
+        reason: { cause: { _tag: 'VolumeError', kind: 'lifecycle', cause: { reason: 'CredentialsRejected' } } },
+      },
+    });
+    if (result._tag === 'Failure')
+      expect(Volume.errorOf(result.failure)).toMatchObject({ reason: 'CredentialsRejected' });
     expect(client.writes).toHaveLength(1);
   });
 

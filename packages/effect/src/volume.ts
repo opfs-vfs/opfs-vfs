@@ -587,7 +587,7 @@ const createWorkerService = (
       if (failure) return yield* Effect.fail(syncError(failure));
       const status = yield* restore(
         waitForReady(client, fileName, 'sync', { remaining: initTimeout }, terminal, (error) =>
-          error.code === 'VFS_OWNER_READY_TIMEOUT' && coordinator.continuity._tag === 'pending'
+          error.code === 'VFS_OWNER_READY_TIMEOUT' && coordinator.continuity._tag !== 'clean'
             ? volumeError(error, fileName, 'sync', 'lifecycle', 'unknown')
             : syncError(error),
         ),
