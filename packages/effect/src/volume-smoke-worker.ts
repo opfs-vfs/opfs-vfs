@@ -1,13 +1,14 @@
-import { ByteSize, Effect } from 'effect';
+import { ByteSize, Effect, Layer, Stream } from 'effect';
 import { deleteVolume, OpenFlags } from '@opfs-vfs/opfs-vfs';
 import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
-import { Volume } from './index.js';
+import { Subscriptions, Volume } from './index.js';
 import { OpfsFileSystem } from './filesystem.js';
 
 self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
   const fileName = `effect-${crypto.randomUUID()}.bin`;
   let pluginFile: string | undefined;
   let exampleFile: string | undefined;
+  let directSubscriptionFile: string | undefined;
   try {
     const before = await Effect.runPromise(Volume.inspect(fileName));
     const first = await Effect.runPromise(
@@ -207,6 +208,31 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
     if (reused._tag !== 'VolumeError' || reused.kind !== 'configuration' || reused.code !== 'EINVAL') {
       throw new Error('A configured direct plugin was reused without rejection');
     }
+    directSubscriptionFile = `effect-direct-subscriptions-${crypto.randomUUID()}.bin`;
+    const directSubscription = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({
+            fileName: directSubscriptionFile!,
+            plugins: () => [subscriptions()],
+          });
+          const live = Layer.provide(Subscriptions.layer, Layer.succeed(Volume.Volume, volume));
+          return yield* Effect.gen(function* () {
+            const service = yield* Subscriptions.Subscriptions;
+            const subscription = yield* service.subscribe({ path: '/', scope: 'directory' });
+            const backend = Volume.unsafeBackend(volume);
+            const fd = backend.openSync('/subscribed.txt', OpenFlags.O_CREAT | OpenFlags.O_RDWR);
+            backend.writeSync(fd, new TextEncoder().encode('direct change'));
+            backend.closeSync(fd);
+            const change = yield* Stream.runHead(subscription.changes);
+            return {
+              change: change._tag === 'Some' ? { type: change.value.type, path: change.value.path } : null,
+              retired: yield* subscription.retired,
+            };
+          }).pipe(Effect.provide(live));
+        }),
+      ),
+    );
     const example = data.example ? await import(/* @vite-ignore */ data.example) : undefined;
     const exampleResult = example
       ? 'save' in example
@@ -219,11 +245,20 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
       : undefined;
     await deleteVolume(fileName);
     await deleteVolume(pluginFile);
+    await deleteVolume(directSubscriptionFile);
     if (exampleFile) await deleteVolume(exampleFile);
-    self.postMessage({ ok: true, before, after, first, reopened, example: { state: 'clean', result: exampleResult } });
+    self.postMessage({
+      ok: true,
+      before,
+      after,
+      first: { ...first, directSubscription },
+      reopened,
+      example: { state: 'clean', result: exampleResult },
+    });
   } catch (error) {
     await deleteVolume(fileName).catch(() => {});
     if (pluginFile) await deleteVolume(pluginFile).catch(() => {});
+    if (directSubscriptionFile) await deleteVolume(directSubscriptionFile).catch(() => {});
     if (exampleFile) await deleteVolume(exampleFile).catch(() => {});
     self.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }

@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Volume } from './index.js';
 import { OpfsFileSystem } from './filesystem.js';
 import type { VfsDirEntry, VfsStat } from '@opfs-vfs/opfs-vfs';
+import type { ConfiguredVfsPlugin } from '@opfs-vfs/opfs-vfs/plugins';
 import type { DirectMountOptions, VolumeService } from './volume.js';
+import { getCoordinator } from './coordinator.js';
 import {
   EncryptionError,
   RemoteErrorDetails,
@@ -229,6 +231,23 @@ describe('Volume direct acquisition', () => {
     expectTypeOf(Volume.layerDirect(layerInput)).toEqualTypeOf<
       Layer.Layer<Volume.Volume, MountError | LayerConfigError, LayerConfigContext>
     >();
+  });
+
+  it('detects direct logical-change capability from the validated contribution, independent of plugin identity', async () => {
+    const plugin: ConfiguredVfsPlugin = {
+      id: 'custom-observer',
+      contractVersion: 1,
+      compatibilityKey: 'custom-observer-v1',
+      logicalChanges: { version: 1, create: () => ({}) as never },
+    };
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'direct-subscriptions.bin', plugins: () => [plugin] });
+          expect(getCoordinator(volume)?.subscriptionsAvailable).toBe(true);
+        }),
+      ),
+    );
   });
 
   it('rejects invalid names through inspect', async () => {

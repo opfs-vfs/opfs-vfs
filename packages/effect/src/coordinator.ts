@@ -11,6 +11,12 @@ export type Continuity =
   | { readonly _tag: 'pending'; readonly generation: string }
   | { readonly _tag: 'lost'; readonly generation: string };
 
+export interface SubscriptionSetupRecord {
+  readonly generation: string;
+  readonly closed: Promise<{ readonly status: 'released' } | { readonly status: 'unknown'; readonly error: unknown }>;
+  state: 'active' | 'retiring';
+}
+
 export interface Coordinator {
   readonly backend: Backend;
   readonly scope?: Scope.Scope;
@@ -19,23 +25,31 @@ export interface Coordinator {
   readonly currentGeneration: () => string | undefined;
   readonly canRecapture: () => boolean;
   readonly readinessTimeout: number;
+  readonly subscriptionsAvailable: boolean;
   readonly terminal: () => VolumeError | undefined;
   readonly awaitReady: (budget: { remaining: number }, operation: string) => Effect.Effect<string, VolumeError>;
   readonly gate: Semaphore.Semaphore;
   readonly terminalSignal: Deferred.Deferred<VolumeError>;
   readonly files: Set<() => Effect.Effect<void>>;
+  readonly subscriptionSetups: Map<SubscriptionSetupRecord['closed'], SubscriptionSetupRecord>;
+  readonly subscriptionUnknown: Map<string, unknown>;
   continuity: Continuity;
 }
 
 const coordinators = new WeakMap<VolumeService, Coordinator>();
 
 export const makeCoordinator = (
-  options: Omit<Coordinator, 'gate' | 'terminalSignal' | 'continuity' | 'files'>,
+  options: Omit<
+    Coordinator,
+    'gate' | 'terminalSignal' | 'continuity' | 'files' | 'subscriptionSetups' | 'subscriptionUnknown'
+  >,
 ): Coordinator => ({
   ...options,
   gate: Semaphore.makeUnsafe(1),
   terminalSignal: Deferred.makeUnsafe<VolumeError>(),
   files: new Set(),
+  subscriptionSetups: new Map(),
+  subscriptionUnknown: new Map(),
   continuity: { _tag: 'clean' },
 });
 

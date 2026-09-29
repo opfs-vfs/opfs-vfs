@@ -7,6 +7,7 @@ import type { VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
 import { Volume } from './index.js';
 import { OpfsFileSystem } from './filesystem.js';
 import type { WorkerMountOptions } from './volume.js';
+import { getCoordinator } from './coordinator.js';
 import { EncryptionError, VolumeError } from './errors.js';
 
 const workerMocks = vi.hoisted(() => ({ open: vi.fn() }));
@@ -2353,6 +2354,28 @@ describe('Volume worker acquisition and sessions', () => {
     expect(workerMocks.open.mock.calls[0]?.[1].sharedWorker).toBeUndefined();
     expect(typeof workerMocks.open.mock.calls[0]?.[1].worker).toBe('function');
     expect(client.closeCalls).toBe(1);
+  });
+
+  it('enables subscription capability only for the exact worker profile request', async () => {
+    for (const [compatibilityKey, expected] of [
+      ['subscriptions-v1', true],
+      ['other-v1', false],
+    ] as const) {
+      const client = new FakeWorkerClient();
+      workerMocks.open.mockResolvedValueOnce(clientAsCore(client));
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const volume = yield* Volume.make(
+              mount({
+                plugins: [{ id: 'subscriptions', contractVersion: 1, compatibilityKey, options: {} }],
+              }),
+            );
+            expect(getCoordinator(volume)?.subscriptionsAvailable).toBe(expected);
+          }),
+        ),
+      );
+    }
   });
 
   it.each(['worker', 'sharedWorker'] as const)(
