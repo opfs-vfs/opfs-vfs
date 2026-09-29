@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { VolumeError, VolumeProvider, useVolume, useVolumeClient } from '../index';
 import { closeManaged, cleanup, countingWorker, mount, volumeName, waitFor, worker } from './harness';
 
+const descriptorMethods = ['open', 'read', 'write', 'seek', 'close', 'fstat', 'fsync', 'ftruncate'] as const;
+
 function Commands({ values }: { values: unknown[] }) {
   values.push(useVolumeClient());
   return null;
@@ -70,7 +72,7 @@ function SaveAction({
 }
 
 describe('generation command handles', () => {
-  it('is null while pending and exposes only frozen generation methods while ready', async () => {
+  it('is null while pending and exposes only frozen path methods while ready', async () => {
     const fileName = volumeName();
     const values: unknown[] = [];
     const results: any[] = [];
@@ -85,10 +87,13 @@ describe('generation command handles', () => {
     try {
       expect(values.at(-1)).toBeNull();
       await waitFor(() => values.at(-1) !== null);
-      const handle = values.at(-1)!;
+      const handle = values.at(-1) as NonNullable<ReturnType<typeof useVolumeClient>>;
       expect(Object.isFrozen(handle)).toBe(true);
-      expect(Object.keys(handle).sort()).toEqual([...GENERATION_METHODS].sort());
+      expect(Object.keys(handle)).toHaveLength(GENERATION_METHODS.length - descriptorMethods.length);
+      for (const method of descriptorMethods) expect(handle).not.toHaveProperty(method);
       expect(handle).not.toHaveProperty('closeVfs');
+      await handle.writeFileBuffer('/path', new Uint8Array([1]));
+      expect(await handle.readFileBuffer('/path')).toEqual(new Uint8Array([1]));
       await app.render(
         <VolumeProvider fileName={fileName} worker={worker}>
           {() => <Commands values={values} />}
