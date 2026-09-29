@@ -33,6 +33,15 @@ const commandOutcome = (error: unknown, mutate: boolean) =>
       ? 'possibly-applied'
       : 'unknown';
 
+const commandMountError = (error: unknown, fileName: string | null, method: string) =>
+  mountError(
+    error instanceof VfsCommandError ? error.cause : error,
+    fileName,
+    method,
+    undefined,
+    commandOutcome(error, false),
+  );
+
 const terminalCommandError = (
   terminal: VolumeError,
   fileName: string,
@@ -406,7 +415,7 @@ const openHandle = (state: Coordinator, path: string, flag: FileSystem.OpenFlag,
       handle.release = () =>
         Effect.tryPromise({
           try: () => closeHandle(handle),
-          catch: (error) => mountError(error, state.fileName, 'close'),
+          catch: (error) => commandMountError(error, state.fileName, 'close'),
         }).pipe(Effect.orDie);
       state.files.add(handle.release);
       yield* Scope.addFinalizer(child, handle.release());
@@ -737,11 +746,11 @@ const readFileDescriptor = (state: Coordinator, backend: Backend, generation: st
           ('forGeneration' in backend
             ? Effect.tryPromise({
                 try: () => backend.forGeneration(generation).close(value),
-                catch: (error) => mountError(error, state.fileName, 'readFile'),
+                catch: (error) => commandMountError(error, state.fileName, 'readFile'),
               })
             : Effect.try({
                 try: () => backend.closeSync(value),
-                catch: (error) => mountError(error, state.fileName, 'readFile'),
+                catch: (error) => commandMountError(error, state.fileName, 'readFile'),
               })
           ).pipe(Effect.orDie),
       );

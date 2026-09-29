@@ -966,7 +966,10 @@ describe('Volume worker acquisition and sessions', () => {
   it('keeps an original failure and one decoded file-close defect', async () => {
     const client = new FakeWorkerClient();
     workerMocks.open.mockResolvedValue(clientAsCore(client));
-    const closeFailure = new Error('descriptor close failed');
+    const closeFailure = new VfsCommandError(
+      Object.assign(new Error('owner changed'), { code: 'VFS_ATTACHMENT_LOST' }),
+      'refused',
+    );
     const facade = client.forGeneration.bind(client);
     vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
       ...facade(generation),
@@ -991,10 +994,76 @@ describe('Volume worker acquisition and sessions', () => {
         exit.cause.reasons.filter(
           (reason) =>
             reason._tag === 'Die' &&
-            (reason.defect as { details?: { message?: string } }).details?.message === closeFailure.message,
+            (reason.defect as { code?: string; kind?: string; outcome?: string })?.code === 'VFS_ATTACHMENT_LOST' &&
+            (reason.defect as { kind?: string }).kind === 'lifecycle' &&
+            (reason.defect as { outcome?: string }).outcome === 'not-applied',
         ),
       ).toHaveLength(1);
     }
+  });
+
+  it('keeps a replied crypto cause on a public File close finalizer', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      close: async () => {
+        throw new VfsCommandError(Object.assign(new Error('integrity'), { code: 'ECRYPTOINTEGRITY' }), 'replied');
+      },
+    }));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).open('/note');
+        }),
+      ),
+    );
+    if (!Exit.isFailure(exit)) throw new Error('Expected close finalizer failure');
+    const cleanup = exit.cause.reasons.find((reason) => reason._tag === 'Die');
+    expect(cleanup).toMatchObject({
+      _tag: 'Die',
+      defect: { _tag: 'EncryptionError', reason: 'IntegrityFailure', code: 'ECRYPTOINTEGRITY', outcome: 'unknown' },
+    });
+  });
+
+  it('keeps a replied corruption cause on a descriptor read finalizer', async () => {
+    const client = new FakeWorkerClient();
+    client.onReadFileBuffer = async () => {
+      throw Object.assign(new Error('helper limit'), { code: 'EFBIG' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const facade = client.forGeneration.bind(client);
+    vi.spyOn(client, 'forGeneration').mockImplementation((generation) => ({
+      ...facade(generation),
+      close: async () => {
+        throw new VfsCommandError(
+          Object.assign(new Error('corrupt'), { code: 'EIO', category: 'meta-log', name: 'VfsCorruptionError' }),
+          'replied',
+        );
+      },
+    }));
+    const exit = await Effect.runPromiseExit(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).readFile('/note');
+        }),
+      ),
+    );
+    if (!Exit.isFailure(exit)) throw new Error('Expected descriptor finalizer failure');
+    const cleanup = exit.cause.reasons.find((reason) => reason._tag === 'Die');
+    expect(cleanup).toMatchObject({
+      _tag: 'Die',
+      defect: {
+        _tag: 'VolumeError',
+        kind: 'corruption',
+        code: 'EIO',
+        outcome: 'unknown',
+        details: { category: 'meta-log' },
+      },
+    });
   });
 
   it('keeps truncate cursor rules across default, failure, and append operations', async () => {
