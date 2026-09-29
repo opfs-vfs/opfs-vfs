@@ -10,7 +10,7 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
       before?: { exists: boolean };
       after?: { exists: boolean };
       reopened?: { content: string; fileSystemContent: string; persistence: { state: string } };
-      example?: { state: string };
+      example?: { state: string; result?: unknown };
       error?: string;
     }>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('direct volume worker timed out')), 20_000);
@@ -33,6 +33,7 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
       persistence: { state: 'clean' },
     });
     if (packedExample) expect(result.example).toMatchObject({ state: 'clean' });
+    if (packedExample?.endsWith('/filesystem-stream.ts')) expect(result.example?.result).toBe(16n * 1024n * 1024n + 1n);
   } finally {
     worker.terminate();
   }

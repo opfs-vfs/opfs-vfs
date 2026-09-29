@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
+import { ByteSize, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Volume } from './index.js';
 import { OpfsFileSystem } from './filesystem.js';
@@ -26,7 +26,11 @@ const state = vi.hoisted(() => ({
   onRead: () => {},
   onCloseFd: () => {},
   bytes: new Uint8Array(),
+  reportedSize: undefined as number | undefined,
   writes: [] as Array<{ path: string; options: unknown }>,
+  appendFd: false,
+  cleanupOrder: [] as string[],
+  maxWrite: Number.POSITIVE_INFINITY,
 }));
 
 vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
@@ -42,22 +46,31 @@ vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
       getLocalPersistenceStatusSync() {
         return { localPersistenceState: 'clean' as const };
       }
-      openSync() {
+      openSync(_path: string, flags = 0) {
+        state.appendFd = (flags & 1024) !== 0;
         return 1;
       }
-      writeSync(_fd: number, bytes: Uint8Array) {
-        state.bytes = bytes.slice();
-        return bytes.byteLength;
+      writeSync(_fd: number, bytes: Uint8Array, offset?: number) {
+        const part = bytes.subarray(0, Math.min(bytes.length, state.maxWrite));
+        if (state.appendFd) state.bytes = Uint8Array.from([...state.bytes, ...part]);
+        else {
+          const at = offset ?? 0;
+          const next = new Uint8Array(Math.max(state.bytes.length, at + part.length));
+          next.set(state.bytes);
+          next.set(part, at);
+          state.bytes = next;
+        }
+        return part.byteLength;
       }
-      readSync(_fd: number, size: number) {
+      readSync(_fd: number, size: number, offset = 0) {
         state.onRead();
-        const buffer = state.bytes.slice(0, size);
+        const buffer = state.bytes.slice(offset, offset + size);
         return { buffer, read: buffer.byteLength };
       }
       fstatSync() {
         return {
           mode: 0o100666,
-          size: state.bytes.length,
+          size: state.reportedSize ?? state.bytes.length,
           ino: 1,
           nlink: 1,
           blksize: 4096,
@@ -83,7 +96,13 @@ vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
         };
       }
       closeSync() {
+        state.cleanupOrder.push('file');
         state.onCloseFd();
+      }
+      ftruncateSync(_fd: number, size: number) {
+        const resized = new Uint8Array(size);
+        resized.set(state.bytes.subarray(0, size));
+        state.bytes = resized;
       }
       closeVfs() {
         state.closeCalls++;
@@ -102,7 +121,11 @@ describe('Volume direct acquisition', () => {
     state.onRead = () => {};
     state.onCloseFd = () => {};
     state.bytes = new Uint8Array();
+    state.reportedSize = undefined;
     state.writes = [];
+    state.appendFd = false;
+    state.cleanupOrder = [];
+    state.maxWrite = Number.POSITIVE_INFINITY;
   });
 
   it('infers direct mount types for options, effects, and union inputs', () => {
@@ -263,13 +286,8 @@ describe('Volume direct acquisition', () => {
           expect(yield* fs.readFileString('/note.txt')).toBe('second');
           yield* fs.writeFile('/note.txt', new TextEncoder().encode('!'), { flag: 'ax' });
           expect(new TextDecoder().decode(state.bytes)).toBe('second!');
-          const unsupportedAppend = yield* Effect.result(
-            fs.writeFile('/note.txt', new TextEncoder().encode('ignored'), { flag: 'a' }),
-          );
-          expect(unsupportedAppend).toMatchObject({
-            _tag: 'Failure',
-            failure: { reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'unsupported' } } },
-          });
+          yield* fs.writeFile('/note.txt', new TextEncoder().encode('ignored'), { flag: 'a' });
+          expect(new TextDecoder().decode(state.bytes)).toBe('second!ignored');
           const relativeWrite = yield* Effect.result(fs.writeFile('relative.txt', new Uint8Array([0])));
           expect(relativeWrite).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
           yield* volume.sync;
@@ -287,6 +305,7 @@ describe('Volume direct acquisition', () => {
     const read = Object.assign(new Error('read failed'), { code: 'EIO' });
     const close = Object.assign(new Error('close failed'), { code: 'EIO' });
     let closed = false;
+    state.bytes = new Uint8Array([1]);
     state.onRead = () => {
       throw read;
     };
@@ -318,6 +337,138 @@ describe('Volume direct acquisition', () => {
           close.message,
         );
     }
+  });
+
+  it('serializes File cursors, loops writes, and applies truncate cursor rules', async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'file-handle.bin' });
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.writeFileString('/file', 'abcdef');
+          const opened = yield* fs.open('/file', { flag: 'r+' });
+          const first = new Uint8Array(2);
+          expect(yield* opened.read(first)).toBe(2);
+          expect(new TextDecoder().decode(first)).toBe('ab');
+          yield* opened.writeAll(new TextEncoder().encode('Z'));
+          expect(yield* opened.seek(0n, 'current')).toBe(3n);
+          expect((yield* Effect.result(opened.seek(-1n, 'start')))._tag).toBe('Failure');
+          expect((yield* Effect.result(opened.seek(BigInt(Number.MAX_SAFE_INTEGER) + 1n, 'start')))._tag).toBe(
+            'Failure',
+          );
+          yield* opened.truncate(2);
+          expect(yield* opened.seek(0n, 'current')).toBe(2n);
+          expect(yield* opened.stat.pipe(Effect.map((info) => ByteSize.toBigInt(info.size)))).toBe(2n);
+        }),
+      ),
+    );
+  });
+
+  it('fails File.stat when backend metadata is outside the supported range', async () => {
+    state.reportedSize = Number.MAX_SAFE_INTEGER + 1;
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'invalid-stat.bin' });
+          const opened = yield* OpfsFileSystem.make(volume).open('/file', { flag: 'r' });
+          return yield* Effect.result(opened.stat);
+        }),
+      ),
+    );
+    expect(result).toMatchObject({ _tag: 'Failure' });
+  });
+
+  it('keeps append independent of the read cursor and preserves write buffers on short writes', async () => {
+    state.maxWrite = 2;
+    const source = new TextEncoder().encode('XYZ');
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'append-cursor.bin' });
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.writeFileString('/file', 'abc');
+          const opened = yield* fs.open('/file', { flag: 'a+' });
+          const original = new Uint8Array(1);
+          yield* opened.read(original);
+          yield* opened.writeAll(source);
+          expect(yield* opened.seek(0n, 'current')).toBe(1n);
+          expect(source.byteLength).toBe(3);
+          expect(new TextDecoder().decode(state.bytes)).toBe('abcXYZ');
+        }),
+      ),
+    );
+  });
+
+  it('appends concurrent direct handles at the current EOF', async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'concurrent-append.bin' });
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.writeFileString('/file', 'base');
+          const first = yield* fs.open('/file', { flag: 'a' });
+          const second = yield* fs.open('/file', { flag: 'a' });
+          const one = yield* Effect.forkChild(first.writeAll(new TextEncoder().encode('A')));
+          const two = yield* Effect.forkChild(second.writeAll(new TextEncoder().encode('B')));
+          yield* Fiber.join(one);
+          yield* Fiber.join(two);
+          expect(new TextDecoder().decode(state.bytes)).toMatch(/^base(?:AB|BA)$/);
+        }),
+      ),
+    );
+  });
+
+  it('fails writeAll with WriteZero when the backend stops making progress', async () => {
+    state.maxWrite = 0;
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'write-zero.bin' });
+          const opened = yield* OpfsFileSystem.make(volume).open('/file', { flag: 'w' });
+          return yield* Effect.result(opened.writeAll(new Uint8Array([1])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'WriteZero' } } });
+  });
+
+  it('closes handles before their volume when the caller uses a separate scope', async () => {
+    const volumeScope = Scope.makeUnsafe('sequential');
+    const callerScope = Scope.makeUnsafe('sequential');
+    state.close = () => {
+      state.cleanupOrder.push('volume');
+      return Promise.resolve();
+    };
+    let opened!: import('effect').FileSystem.File;
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const volume = yield* Effect.provideService(
+          Volume.makeDirect({ fileName: 'separate-file-scope.bin' }),
+          Scope.Scope,
+          volumeScope,
+        );
+        opened = yield* Effect.provideService(
+          OpfsFileSystem.make(volume).open('/file', { flag: 'r' }),
+          Scope.Scope,
+          callerScope,
+        );
+        yield* Scope.close(volumeScope, Exit.void);
+        expect(state.cleanupOrder).toEqual(['file', 'volume']);
+        const stale = yield* Effect.result(opened.readAlloc(1));
+        expect(stale).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadResource' } } });
+        for (const operation of [
+          opened.seek(0n, 'start'),
+          opened.read(new Uint8Array(0)),
+          opened.readAlloc(0),
+          opened.write(new Uint8Array(0)),
+          opened.writeAll(new Uint8Array(0)),
+        ]) {
+          const invalid = yield* Effect.result(operation);
+          expect(invalid).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadResource' } } });
+        }
+      }),
+    );
+    await Effect.runPromise(Scope.close(callerScope, Exit.void));
   });
 
   it('rejects relative paths and marks unfinished methods unsupported', async () => {

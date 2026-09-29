@@ -1,4 +1,4 @@
-import { Context, Deferred, Effect, Exit, Layer, Scope, Schema, Semaphore } from 'effect';
+import { Cause, Context, Deferred, Effect, Exit, Layer, Scope, Schema, Semaphore } from 'effect';
 import {
   OpfsVfs,
   peekVolume,
@@ -47,6 +47,26 @@ type Input<E, R> = DirectMountOptions | Effect.Effect<DirectMountOptions, E, R>;
 type WorkerInput<E, R> = WorkerMountOptions | Effect.Effect<WorkerMountOptions, E, R>;
 
 export class Volume extends Context.Service<Volume, VolumeService>()('@opfs-vfs/effect/Volume') {}
+
+const closeFiles = (coordinator: ReturnType<typeof makeCoordinator> | undefined) =>
+  Effect.forEach([...(coordinator?.files ?? [])], (close) => Effect.exit(close()), { concurrency: 1 }).pipe(
+    Effect.flatMap((exits) => {
+      let cause: Cause.Cause<never> | undefined;
+      for (const exit of exits) if (Exit.isFailure(exit)) cause = cause ? Cause.combine(cause, exit.cause) : exit.cause;
+      return cause ? Effect.failCause(cause) : Effect.void;
+    }),
+  );
+
+const combineCleanup = <A>(first: Exit.Exit<A, never>, second: Exit.Exit<void, never>) => {
+  const cause = Exit.isFailure(first)
+    ? Exit.isFailure(second)
+      ? Cause.combine(first.cause, second.cause)
+      : first.cause
+    : Exit.isFailure(second)
+      ? second.cause
+      : undefined;
+  return cause ? Effect.failCause(cause) : Effect.void;
+};
 
 const invalidName = (fileName: string) =>
   typeof fileName !== 'string' || fileName.length <= 4 || !fileName.endsWith('.bin') || /[/\\]/.test(fileName);
@@ -101,7 +121,10 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
         if (coordinator)
           latchTerminal(coordinator, volumeError(new Error('Volume is closed'), null, 'close', 'lifecycle', 'unknown'));
         if (service) closedBackends.add(service);
-        if (backend) release ??= Promise.resolve(backend.closeVfs()).then(() => undefined);
+        if (backend)
+          release ??= Promise.resolve()
+            .then(() => backend!.closeVfs())
+            .then(() => undefined);
         return release ?? Promise.resolve();
       };
       let firstCloseExit: Exit.Exit<unknown, unknown> | undefined;
@@ -160,10 +183,22 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
         }
         yield* Scope.addFinalizer(
           resource,
-          Effect.tryPromise({
-            try: closeBackend,
-            catch: (error) => mountError(error, fileName, 'close', 'lifecycle'),
-          }).pipe(Effect.catch((error) => Effect.die(error))),
+          Effect.gen(function* () {
+            closed = true;
+            if (coordinator)
+              latchTerminal(
+                coordinator,
+                volumeError(new Error('Volume is closed'), null, 'close', 'lifecycle', 'unknown'),
+              );
+            const filesExit = yield* Effect.exit(closeFiles(coordinator));
+            const backendExit = yield* Effect.exit(
+              Effect.tryPromise({
+                try: closeBackend,
+                catch: (error) => mountError(error, fileName, 'close', 'lifecycle'),
+              }).pipe(Effect.orDie),
+            );
+            return yield* combineCleanup(filesExit, backendExit);
+          }),
         );
         yield* ensureOpen(fileName);
         yield* restore(
@@ -175,6 +210,7 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
         yield* ensureOpen(fileName);
         coordinator = makeCoordinator({
           fileName,
+          scope: resource,
           readinessTimeout: Infinity,
           backend: backend!,
           isClosed: () => closed,
@@ -384,6 +420,10 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
       );
       yield* Scope.addFinalizer(
         resource,
+        Effect.suspend(() => closeFiles(coordinator)),
+      );
+      yield* Scope.addFinalizer(
+        resource,
         Effect.sync(() => {
           closed = true;
           abort.abort();
@@ -490,6 +530,7 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
         }
         coordinator = makeCoordinator({
           fileName,
+          scope: resource,
           readinessTimeout: initTimeout,
           backend: client!,
           isClosed: () => closed,

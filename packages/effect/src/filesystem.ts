@@ -1,4 +1,16 @@
-import { Cause, Deferred, Effect, Exit, FileSystem, Layer, PlatformError, Semaphore, Stream } from 'effect';
+import {
+  ByteSize,
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Option,
+  PlatformError,
+  Semaphore,
+  Stream,
+} from 'effect';
 import { OpenFlags, type OpfsVfs, type VfsStat } from '@opfs-vfs/opfs-vfs';
 import { VfsCommandError } from '@opfs-vfs/opfs-vfs/worker';
 import type { OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
@@ -256,8 +268,473 @@ const execute = <A>(
   });
 };
 
+const staleHandle = (state: Coordinator, method: string) =>
+  PlatformError.systemError({
+    _tag: 'BadResource',
+    module: moduleName,
+    method,
+    cause: new VolumeError({
+      kind: 'lifecycle',
+      fileName: state.fileName,
+      operation: method,
+      code: 'VFS_FILE_GENERATION_CHANGED',
+      outcome: 'not-applied',
+      details: null,
+    }),
+  });
+
+const executeHandle = <A>(
+  handle: FileHandle,
+  method: string,
+  run: () => A | Promise<A>,
+  mutate = false,
+  barrier = false,
+  onSuccess?: (value: A) => void,
+): Effect.Effect<A, PlatformError.PlatformError> =>
+  Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const state = handle.state;
+      const terminal = state.terminal();
+      if (terminal) return yield* Effect.fail(platform(terminal, method, handle.path, state.fileName, mutate));
+      if (handle.closed || state.isClosed()) return yield* Effect.fail(staleHandle(state, method));
+      const admitted = yield* restore(
+        state
+          .awaitReady({ remaining: state.readinessTimeout }, method)
+          .pipe(Effect.mapError((error) => platform(error, method, handle.path, state.fileName, mutate))),
+      );
+      if (admitted !== handle.generation || state.currentGeneration() !== handle.generation)
+        return yield* Effect.fail(staleHandle(state, method));
+      return yield* Effect.scoped(
+        Effect.gen(function* () {
+          if (mutate)
+            yield* restore(
+              Effect.interruptible(
+                Effect.asVoid(
+                  Effect.raceFirst(
+                    Effect.acquireRelease(Semaphore.take(state.gate, 1), () => Semaphore.release(state.gate, 1), {
+                      interruptible: true,
+                    }),
+                    Deferred.await(state.terminalSignal).pipe(
+                      Effect.flatMap((error) =>
+                        Effect.fail(platform(error, method, handle.path, state.fileName, mutate)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          const terminalAfter = state.terminal();
+          if (terminalAfter)
+            return yield* Effect.fail(platform(terminalAfter, method, handle.path, state.fileName, mutate));
+          if (handle.closed || state.isClosed() || state.currentGeneration() !== handle.generation)
+            return yield* Effect.fail(staleHandle(state, method));
+          const previous = state.continuity;
+          if (mutate && !barrier) {
+            if (previous._tag === 'lost' || (previous._tag === 'pending' && previous.generation !== handle.generation))
+              state.continuity = { _tag: 'lost', generation: previous.generation };
+            else if (previous._tag === 'clean') state.continuity = { _tag: 'pending', generation: handle.generation };
+          }
+          const result = yield* Effect.tryPromise({ try: () => Promise.resolve(run()), catch: (error) => error }).pipe(
+            Effect.catchCause((cause) => {
+              const refusal =
+                cause.reasons.length === 1 && cause.reasons[0]._tag === 'Fail' ? cause.reasons[0].error : undefined;
+              if (mutate && !barrier && refusal instanceof VfsCommandError && refusal.dispatch === 'refused')
+                state.continuity = previous;
+              return Effect.failCause(
+                Cause.map(cause, (error) => platform(error, method, handle.path, state.fileName, mutate)),
+              );
+            }),
+          );
+          onSuccess?.(result);
+          if (barrier && state.continuity._tag === 'pending' && state.continuity.generation === handle.generation)
+            state.continuity = { _tag: 'clean' };
+          return result;
+        }),
+      );
+    }),
+  );
+
 const stat = (backend: Backend, generation: string, path: string): Stat | Promise<Stat> =>
   'forGeneration' in backend ? backend.forGeneration(generation).stat(path) : backend.statSync(path);
+
+const closeHandle = (handle: FileHandle): Promise<void> => {
+  handle.closed = true;
+  handle.closing ??= (async () => {
+    if (handle.openingDone) await handle.openingDone;
+    if (handle.fd === undefined) return;
+    const backend = handle.state.backend;
+    if ('forGeneration' in backend) await backend.forGeneration(handle.generation).close(handle.fd);
+    else backend.closeSync(handle.fd);
+  })().finally(() => {
+    if (handle.release) handle.state.files.delete(handle.release);
+  });
+  return handle.closing.catch((error) => {
+    if (handle.closeFailureReported) return;
+    handle.closeFailureReported = true;
+    throw error;
+  });
+};
+
+const handleEffect = <A>(
+  handle: FileHandle,
+  method: string,
+  run: (backend: Backend) => A | Promise<A>,
+  mutate = false,
+  barrier = false,
+) => takeCursor(handle, method, () => executeHandle(handle, method, () => run(handle.state.backend), mutate, barrier));
+
+const openHandle = (state: Coordinator, path: string, flag: FileSystem.OpenFlag, mode?: number) => {
+  const flags = openFlags[flag];
+  const mutates = (flags & (OpenFlags.O_CREAT | OpenFlags.O_TRUNC)) !== 0;
+  return Effect.acquireRelease(
+    Effect.gen(function* () {
+      const pathFailure = invalidPath('open', path);
+      if (pathFailure) return yield* Effect.fail(pathFailure);
+      let finishOpen!: () => void;
+      const openingDone = new Promise<void>((resolve) => {
+        finishOpen = resolve;
+      });
+      const handle: FileHandle = {
+        state,
+        fd: undefined,
+        generation: '',
+        path,
+        append: (flags & OpenFlags.O_APPEND) !== 0,
+        cursor: 0,
+        cursorGate: Semaphore.makeUnsafe(1),
+        closed: false,
+        openingDone,
+      };
+      handle.release = () =>
+        Effect.tryPromise({
+          try: () => closeHandle(handle),
+          catch: (error) => mountError(error, state.fileName, 'close'),
+        }).pipe(Effect.orDie);
+      state.files.add(handle.release);
+      let generation = '';
+      const opened = yield* Effect.exit(
+        execute(
+          state,
+          'open',
+          path,
+          (backend, current) => {
+            generation = current;
+            return 'forGeneration' in backend
+              ? backend.forGeneration(current).open(path, flags, mode)
+              : backend.openSync(path, flags, mode);
+          },
+          mutates,
+        ),
+      );
+      if (Exit.isSuccess(opened)) {
+        handle.fd = opened.value;
+        handle.generation = generation;
+      }
+      finishOpen();
+      if (Exit.isFailure(opened)) {
+        if (handle.release) state.files.delete(handle.release);
+        return yield* Effect.failCause(opened.cause);
+      }
+      if (handle.closed || state.isClosed()) {
+        yield* Effect.tryPromise({
+          try: () => closeHandle(handle),
+          catch: (error) => platform(error, 'close', path, state.fileName),
+        });
+        return yield* Effect.fail(
+          PlatformError.systemError({ _tag: 'BadResource', module: moduleName, method: 'open' }),
+        );
+      }
+      return handle;
+    }),
+    (handle) =>
+      Effect.tryPromise({
+        try: () => closeHandle(handle),
+        catch: (error) => platform(error, 'close', path, state.fileName),
+      }).pipe(Effect.orDie),
+  );
+};
+
+const file = (
+  state: Coordinator,
+  path: string,
+  flag: FileSystem.OpenFlag,
+  mode?: number,
+): Effect.Effect<FileSystem.File, PlatformError.PlatformError, import('effect').Scope.Scope> =>
+  Effect.flatMap(openHandle(state, path, flag, mode), (handle) =>
+    handle.closed
+      ? Effect.fail(PlatformError.systemError({ _tag: 'BadResource', module: moduleName, method: 'open' }))
+      : Effect.succeed({
+          [FileSystem.FileTypeId]: FileSystem.FileTypeId,
+          stat: handleEffect(handle, 'fstat', (backend) =>
+            'forGeneration' in handle.state.backend
+              ? handle.state.backend.forGeneration(handle.generation).fstat(handle.fd!).then(fileInfo)
+              : fileInfo(handle.state.backend.fstatSync(handle.fd!)),
+          ),
+          seek: (offset: bigint, from: FileSystem.SeekMode) =>
+            takeCursor(handle, 'seek', () =>
+              Effect.gen(function* () {
+                const current = BigInt(handle.cursor);
+                const nextBig = from === 'start' ? offset : current + offset;
+                const next = checkedNumber(nextBig, 'seek');
+                if (typeof next !== 'number') return yield* Effect.fail(next);
+                if (!Number.isSafeInteger(next) || next < 0)
+                  return yield* Effect.fail(badArgument('seek', 'seek position must be a non-negative safe integer'));
+                handle.cursor = next;
+                return BigInt(next);
+              }),
+            ),
+          sync: handleEffect(
+            handle,
+            'fsync',
+            (backend) =>
+              'forGeneration' in handle.state.backend
+                ? handle.state.backend.forGeneration(handle.generation).fsync(handle.fd!)
+                : handle.state.backend.fsyncSync(handle.fd!),
+            true,
+            true,
+          ),
+          read: (buffer: Uint8Array) => {
+            if (!(buffer instanceof Uint8Array)) return Effect.fail(badArgument('read', 'buffer must be a Uint8Array'));
+            return handleEffect(handle, 'read', async (backend) => {
+              const result =
+                'forGeneration' in handle.state.backend
+                  ? await handle.state.backend
+                      .forGeneration(handle.generation)
+                      .read(handle.fd!, buffer.byteLength, handle.cursor)
+                  : handle.state.backend.readSync(handle.fd!, buffer.byteLength, handle.cursor);
+              if (!Number.isSafeInteger(result.read) || result.read < 0 || result.read > buffer.byteLength)
+                throw Object.assign(new Error('Invalid read length'), { code: 'EIO' });
+              buffer.set(result.buffer.subarray(0, result.read));
+              handle.cursor += result.read;
+              return result.read;
+            });
+          },
+          readAlloc: (size: number) => {
+            if (!Number.isSafeInteger(size) || size < 0)
+              return Effect.fail(badArgument('readAlloc', 'size must be a non-negative safe integer'));
+            if (size === 0) return takeCursor(handle, 'readAlloc', () => Effect.succeed(Option.none()));
+            return fileReadAlloc(handle, size);
+          },
+          truncate: (length = 0) => {
+            if (!Number.isSafeInteger(length) || length < 0)
+              return Effect.fail(badArgument('truncate', 'length must be a non-negative safe integer'));
+            return takeCursor(handle, 'ftruncate', () =>
+              executeHandle(
+                handle,
+                'ftruncate',
+                () => {
+                  const backend = handle.state.backend;
+                  return 'forGeneration' in backend
+                    ? backend.forGeneration(handle.generation).ftruncate(handle.fd!, length)
+                    : backend.ftruncateSync(handle.fd!, length);
+                },
+                true,
+                false,
+                () => {
+                  if (!handle.append) handle.cursor = Math.min(handle.cursor, length);
+                },
+              ),
+            );
+          },
+          write: (buffer: Uint8Array) => {
+            if (!(buffer instanceof Uint8Array))
+              return Effect.fail(badArgument('write', 'buffer must be a Uint8Array'));
+            return Effect.suspend(() => {
+              const bytes = Uint8Array.from(buffer);
+              const size = bytes.byteLength;
+              return takeCursor(handle, 'write', () =>
+                executeHandle(
+                  handle,
+                  'write',
+                  () => {
+                    const backend = handle.state.backend;
+                    return 'forGeneration' in backend
+                      ? backend
+                          .forGeneration(handle.generation)
+                          .write(handle.fd!, bytes, handle.append ? undefined : handle.cursor)
+                      : backend.writeSync(handle.fd!, bytes, handle.append ? undefined : handle.cursor);
+                  },
+                  true,
+                  false,
+                  (written) => {
+                    if (!Number.isSafeInteger(written) || written < 0 || written > size)
+                      throw Object.assign(new Error('Invalid write length'), { code: 'EIO' });
+                    if (!handle.append) handle.cursor += written;
+                  },
+                ),
+              );
+            });
+          },
+          writeAll: (buffer: Uint8Array) => {
+            if (!(buffer instanceof Uint8Array))
+              return Effect.fail(badArgument('writeAll', 'buffer must be a Uint8Array'));
+            return Effect.suspend(() => {
+              const bytes = Uint8Array.from(buffer);
+              return takeCursor(handle, 'writeAll', () => {
+                let written = 0;
+                return Effect.gen(function* () {
+                  while (written < bytes.byteLength) {
+                    const chunk = Uint8Array.from(bytes.subarray(written));
+                    const chunkLength = chunk.byteLength;
+                    const count = yield* executeHandle(
+                      handle,
+                      'write',
+                      () => {
+                        const backend = handle.state.backend;
+                        return 'forGeneration' in backend
+                          ? backend
+                              .forGeneration(handle.generation)
+                              .write(handle.fd!, chunk, handle.append ? undefined : handle.cursor)
+                          : backend.writeSync(handle.fd!, chunk, handle.append ? undefined : handle.cursor);
+                      },
+                      true,
+                      false,
+                      (count) => {
+                        if (!Number.isSafeInteger(count) || count < 0 || count > chunkLength)
+                          throw Object.assign(new Error('Invalid write length'), { code: 'EIO' });
+                        written += count;
+                        if (!handle.append) handle.cursor += count;
+                      },
+                    );
+                    if (count === 0)
+                      return yield* Effect.fail(
+                        PlatformError.systemError({
+                          _tag: 'WriteZero',
+                          module: moduleName,
+                          method: 'writeAll',
+                          pathOrDescriptor: path,
+                        }),
+                      );
+                  }
+                }).pipe(
+                  Effect.catchCause((cause) =>
+                    written > 0
+                      ? Effect.failCause(Cause.map(cause, (error) => partialWriteFailure(state, path, error)))
+                      : Effect.failCause(cause),
+                  ),
+                );
+              });
+            });
+          },
+        } as unknown as FileSystem.File),
+  );
+
+const fileReadAlloc = (handle: FileHandle, size: number) =>
+  handleEffect(handle, 'readAlloc', async (backend) => {
+    const result =
+      'forGeneration' in handle.state.backend
+        ? await handle.state.backend.forGeneration(handle.generation).read(handle.fd!, size, handle.cursor)
+        : handle.state.backend.readSync(handle.fd!, size, handle.cursor);
+    if (!Number.isSafeInteger(result.read) || result.read < 0 || result.read > size)
+      throw Object.assign(new Error('Invalid read length'), { code: 'EIO' });
+    if (result.read === 0) return Option.none<Uint8Array>();
+    handle.cursor += result.read;
+    return Option.some(Uint8Array.from(result.buffer.subarray(0, result.read)));
+  });
+
+const partialWriteFailure = (state: Coordinator, path: string, error: unknown) => {
+  const details = remoteDetails(error);
+  const reason = typeof error === 'object' && error !== null && 'reason' in error ? error.reason : undefined;
+  const tag =
+    typeof reason === 'object' && reason !== null && '_tag' in reason
+      ? (reason._tag as ReturnType<typeof sysTag>)
+      : sysTag(
+          details,
+          new VolumeError({
+            kind: 'filesystem',
+            fileName: state.fileName,
+            operation: 'writeAll',
+            outcome: 'possibly-applied',
+            details,
+          }),
+        );
+  const cause = new VolumeError({
+    kind: 'filesystem',
+    fileName: state.fileName,
+    operation: 'writeAll',
+    outcome: 'possibly-applied',
+    details,
+    cause: error,
+  });
+  return PlatformError.systemError({
+    _tag: tag,
+    module: moduleName,
+    method: 'writeAll',
+    pathOrDescriptor: path,
+    ...(details.message ? { description: details.message } : {}),
+    cause,
+  });
+};
+
+const readFileDescriptor = (state: Coordinator, backend: Backend, generation: string, path: string) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fd = yield* Effect.acquireRelease(
+        Effect.tryPromise({
+          try: async () =>
+            'forGeneration' in backend
+              ? await backend.forGeneration(generation).open(path, OpenFlags.O_RDONLY)
+              : backend.openSync(path, OpenFlags.O_RDONLY),
+          catch: (error) => error,
+        }),
+        (value) =>
+          ('forGeneration' in backend
+            ? Effect.tryPromise({
+                try: () => backend.forGeneration(generation).close(value),
+                catch: (error) => mountError(error, state.fileName, 'readFile'),
+              })
+            : Effect.try({
+                try: () => backend.closeSync(value),
+                catch: (error) => mountError(error, state.fileName, 'readFile'),
+              })
+          ).pipe(Effect.orDie),
+      );
+      const info = yield* Effect.tryPromise({
+        try: async () =>
+          'forGeneration' in backend ? await backend.forGeneration(generation).fstat(fd) : backend.fstatSync(fd),
+        catch: (error) => error,
+      });
+      if (!Number.isSafeInteger(info.size) || info.size < 0)
+        return yield* Effect.fail(
+          mountError(
+            Object.assign(new Error('File size is outside the supported range'), { code: 'EFBIG' }),
+            state.fileName,
+            'readFile',
+          ),
+        );
+      const bytes = yield* Effect.try({
+        try: () => new Uint8Array(info.size),
+        catch: (error) => error,
+      });
+      let offset = 0;
+      while (offset < bytes.byteLength) {
+        const size = Math.min(64 * 1024, bytes.byteLength - offset);
+        const result = yield* Effect.tryPromise({
+          try: async () =>
+            'forGeneration' in backend
+              ? await backend.forGeneration(generation).read(fd, size, offset)
+              : backend.readSync(fd, size, offset),
+          catch: (error) => error,
+        });
+        if (
+          !Number.isSafeInteger(result.read) ||
+          result.read <= 0 ||
+          result.read > size ||
+          result.buffer.byteLength < result.read
+        )
+          return yield* Effect.fail(
+            mountError(
+              Object.assign(new Error('Incomplete whole-file read'), { code: 'EIO' }),
+              state.fileName,
+              'readFile',
+            ),
+          );
+        bytes.set(result.buffer.subarray(0, result.read), offset);
+        offset += result.read;
+      }
+      return bytes;
+    }),
+  );
 
 const unsupportedMethod =
   (method: string, fileName: string) =>
@@ -266,6 +743,90 @@ const unsupportedMethod =
     const pathFailure = path === undefined ? undefined : invalidPath(method, path);
     return Effect.fail(pathFailure ?? unsupported(method, path, fileName));
   };
+
+const openFlags: Record<FileSystem.OpenFlag, number> = {
+  r: OpenFlags.O_RDONLY,
+  'r+': OpenFlags.O_RDWR,
+  w: OpenFlags.O_WRONLY | OpenFlags.O_CREAT | OpenFlags.O_TRUNC,
+  wx: OpenFlags.O_WRONLY | OpenFlags.O_CREAT | OpenFlags.O_TRUNC | OpenFlags.O_EXCL,
+  'w+': OpenFlags.O_RDWR | OpenFlags.O_CREAT | OpenFlags.O_TRUNC,
+  'wx+': OpenFlags.O_RDWR | OpenFlags.O_CREAT | OpenFlags.O_TRUNC | OpenFlags.O_EXCL,
+  a: OpenFlags.O_WRONLY | OpenFlags.O_CREAT | OpenFlags.O_APPEND,
+  ax: OpenFlags.O_WRONLY | OpenFlags.O_CREAT | OpenFlags.O_APPEND | OpenFlags.O_EXCL,
+  'a+': OpenFlags.O_RDWR | OpenFlags.O_CREAT | OpenFlags.O_APPEND,
+  'ax+': OpenFlags.O_RDWR | OpenFlags.O_CREAT | OpenFlags.O_APPEND | OpenFlags.O_EXCL,
+};
+
+interface FileHandle {
+  readonly state: Coordinator;
+  fd?: number;
+  generation: string;
+  readonly path: string;
+  readonly append: boolean;
+  cursor: number;
+  readonly cursorGate: Semaphore.Semaphore;
+  closed: boolean;
+  closing?: Promise<void>;
+  closeFailureReported?: boolean;
+  openingDone?: Promise<void>;
+  release?: () => Effect.Effect<void>;
+}
+
+const badArgument = (method: string, description: string) =>
+  PlatformError.badArgument({ module: moduleName, method, description });
+
+const fileInfo = (value: VfsStat): FileSystem.File.Info => {
+  if (!Number.isSafeInteger(value.mode) || !Number.isSafeInteger(value.size) || value.size < 0)
+    throw badArgument('stat', 'file metadata is outside the supported range');
+  const optionalNumber = (number: number | undefined) =>
+    number !== undefined && Number.isSafeInteger(number) && number >= 0 ? Option.some(number) : Option.none();
+  const date = (number: number | undefined) => {
+    const value = number === undefined ? undefined : new Date(number);
+    return value && Number.isFinite(value.getTime()) ? Option.some(value) : Option.none();
+  };
+  const kind = value.mode & 0o170000;
+  return {
+    type: value.is_file ? 'File' : value.is_dir ? 'Directory' : kind === 0o120000 ? 'SymbolicLink' : 'Unknown',
+    mtime: date(value.mtimeMs ?? value.timestampMs),
+    atime: date(value.atimeMs ?? value.timestampMs),
+    birthtime: Option.none(),
+    dev: 0,
+    ino: optionalNumber(value.ino),
+    mode: value.mode,
+    nlink: optionalNumber(value.nlink),
+    uid: Option.none(),
+    gid: Option.none(),
+    rdev: Option.none(),
+    size: ByteSize.bytes(BigInt(value.size)),
+    blksize: optionalNumber(value.blksize).pipe(Option.map(ByteSize.bytes)),
+    blocks: optionalNumber(value.blocks),
+  };
+};
+
+const checkedNumber = (value: bigint, method: string): number | PlatformError.PlatformError => {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0
+    ? number
+    : badArgument(method, 'offset is outside the supported range');
+};
+
+const stateIsClosed = (handle: FileHandle) => handle.state.isClosed();
+
+const takeCursor = <A>(handle: FileHandle, method: string, run: () => Effect.Effect<A, PlatformError.PlatformError>) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      yield* Effect.acquireRelease(
+        Semaphore.take(handle.cursorGate, 1),
+        () => Semaphore.release(handle.cursorGate, 1),
+        { interruptible: true },
+      );
+      const terminal = handle.state.terminal();
+      if (terminal) return yield* Effect.fail(platform(terminal, method, handle.path, handle.state.fileName));
+      if (handle.closed || stateIsClosed(handle))
+        return yield* Effect.fail(PlatformError.systemError({ _tag: 'BadResource', module: moduleName, method }));
+      return yield* run();
+    }),
+  );
 
 const make = (volume: VolumeService): FileSystem.FileSystem => {
   const state = getCoordinator(volume);
@@ -281,40 +842,18 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
       }),
     readFile: (path) =>
       execute(state, 'readFile', path, (backend, generation) => {
-        if ('forGeneration' in backend)
-          return backend.forGeneration(generation).readFileBuffer(path, maxWholeFileBytes);
-        return Effect.scoped(
-          Effect.gen(function* () {
-            const fd = yield* Effect.acquireRelease(
-              Effect.try({
-                try: () => backend.openSync(path, OpenFlags.O_RDONLY),
-                catch: (error) => mountError(error, state.fileName, 'readFile'),
-              }),
-              (value) =>
-                Effect.try({
-                  try: () => backend.closeSync(value),
-                  catch: (error) => mountError(error, state.fileName, 'readFile'),
-                }).pipe(Effect.orDie),
-            );
-            const { size } = yield* Effect.try({
-              try: () => backend.fstatSync(fd),
-              catch: (error) => mountError(error, state.fileName, 'readFile'),
-            });
-            if (!Number.isSafeInteger(size) || size < 0 || size > maxWholeFileBytes)
-              return yield* Effect.fail(
-                mountError(
-                  Object.assign(new Error('File exceeds the 16 MiB whole-file limit'), { code: 'EFBIG' }),
-                  state.fileName,
-                  'readFile',
-                ),
-              );
-            const result = yield* Effect.try({
-              try: () => backend.readSync(fd, size, 0),
-              catch: (error) => mountError(error, state.fileName, 'readFile'),
-            });
-            return result.buffer.slice(0, result.read);
-          }),
-        ) as Effect.Effect<Uint8Array, unknown>;
+        const fallback = () => readFileDescriptor(state, backend, generation, path);
+        if (!('forGeneration' in backend)) return fallback();
+        return Effect.tryPromise({
+          try: () => backend.forGeneration(generation).readFileBuffer(path, maxWholeFileBytes),
+          catch: (error) => error,
+        }).pipe(
+          Effect.catch((error) =>
+            remoteDetails(error instanceof VfsCommandError ? error.cause : error).code === 'EFBIG'
+              ? fallback()
+              : Effect.fail(error),
+          ),
+        );
       }),
     writeFile: (path, bytes, options) => {
       const pathFailure = invalidPath('writeFile', path);
@@ -328,8 +867,15 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
           }),
         );
       const flag = options?.flag ?? 'w';
-      if (options?.mode !== undefined || bytes.byteLength > maxWholeFileBytes || !['w', 'wx', 'ax'].includes(flag))
-        return Effect.fail(unsupported('writeFile', path, state.fileName));
+      if (!(flag in openFlags)) return Effect.fail(badArgument('writeFile', 'unsupported file flag'));
+      if (options?.mode !== undefined || bytes.byteLength > maxWholeFileBytes || !['w', 'wx', 'ax'].includes(flag)) {
+        return Effect.scoped(
+          Effect.gen(function* () {
+            const opened = yield* file(state, path, flag, options?.mode);
+            yield* opened.writeAll(bytes);
+          }),
+        );
+      }
       return execute(
         state,
         'writeFile',
@@ -354,7 +900,7 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
     makeTempDirectoryScoped: unsupportedMethod('makeTempDirectoryScoped', state.fileName),
     makeTempFile: unsupportedMethod('makeTempFile', state.fileName),
     makeTempFileScoped: unsupportedMethod('makeTempFileScoped', state.fileName),
-    open: unsupportedMethod('open', state.fileName),
+    open: (path, options) => file(state, path, options?.flag ?? 'r', options?.mode),
     readDirectory: unsupportedMethod('readDirectory', state.fileName),
     readLink: unsupportedMethod('readLink', state.fileName),
     realPath: unsupportedMethod('realPath', state.fileName),

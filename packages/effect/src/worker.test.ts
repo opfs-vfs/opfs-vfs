@@ -36,8 +36,17 @@ class FakeWorkerClient {
   onSync: (() => Promise<void>) | undefined;
   onWriteFileBuffer: ((generation: string, path: string, bytes: Uint8Array) => Promise<void>) | undefined;
   onReadFileBuffer: ((generation: string, path: string) => Promise<Uint8Array>) | undefined;
+  onDescriptorWrite: (() => Promise<void>) | undefined;
+  onDescriptorRead: (() => Promise<void>) | undefined;
+  onDescriptorOpen: (() => Promise<void>) | undefined;
+  afterDescriptorWrite: (() => void) | undefined;
+  maxWrite = Number.POSITIVE_INFINITY;
   writes: Array<{ generation: string; path: string }> = [];
   reads: Array<{ generation: string; path: string; limit: number }> = [];
+  descriptorCalls: Array<{ generation: string; method: string }> = [];
+  bytes = new Uint8Array();
+  nextFd = 1;
+  openFlags = new Map<number, number>();
   syncCalls = 0;
   readonly ready: Promise<void>;
   resolveReady!: () => void;
@@ -72,7 +81,74 @@ class FakeWorkerClient {
 
   forGeneration(generation: string) {
     this.generations.push(generation);
+    const ensureOwner = () => {
+      if (this.current.ownerGeneration !== generation)
+        throw new VfsCommandError(
+          Object.assign(new Error('Owner changed'), { code: 'VFS_ATTACHMENT_LOST' }),
+          'refused',
+        );
+    };
     return {
+      open: async (_path: string, flags = 0) => {
+        ensureOwner();
+        this.descriptorCalls.push({ generation, method: 'open' });
+        await this.onDescriptorOpen?.();
+        const fd = this.nextFd++;
+        this.openFlags.set(fd, flags);
+        return fd;
+      },
+      close: async (fd: number) => {
+        this.descriptorCalls.push({ generation, method: 'close' });
+        this.openFlags.delete(fd);
+      },
+      fstat: async (_fd: number) => {
+        this.descriptorCalls.push({ generation, method: 'fstat' });
+        return {
+          mode: 0o100666,
+          size: this.bytes.length,
+          ino: 1,
+          nlink: 1,
+          blksize: 4096,
+          blocks: 1,
+          is_file: true,
+          is_dir: false,
+        };
+      },
+      read: async (_fd: number, size: number, offset = 0) => {
+        ensureOwner();
+        await this.onDescriptorRead?.();
+        this.descriptorCalls.push({ generation, method: 'read' });
+        const buffer = this.bytes.slice(offset, offset + size);
+        return { buffer, read: buffer.length };
+      },
+      write: async (fd: number, data: Uint8Array, offset?: number) => {
+        ensureOwner();
+        await this.onDescriptorWrite?.();
+        this.descriptorCalls.push({ generation, method: 'write' });
+        const part = data.subarray(0, Math.min(data.byteLength, this.maxWrite));
+        if ((this.openFlags.get(fd) ?? 0) & 1024) this.bytes = Uint8Array.from([...this.bytes, ...part]);
+        else {
+          const at = offset ?? 0;
+          const result = new Uint8Array(Math.max(this.bytes.length, at + part.length));
+          result.set(this.bytes);
+          result.set(part, at);
+          this.bytes = result;
+        }
+        this.afterDescriptorWrite?.();
+        return part.length;
+      },
+      ftruncate: async (_fd: number, size: number) => {
+        ensureOwner();
+        this.descriptorCalls.push({ generation, method: 'ftruncate' });
+        const result = new Uint8Array(size);
+        result.set(this.bytes.subarray(0, size));
+        this.bytes = result;
+      },
+      fsync: async (_fd: number) => {
+        ensureOwner();
+        this.descriptorCalls.push({ generation, method: 'fsync' });
+        this.syncCalls++;
+      },
       sync: () => {
         this.syncCalls++;
         return this.onSync?.() ?? Promise.resolve();
@@ -107,6 +183,241 @@ const waitUntil = async (predicate: () => boolean) => {
 describe('Volume worker acquisition and sessions', () => {
   beforeEach(() => {
     workerMocks.open.mockReset();
+  });
+
+  it('routes large whole-file writes through copied, generation-pinned descriptors', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const source = new Uint8Array(16 * 1024 * 1024 + 1);
+    source.fill(37);
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).writeFile('/large', source);
+        }),
+      ),
+    );
+    expect(source.byteLength).toBe(16 * 1024 * 1024 + 1);
+    expect(client.bytes).toEqual(source);
+    expect(client.writes).toEqual([]);
+    expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'open'],
+      ['generation-1', 'write'],
+      ['generation-1', 'close'],
+    ]);
+  });
+
+  it('keeps an open File pinned to its owner and closes it through that owner after takeover', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'r+' });
+          client.publish({ ownerGeneration: 'generation-2' });
+          const failed = yield* Effect.result(opened.write(new Uint8Array([1])));
+          return failed;
+        }),
+      ),
+    );
+    expect(result._tag).toBe('Failure');
+    expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'open'],
+      ['generation-1', 'close'],
+    ]);
+  });
+
+  it('joins a pending OPEN cleanup before releasing its volume', async () => {
+    const client = new FakeWorkerClient();
+    let started = false;
+    let resolveOpen!: () => void;
+    const openGate = new Promise<void>((resolve) => {
+      resolveOpen = resolve;
+    });
+    client.onDescriptorOpen = async () => {
+      started = true;
+      await openGate;
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const volumeScope = Scope.makeUnsafe('sequential');
+    const callerScope = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const volume = yield* Effect.provideService(Volume.make(mount()), Scope.Scope, volumeScope);
+        const opening = yield* Effect.forkChild(
+          Effect.provideService(OpfsFileSystem.make(volume).open('/pending', { flag: 'r+' }), Scope.Scope, callerScope),
+        );
+        yield* Effect.sleep(0);
+        expect(started).toBe(true);
+        const closing = yield* Effect.forkChild(Scope.close(volumeScope, Exit.void));
+        yield* Effect.sleep(0);
+        expect(client.closeCalls).toBe(0);
+        resolveOpen();
+        const opened = yield* Fiber.await(opening);
+        expect(opened).toMatchObject({
+          _tag: 'Failure',
+          cause: { reasons: [{ error: { reason: { _tag: 'BadResource' } } }] },
+        });
+        yield* Fiber.join(closing);
+        expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+          ['generation-1', 'open'],
+          ['generation-1', 'close'],
+        ]);
+      }),
+    );
+    await Effect.runPromise(Scope.close(callerScope, Exit.void));
+    expect(client.closeCalls).toBe(1);
+  });
+
+  it('falls back from EFBIG whole-file helper reads to descriptors on the same generation', async () => {
+    const client = new FakeWorkerClient();
+    client.bytes = new TextEncoder().encode('descriptor fallback');
+    client.onReadFileBuffer = async () => {
+      throw Object.assign(new Error('helper limit'), { code: 'EFBIG' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* OpfsFileSystem.make(volume).readFile('/note');
+        }),
+      ),
+    );
+    expect(new TextDecoder().decode(result)).toBe('descriptor fallback');
+    expect(client.reads.map(({ generation }) => generation)).toEqual(['generation-1']);
+    expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'open'],
+      ['generation-1', 'fstat'],
+      ['generation-1', 'read'],
+      ['generation-1', 'close'],
+    ]);
+  });
+
+  it('reads large whole files through bounded descriptor requests', async () => {
+    const client = new FakeWorkerClient();
+    client.bytes = new Uint8Array(16 * 1024 * 1024 + 1);
+    client.bytes.fill(23);
+    client.onReadFileBuffer = async () => {
+      throw Object.assign(new Error('helper limit'), { code: 'EFBIG' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* OpfsFileSystem.make(volume).readFile('/large');
+        }),
+      ),
+    );
+    expect(result.byteLength).toBe(16 * 1024 * 1024 + 1);
+    expect(result[0]).toBe(23);
+    expect(result.at(-1)).toBe(23);
+    expect(client.descriptorCalls.filter(({ method }) => method === 'read')).toHaveLength(257);
+    expect(client.descriptorCalls.at(-1)?.method).toBe('close');
+  });
+
+  it('lets a queued cursor operation be interrupted while an earlier read is held', async () => {
+    const client = new FakeWorkerClient();
+    client.bytes = new Uint8Array([1, 2]);
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onDescriptorRead = async () => {
+      await Effect.runPromise(Deferred.succeed(entered, undefined));
+      await Effect.runPromise(Deferred.await(resume));
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'r' });
+          const active = yield* Effect.forkChild(opened.readAlloc(1));
+          yield* Deferred.await(entered);
+          const queued = yield* Effect.forkChild(Effect.exit(opened.readAlloc(1)));
+          yield* Effect.sleep(0);
+          yield* Fiber.interrupt(queued);
+          const exit = yield* Fiber.await(queued);
+          expect(exit._tag).toBe('Failure');
+          if (exit._tag === 'Failure')
+            expect(exit.cause.reasons.some((reason) => reason._tag === 'Interrupt')).toBe(true);
+          yield* Deferred.succeed(resume, undefined);
+          const first = yield* Fiber.join(active);
+          expect(first).toMatchObject({ _tag: 'Some', value: new Uint8Array([1]) });
+        }),
+      ),
+    );
+  });
+
+  it('uses File.sync as a same-owner persistence barrier', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'w' });
+          yield* opened.sync;
+          client.publish({ ownerGeneration: 'generation-2' });
+          yield* volume.sync;
+        }),
+      ),
+    );
+    expect(client.syncCalls).toBe(2);
+  });
+
+  it('appends concurrent worker handles at the current EOF', async () => {
+    const client = new FakeWorkerClient();
+    client.bytes = new TextEncoder().encode('base');
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          const first = yield* fs.open('/note', { flag: 'a' });
+          const second = yield* fs.open('/note', { flag: 'a' });
+          const one = yield* Effect.forkChild(first.writeAll(new TextEncoder().encode('A')));
+          const two = yield* Effect.forkChild(second.writeAll(new TextEncoder().encode('B')));
+          yield* Fiber.join(one);
+          yield* Fiber.join(two);
+        }),
+      ),
+    );
+    expect(new TextDecoder().decode(client.bytes)).toMatch(/^base(?:AB|BA)$/);
+  });
+
+  it('keeps partial writeAll progress on its owner and reports it as possibly applied', async () => {
+    const client = new FakeWorkerClient();
+    client.maxWrite = 1;
+    client.afterDescriptorWrite = () => client.publish({ ownerGeneration: 'generation-2' });
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const opened = yield* OpfsFileSystem.make(volume).open('/note', { flag: 'r+' });
+          return yield* Effect.result(opened.writeAll(new Uint8Array([1, 2, 3])));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: {
+        reason: {
+          _tag: 'BadResource',
+          cause: { _tag: 'VolumeError', operation: 'writeAll', outcome: 'possibly-applied' },
+        },
+      },
+    });
+    expect(client.bytes).toEqual(new Uint8Array([1]));
+    expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'open'],
+      ['generation-1', 'write'],
+      ['generation-1', 'close'],
+    ]);
   });
 
   it('passes reusable plugin requests, transport settings and an acquisition signal once', async () => {
