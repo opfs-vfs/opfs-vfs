@@ -565,6 +565,104 @@ describe('acknowledged subscription retirement', () => {
     expect(source.commands.map(({ type }) => type)).toContain('cancel');
   });
 
+  it('sends one cancellation when a retiring observer re-enters', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    let retirements = 0;
+    const handle = await subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+      retiring() {
+        retirements++;
+        controller.abort();
+      },
+    });
+    handle.unsubscribe();
+    await expect(handle.closed).resolves.toEqual({ status: 'released' });
+    expect(retirements).toBe(1);
+    expect(source.commands.filter(({ type }) => type === 'cancel')).toHaveLength(1);
+  });
+
+  for (const frameType of ['terminal', 'closed'] as const)
+    it(`${frameType} observer re-entry sends one acknowledgement without cancellation`, async () => {
+      const source = harness.source(`client-${frameType}`);
+      const controller = new AbortController();
+      const handle = await subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+        retiring() {
+          controller.abort();
+        },
+      });
+      const registration = source.commands.find(({ type }) => type === 'register')!;
+      const channel = [...harness.channels.values()][0]!;
+      if (frameType === 'terminal')
+        channel.receive({
+          type: 'terminal',
+          subscriptionId: registration.subscriptionId,
+          code: 'SUBSCRIPTION_OVERFLOW',
+        });
+      else channel.receive({ type: 'closed', subscriptionId: registration.subscriptionId });
+      await expect(handle.closed).resolves.toEqual({ status: 'released' });
+      expect(source.commands.filter(({ type }) => type === 'cancel')).toHaveLength(0);
+      expect(source.commands.filter(({ type }) => type === 'terminal-ack')).toHaveLength(1);
+    });
+
+  it('does not cancel from a retiring observer after known setup rejection', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    source.reject('register', coded('EACCES'));
+    let setup!: import('../types').SubscriptionSetup;
+    await expect(
+      subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+        registering(value) {
+          setup = value;
+        },
+        retiring() {
+          controller.abort();
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'EACCES' });
+    await expect(setup.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands.filter(({ type }) => type === 'cancel')).toHaveLength(0);
+  });
+
+  it('does not dispatch from a retiring observer after a preparing hook veto', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    const veto = new Error('veto');
+    let setup!: import('../types').SubscriptionSetup;
+    await expect(
+      subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+        registering(value) {
+          setup = value;
+          throw veto;
+        },
+        retiring() {
+          controller.abort();
+        },
+      }),
+    ).rejects.toBe(veto);
+    await expect(setup.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands).toEqual([]);
+  });
+
+  for (const frameType of ['terminal', 'closed'] as const)
+    it(`acknowledges repeated ${frameType} frames once`, async () => {
+      const source = harness.source(`client-repeat-${frameType}`);
+      const handle = await subscribe(source, options, () => {});
+      const registration = source.commands.find(({ type }) => type === 'register')!;
+      const channel = [...harness.channels.values()][0]!;
+      const frame =
+        frameType === 'terminal'
+          ? {
+              type: 'terminal' as const,
+              subscriptionId: registration.subscriptionId,
+              code: 'SUBSCRIPTION_OVERFLOW' as const,
+            }
+          : { type: 'closed' as const, subscriptionId: registration.subscriptionId };
+      channel.receive(frame);
+      channel.receive(frame);
+      await expect(handle.closed).resolves.toEqual({ status: 'released' });
+      expect(source.commands.filter(({ type }) => type === 'terminal-ack')).toHaveLength(1);
+    });
+
   it('settles a deferred activation failure as unknown', async () => {
     const source = harness.source('client');
     const errors: string[] = [];

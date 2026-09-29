@@ -45,7 +45,7 @@ import { Effect, Layer, Stream } from 'effect';
 import { Subscriptions, Volume } from '@opfs-vfs/effect';
 import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
 
-const live = Layer.provide(
+const liveLayer = Layer.provide(
   Subscriptions.layer,
   Volume.layer({ fileName: 'app.bin', plugins: () => [subscriptionsRequest()] }),
 );
@@ -56,7 +56,7 @@ const observe = Effect.scoped(
     const subscription = yield* subscriptions.subscribe({ path: '/', scope: 'directory', recursive: true });
     yield* Stream.runForEach(subscription.changes, (change) => Effect.sync(() => console.log(change.path)));
   }),
-);
+).pipe(Effect.provide(liveLayer));
 ```
 
 Each `changes` stream can be consumed once. Stream completion, interruption, or
@@ -68,11 +68,14 @@ See `examples/subscriptions.ts` for a complete worker-backed example.
 
 The adapter buffers at most 16 changes and permits one additional producer
 offer to wait; a terminal error clears buffered changes and fails the stream.
-Content capture is off by default (`content: false`). If retirement is unknown,
+Content capture is off by default (`content: false`). The adapter queue and its
+one pending offer retain up to 17 * `maxBytes` of included payloads, in addition
+to source buffers and any data a caller retains. If retirement is unknown,
 new subscriptions on that same owner generation fail until the volume observes
 a different ready generation. Recreating a handle in the same generation does
 not clear the barrier; a new generation does, while an old handle's `retired`
-result remains unchanged.
+result remains unchanged. Direct mounts cannot observe a new owner generation,
+so an unknown retirement requires remounting.
 
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';

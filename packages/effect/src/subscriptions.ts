@@ -84,7 +84,7 @@ const retirementUnknown = (cause: unknown, fileName: string, path: string) => {
     code: 'SUBSCRIPTION_RETIREMENT_UNKNOWN',
     fileName,
     path,
-    ...(decoded?.sourceCode ?? decoded?.code ?? details.code
+    ...((decoded?.sourceCode ?? decoded?.code ?? details.code)
       ? { sourceCode: decoded?.sourceCode ?? decoded?.code ?? details.code }
       : {}),
     details,
@@ -134,6 +134,8 @@ const waitForRetiring = (
   path: string,
 ): Effect.Effect<void, SubscriptionError> =>
   Effect.suspend(() => {
+    const failure = currentFailure(state, generation, path);
+    if (failure) return Effect.fail(failure);
     pruneOtherGenerations(state, generation);
     const unknown = state.subscriptionUnknown.get(generation);
     if (unknown !== undefined) return Effect.fail(retirementUnknown(unknown, state.fileName, path));
@@ -209,9 +211,10 @@ const makeSubscription = (
         Deferred.doneUnsafe(terminalSignal, Effect.succeed(terminal));
         Queue.shutdownUnsafe(queue);
       };
+      let cachedCleanup!: Effect.Effect<void>;
       let cachedRelease!: Effect.Effect<void>;
       let release!: () => Effect.Effect<void>;
-      const releaseBase = Effect.uninterruptibleMask(() =>
+      const cleanupBase = Effect.uninterruptibleMask(() =>
         Effect.gen(function* () {
           closing = true;
           controller.abort();
@@ -228,10 +231,13 @@ const makeSubscription = (
           Deferred.doneUnsafe(terminalSignal, Effect.succeed(undefined));
         }).pipe(Effect.ensuring(Effect.sync(() => state.files.delete(release))), Effect.orDie),
       );
+      cachedCleanup = yield* Effect.cached(cleanupBase);
+      cachedRelease = yield* Effect.cached(
+        Effect.uninterruptible(Scope.close(child, Exit.void).pipe(Effect.andThen(cachedCleanup))),
+      );
       release = () => cachedRelease;
-      cachedRelease = yield* Effect.cached(releaseBase);
       state.files.add(release);
-      yield* Scope.addFinalizer(child, release());
+      yield* Scope.addFinalizer(child, cachedCleanup);
       if (child.state._tag === 'Closed' || state.isClosed()) {
         yield* release();
         return yield* Effect.fail(
@@ -264,6 +270,8 @@ const makeSubscription = (
             .awaitReady(budget, 'subscribe')
             .pipe(Effect.mapError((cause) => subscriptionError(cause, state.fileName, path))),
         );
+        const failure = currentFailure(state, generation, path);
+        if (failure) return yield* Effect.fail(failure);
         pruneOtherGenerations(state, generation);
         yield* restore(waitForRetiring(state, generation, budget, clock, path));
         const admittedAgain = yield* restore(
@@ -325,12 +333,16 @@ const makeSubscription = (
                   if (retirement.status === 'unknown') {
                     const decoded = subscriptionError(retirement.error, state.fileName, path);
                     if (state.currentGeneration() === generation) state.subscriptionUnknown.set(generation, decoded);
-                    console.warn('OPFS VFS subscription retirement is unknown', {
-                      fileName: state.fileName,
-                      path,
-                      generation,
-                      code: decoded.code,
-                    });
+                    try {
+                      console.warn('OPFS VFS subscription retirement is unknown', {
+                        fileName: state.fileName,
+                        path,
+                        generation,
+                        code: decoded.code,
+                      });
+                    } catch {
+                      // Diagnostics cannot turn an observable retirement into an unhandled rejection.
+                    }
                   }
                 },
                 (cause) => {
@@ -446,7 +458,8 @@ const makeSubscription = (
           if (consumed) return Stream.die(new Error('A subscription stream can only be consumed once'));
           consumed = true;
           return Stream.concat(
-            Stream.fromQueue(queue).pipe(
+            Stream.fromEffectRepeat(Queue.take(queue)).pipe(
+              Stream.flatMap((change) => (terminal ? Stream.fail(terminal) : Stream.succeed(change))),
               Stream.catchCause((cause) =>
                 terminal ? Stream.fail(terminal) : closing ? Stream.empty : Stream.failCause(cause),
               ),

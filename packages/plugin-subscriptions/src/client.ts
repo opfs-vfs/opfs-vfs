@@ -140,9 +140,9 @@ function releasePending(opening: Opening): void {
 
 function settle(context: Context, entry: Local, retirement: SubscriptionRetirement): void {
   if (entry.settled) return;
-  notifyRetiring(entry);
   entry.settled = true;
   entry.state = 'closed';
+  notifyRetiring(entry);
   cleanup(entry);
   context.entries.delete(entry.id);
   entry.settle(retirement);
@@ -165,8 +165,6 @@ function notifyRetiring(entry: Local): void {
 
 function releaseBeforeRegister(context: Context, entry: Local, cause: unknown): void {
   if (entry.state !== 'preparing') return;
-  notifyRetiring(entry);
-  entry.state = 'retiring';
   entry.failSetup?.(cause);
   entry.failSetup = undefined;
   settle(context, entry, { status: 'released' });
@@ -178,8 +176,8 @@ function interrupt(context: Context, code: TerminalCode = 'SUBSCRIPTION_INTERRUP
   evict(context);
   for (const entry of context.entries.values()) {
     if (entry.state !== 'preparing') {
-      notifyRetiring(entry);
       entry.state = 'retiring';
+      notifyRetiring(entry);
     }
   }
   try {
@@ -225,9 +223,9 @@ function request(
 
 function retire(context: Context, entry: Local): void {
   if (entry.state === 'closed' || entry.cancelSent || entry.terminalAcked) return;
-  notifyRetiring(entry);
   entry.state = 'retiring';
   entry.cancelSent = true;
+  notifyRetiring(entry);
   cleanup(entry);
   request(context, undefined, { type: 'cancel', subscriptionId: entry.id });
 }
@@ -238,18 +236,17 @@ function terminal(context: Context, entry: Local, code: TerminalCode): void {
     releaseBeforeRegister(context, entry, subscriptionError(code));
     return;
   }
-  notifyRetiring(entry);
+  if (entry.terminalAcked) return;
   const onError = entry.resolved ? entry.onError : undefined;
   entry.terminalCode = code;
   if (!entry.resolved) trackSetup(context, entry);
+  entry.state = 'retiring';
+  entry.terminalAcked = true;
+  notifyRetiring(entry);
   entry.failSetup?.(subscriptionError(code));
   entry.failSetup = undefined;
   cleanup(entry);
-  entry.state = 'retiring';
-  if (!entry.terminalAcked) {
-    entry.terminalAcked = true;
-    request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
-  }
+  request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
   report(onError, code);
 }
 
@@ -261,15 +258,14 @@ function handleFrame(context: Context, entry: Local, frame: ChangeFrame): void {
       releaseBeforeRegister(context, entry, error('EBADF', 'Filesystem is closed'));
       return;
     }
+    if (entry.terminalAcked) return;
+    entry.state = 'retiring';
+    entry.terminalAcked = true;
     notifyRetiring(entry);
     entry.failSetup?.(error('EBADF', 'Filesystem is closed'));
     entry.failSetup = undefined;
     cleanup(entry);
-    entry.state = 'retiring';
-    if (!entry.terminalAcked) {
-      entry.terminalAcked = true;
-      request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
-    }
+    request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
     return;
   }
   if (entry.state !== 'active') return;

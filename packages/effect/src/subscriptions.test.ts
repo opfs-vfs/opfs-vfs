@@ -1,4 +1,4 @@
-import { Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import type { ChangeFrame, ChangeReply, FileChangeChannel, FileChangeSource } from '@opfs-vfs/opfs-vfs/changes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -196,6 +196,38 @@ describe('Effect subscriptions', () => {
       expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ error: expect.any(SubscriptionError) }));
   });
 
+  it('stops buffered delivery after terminal failure reaches the first consumer', async () => {
+    let observed = 0;
+    const exit = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Subscriptions;
+          const subscription = yield* service.subscribe(options);
+          for (let sequence = 1; sequence <= 8; sequence++) {
+            source.emit('update', sequence);
+            yield* Effect.tryPromise({
+              try: () => vi.waitFor(() => expect(source.acknowledgements).toBe(sequence)),
+              catch: (cause) => cause,
+            });
+          }
+          return yield* Effect.exit(
+            Stream.runForEach(subscription.changes, () =>
+              Effect.gen(function* () {
+                observed++;
+                if (observed === 1) {
+                  source.terminate();
+                  yield* Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+                }
+              }),
+            ),
+          );
+        }),
+      ).pipe(Effect.provide(liveLayer)),
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(observed).toBe(1);
+  });
+
   it('bounds queued delivery at sixteen and lets terminal failure discard a full queue', async () => {
     const exit = await Effect.runPromise(
       Effect.scoped(
@@ -301,6 +333,140 @@ describe('Effect subscriptions', () => {
     );
     expect(state.subscriptionSetups.has(pending)).toBe(false);
     expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
+  });
+
+  it('does not let an old waiter prune a current unknown retirement', async () => {
+    const originalCurrent = state.currentGeneration;
+    const originalReady = state.awaitReady;
+    let generation = 'generation-1';
+    const admitted = Deferred.makeUnsafe<void>();
+    Object.assign(state, {
+      currentGeneration: () => generation,
+      awaitReady: () =>
+        Effect.gen(function* () {
+          const captured = generation;
+          if (captured === 'generation-1') yield* Deferred.succeed(admitted, undefined);
+          return captured;
+        }),
+    });
+    let finishOld!: (result: { status: 'released' }) => void;
+    const oldRetirement = new Promise<{ status: 'released' }>((resolve) => (finishOld = resolve));
+    state.subscriptionSetups.set(oldRetirement, {
+      generation: 'generation-1',
+      closed: oldRetirement,
+      state: 'retiring',
+    });
+    try {
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const service = yield* Subscriptions;
+            const oldAttempt = yield* Effect.forkChild(Effect.exit(service.subscribe(options)));
+            yield* Deferred.await(admitted);
+            yield* Effect.yieldNow;
+            generation = source.generation = 'generation-2';
+            const newer = yield* service.subscribe(options);
+            source.onInterrupted('SUBSCRIPTION_INTERRUPTED');
+            expect(yield* newer.retired).toMatchObject({ status: 'unknown' });
+            expect(state.subscriptionUnknown.has('generation-2')).toBe(true);
+            finishOld({ status: 'released' });
+            expect(yield* Fiber.join(oldAttempt)).toMatchObject({ _tag: 'Failure' });
+            const replacement = yield* Effect.exit(service.subscribe(options));
+            expect(Exit.isFailure(replacement)).toBe(true);
+            if (Exit.isFailure(replacement))
+              expect(replacement.cause.reasons).toContainEqual(
+                expect.objectContaining({
+                  error: expect.objectContaining({ code: 'SUBSCRIPTION_RETIREMENT_UNKNOWN' }),
+                }),
+              );
+          }),
+        ).pipe(Effect.provide(liveLayer)),
+      );
+    } finally {
+      finishOld({ status: 'released' });
+      Object.assign(state, { currentGeneration: originalCurrent, awaitReady: originalReady });
+    }
+  });
+
+  it('detaches a completed subscription child scope', async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* Subscriptions;
+        const parent = yield* Scope.make();
+        try {
+          const subscription = yield* service.subscribe(options).pipe(Effect.provideService(Scope.Scope, parent));
+          source.emit();
+          yield* Stream.runHead(subscription.changes);
+          expect(yield* subscription.retired).toEqual({ status: 'released' });
+          expect(parent.state._tag).toBe('Empty');
+        } finally {
+          yield* Scope.close(parent, Exit.void);
+        }
+      }).pipe(Effect.provide(liveLayer)),
+    );
+  });
+
+  it('joins stream cleanup with a concurrent parent close', async () => {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* Subscriptions;
+        const parent = yield* Scope.make();
+        const started = Deferred.makeUnsafe<void>();
+        const release = Deferred.makeUnsafe<void>();
+        try {
+          const subscription = yield* service.subscribe(options).pipe(Effect.provideService(Scope.Scope, parent));
+          source.emit();
+          const consume = yield* Effect.forkChild(
+            Stream.runForEach(subscription.changes, () =>
+              Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release))),
+            ),
+            { startImmediately: true },
+          );
+          yield* Deferred.await(started);
+          const close = yield* Effect.forkChild(Scope.close(parent, Exit.void), { startImmediately: true });
+          yield* Deferred.succeed(release, undefined);
+          yield* Fiber.join(consume);
+          yield* Fiber.join(close);
+          expect(yield* subscription.retired).toEqual({ status: 'released' });
+          expect(parent.state._tag).toBe('Closed');
+        } finally {
+          yield* Scope.close(parent, Exit.void);
+        }
+      }).pipe(Effect.provide(liveLayer)),
+    );
+  });
+
+  it('keeps an unknown retirement readable when warning output throws', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {
+      throw new Error('warning failed');
+    });
+    const failures: unknown[] = [];
+    const onUnhandled = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+      failures.push(event.reason);
+    };
+    window.addEventListener('unhandledrejection', onUnhandled);
+    try {
+      const retirement = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const service = yield* Subscriptions;
+            const subscription = yield* service.subscribe(options);
+            source.onInterrupted('SUBSCRIPTION_INTERRUPTED');
+            const first = yield* subscription.retired;
+            const second = yield* subscription.retired;
+            return { first, second };
+          }),
+        ).pipe(Effect.provide(liveLayer)),
+      );
+      expect(retirement.first).toMatchObject({ status: 'unknown' });
+      expect(retirement.second).toEqual(retirement.first);
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      expect(failures).toEqual([]);
+    } finally {
+      warning.mockRestore();
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
   });
 
   it('uses one TestClock budget for the actual same-generation retirement wait', async () => {
