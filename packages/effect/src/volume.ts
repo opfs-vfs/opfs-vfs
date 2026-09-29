@@ -481,7 +481,7 @@ const createWorkerService = (
           return syncError(terminalFailure);
         }
         const dispatch = error instanceof VfsCommandError ? error.dispatch : undefined;
-        const raw = error instanceof Error && 'cause' in error ? error.cause : error;
+        const raw = error instanceof VfsCommandError ? error.cause : error;
         return mountError(raw, fileName, 'sync', undefined, dispatch === 'refused' ? 'not-applied' : 'unknown');
       },
     });

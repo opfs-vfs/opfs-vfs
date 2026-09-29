@@ -5,7 +5,7 @@ import type { OpfsVfsWorkerClient, ClientStatus } from '@opfs-vfs/opfs-vfs/worke
 import type { VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
 import { Volume } from './index.js';
 import type { WorkerMountOptions } from './volume.js';
-import { EncryptionError } from './errors.js';
+import { EncryptionError, VolumeError } from './errors.js';
 
 const workerMocks = vi.hoisted(() => ({ open: vi.fn() }));
 vi.mock('@opfs-vfs/opfs-vfs/worker', async (importOriginal) => ({
@@ -531,6 +531,75 @@ describe('Volume worker acquisition and sessions', () => {
       outcome: 'unknown',
     });
     expect(client.generations).toEqual(['generation-1']);
+  });
+
+  it('keeps foreign sync errors typed without reading their cause accessor', async () => {
+    const secret = 'do-not-expose-this-secret';
+    const foreign = new Error('foreign sync failed');
+    let causeReads = 0;
+    Object.defineProperty(foreign, 'cause', {
+      get() {
+        causeReads++;
+        throw new Error(secret);
+      },
+    });
+    const client = new FakeWorkerClient();
+    client.onSync = () => Promise.reject(foreign);
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const error = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          return yield* Effect.flip(service.sync);
+        }),
+      ),
+    );
+    expect(error).toBeInstanceOf(VolumeError);
+    expect(error).toMatchObject({ kind: 'unknown', operation: 'sync', details: { message: 'foreign sync failed' } });
+    expect(JSON.stringify(error)).not.toContain(secret);
+    expect(causeReads).toBe(0);
+  });
+
+  it('does not classify a foreign nested cause as crypto', async () => {
+    const foreign = new Error('foreign sync failed', {
+      cause: Object.assign(new Error('volume locked'), { code: 'EVOLUMELOCKED' }),
+    });
+    const client = new FakeWorkerClient();
+    client.onSync = () => Promise.reject(foreign);
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const error = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          return yield* Effect.flip(service.sync);
+        }),
+      ),
+    );
+    expect(error).toBeInstanceOf(VolumeError);
+    expect(error).toMatchObject({ kind: 'unknown', operation: 'sync' });
+    expect(error).not.toBeInstanceOf(EncryptionError);
+  });
+
+  it.each(['sent', 'replied'] as const)('unwraps %s VfsCommandError sync failures', async (dispatch) => {
+    const source = Object.assign(new Error('volume locked'), { code: 'EVOLUMELOCKED' });
+    const client = new FakeWorkerClient();
+    client.onSync = () => Promise.reject(new VfsCommandError(source, dispatch));
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const error = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const service = yield* Volume.make(mount());
+          return yield* Effect.flip(service.sync);
+        }),
+      ),
+    );
+    expect(error).toBeInstanceOf(EncryptionError);
+    expect(error).toMatchObject({
+      reason: 'CredentialsRejected',
+      code: 'EVOLUMELOCKED',
+      outcome: 'unknown',
+      details: { message: 'volume locked' },
+    });
   });
 
   it('keeps a worker crash terminal at the Effect service boundary', async () => {
