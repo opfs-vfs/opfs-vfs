@@ -353,6 +353,116 @@ describe('Volume direct acquisition', () => {
     expect(state.closeCalls).toBe(1);
   });
 
+  it('waits for a held parent-close cleanup after ready rejects', async () => {
+    const parent = await Effect.runPromise(Scope.make());
+    const started = await Effect.runPromise(Deferred.make<void>());
+    const closeStarted = await Effect.runPromise(Deferred.make<void>());
+    const releaseClose = await Effect.runPromise(Deferred.make<void>());
+    const finished = await Effect.runPromise(Deferred.make<void>());
+    let rejectReady!: (error: Error) => void;
+    state.ready = new Promise<void>((_resolve, reject) => {
+      rejectReady = reject;
+    });
+    state.onConstruct = () => {
+      void Effect.runPromise(Deferred.succeed(started, undefined));
+    };
+    state.close = () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* Deferred.succeed(closeStarted, undefined);
+          yield* Deferred.await(releaseClose);
+        }),
+      );
+    const acquisition = Scope.provide(parent)(
+      Volume.makeDirect({ fileName: 'held-close-ready-reject.bin' }).pipe(
+        Effect.onExit(() => Deferred.succeed(finished, undefined)),
+      ),
+    );
+    const acquisitionFiber = await Effect.runPromise(acquisition.pipe(Effect.forkDetach));
+    await Effect.runPromise(Deferred.await(started));
+    const closeFiber = await Effect.runPromise(Scope.close(parent, Exit.void).pipe(Effect.forkDetach));
+    await Effect.runPromise(Deferred.await(closeStarted));
+    rejectReady(new Error('init failed'));
+    await Effect.runPromise(Effect.yieldNow);
+    expect(await Effect.runPromise(Deferred.isDone(finished))).toBe(false);
+    await Effect.runPromise(Deferred.succeed(releaseClose, undefined));
+    const exit = await Effect.runPromise(Fiber.await(acquisitionFiber));
+    await Effect.runPromise(Fiber.await(closeFiber));
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(state.closeCalls).toBe(1);
+  });
+
+  it('preserves ready, backend, and configuration cleanup failures once', async () => {
+    const parent = await Effect.runPromise(Scope.make());
+    const constructed = await Effect.runPromise(Deferred.make<void>());
+    const configFinalizerStarted = await Effect.runPromise(Deferred.make<void>());
+    const releaseConfigFinalizer = await Effect.runPromise(Deferred.make<void>());
+    const finished = await Effect.runPromise(Deferred.make<void>());
+    const readyFailure = new Error('init failed');
+    const backendFailure = new Error('close failed');
+    const configFailure = new Error('configuration cleanup failed');
+    const order: string[] = [];
+    let rejectReady!: (error: Error) => void;
+    state.ready = new Promise<void>((_resolve, reject) => {
+      rejectReady = reject;
+    });
+    state.onConstruct = () => {
+      void Effect.runPromise(Deferred.succeed(constructed, undefined));
+    };
+    state.close = () => {
+      order.push('backend');
+      throw backendFailure;
+    };
+    const config = Effect.gen(function* () {
+      yield* Effect.addFinalizer(() =>
+        Effect.gen(function* () {
+          order.push('configuration');
+          yield* Deferred.succeed(configFinalizerStarted, undefined);
+          yield* Deferred.await(releaseConfigFinalizer);
+          return yield* Effect.die(configFailure);
+        }),
+      );
+      return { fileName: 'cleanup-causes.bin' };
+    });
+    try {
+      const fiber = await Effect.runPromise(
+        Scope.provide(parent)(
+          Volume.makeDirect(config).pipe(Effect.onExit(() => Deferred.succeed(finished, undefined))),
+        ).pipe(Effect.forkDetach),
+      );
+      await Effect.runPromise(Deferred.await(constructed));
+      const closeFiber = await Effect.runPromise(Scope.close(parent, Exit.void).pipe(Effect.forkDetach));
+      await Effect.runPromise(Deferred.await(configFinalizerStarted));
+      expect(state.closeCalls).toBe(1);
+      expect(order).toEqual(['backend', 'configuration']);
+      rejectReady(readyFailure);
+      await Effect.runPromise(Effect.yieldNow);
+      expect(await Effect.runPromise(Deferred.isDone(finished))).toBe(false);
+      await Effect.runPromise(Deferred.succeed(releaseConfigFinalizer, undefined));
+      const exit = await Effect.runPromise(Fiber.await(fiber));
+      await Effect.runPromise(Fiber.await(closeFiber));
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(exit.cause.reasons).toContainEqual(
+          expect.objectContaining({
+            _tag: 'Fail',
+            error: expect.objectContaining({ details: { message: readyFailure.message } }),
+          }),
+        );
+        expect(
+          exit.cause.reasons.filter(
+            (reason) =>
+              reason._tag === 'Die' &&
+              (reason.defect as { details?: { message?: string } }).details?.message === backendFailure.message,
+          ),
+        ).toHaveLength(1);
+        expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ _tag: 'Die', defect: configFailure }));
+      }
+    } finally {
+      await Effect.runPromise(Scope.close(parent, Exit.void));
+    }
+  });
+
   it('decodes only known adapter errors from a platform cause', () => {
     const encryption = new EncryptionError({
       reason: 'IntegrityFailure',

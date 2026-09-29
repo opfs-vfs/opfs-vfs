@@ -60,33 +60,37 @@ const make = <E, R>(input: Input<E, R>): Effect.Effect<VolumeService, MountError
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const parent = yield* Effect.scope;
-      const child = yield* Scope.fork(parent, 'sequential');
+      const owner = yield* Scope.fork(parent, 'sequential');
+      const resource = yield* Scope.make('sequential');
       let closed = false;
       let backend: OpfsVfs | undefined;
       let release: Promise<void> | undefined;
       let service: VolumeService | undefined;
       const ensureOpen = (fileName: string | null) =>
-        closed
+        closed || owner.state._tag === 'Closed'
           ? Effect.fail(
               volumeError(new Error('Volume scope is closed'), fileName, 'acquire', 'lifecycle', 'not-applied'),
             )
           : Effect.void;
-      yield* Scope.addFinalizer(
-        child,
-        Effect.sync(() => {
-          closed = true;
-        }),
-      );
       const closeBackend = () => {
-        closed = true;
         if (service) closedBackends.add(service);
         if (backend) release ??= Promise.resolve(backend.closeVfs()).then(() => undefined);
         return release ?? Promise.resolve();
       };
+      let firstCloseExit: Exit.Exit<unknown, unknown> | undefined;
+      const cachedClose: Effect.Effect<void, never> = yield* Effect.cached(
+        Effect.suspend(() => Scope.close(resource, firstCloseExit!)),
+      );
+      const closeResource = (exit: Exit.Exit<unknown, unknown>): Effect.Effect<void, never> => {
+        firstCloseExit ??= exit;
+        return cachedClose;
+      };
+      yield* Scope.addFinalizerExit(owner, closeResource);
+      yield* ensureOpen(null);
 
       const acquire = Effect.gen(function* () {
         const parentScopedInput = Effect.isEffect(input)
-          ? Effect.provideService(input, Scope.Scope, child)
+          ? Effect.provideService(input, Scope.Scope, resource)
           : Effect.succeed(input);
         const options = yield* restore(parentScopedInput);
         yield* ensureOpen(null);
@@ -128,7 +132,7 @@ const make = <E, R>(input: Input<E, R>): Effect.Effect<VolumeService, MountError
           );
         }
         yield* Scope.addFinalizer(
-          child,
+          resource,
           Effect.tryPromise({
             try: closeBackend,
             catch: (error) => mountError(error, fileName, 'close', 'lifecycle'),
@@ -144,12 +148,27 @@ const make = <E, R>(input: Input<E, R>): Effect.Effect<VolumeService, MountError
         yield* ensureOpen(fileName);
         service = createService(backend!, fileName, () => closed);
         backends.set(service, backend!);
+        yield* Scope.addFinalizer(
+          resource,
+          Effect.sync(() => {
+            closed = true;
+            if (service) closedBackends.add(service);
+          }),
+        );
         yield* ensureOpen(fileName);
         return service;
       });
 
       return yield* acquire.pipe(
-        Effect.onExit((exit) => (Exit.isFailure(exit) ? Scope.close(child, exit) : Effect.void)),
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit)
+            ? Effect.gen(function* () {
+                const resourceExit = yield* Effect.exit(closeResource(exit));
+                yield* Effect.exit(Scope.close(owner, exit));
+                if (Exit.isFailure(resourceExit)) return yield* Effect.failCause(resourceExit.cause);
+              })
+            : Effect.void,
+        ),
       );
     }),
   );
