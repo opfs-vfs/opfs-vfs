@@ -1,7 +1,7 @@
-import { Deferred, Effect, Exit, Fiber, Schema, Scope } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Deferred, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Volume } from './index.js';
-import type { DirectMountOptions } from './volume.js';
+import type { DirectMountOptions, VolumeService } from './volume.js';
 import {
   EncryptionError,
   RemoteErrorDetails,
@@ -9,7 +9,13 @@ import {
   VolumeError,
   mountError,
   remoteDetails,
+  type MountError,
 } from './errors.js';
+
+type MakeConfigError = { readonly _tag: 'MakeConfigError' };
+type MakeConfigContext = { readonly makeConfig: true };
+type LayerConfigError = { readonly _tag: 'LayerConfigError' };
+type LayerConfigContext = { readonly layerConfig: true };
 
 const state = vi.hoisted(() => ({
   ready: Promise.resolve(),
@@ -59,6 +65,36 @@ describe('Volume direct acquisition', () => {
     state.onConstruct = () => {};
     state.closeCalls = 0;
     state.bytes = new Uint8Array();
+  });
+
+  it('infers direct mount types for options, effects, and union inputs', () => {
+    const options: DirectMountOptions = { fileName: 'type-check.bin' };
+    const makeEffect: Effect.Effect<DirectMountOptions, MakeConfigError, MakeConfigContext> = Effect.succeed(options);
+    const makeInput: DirectMountOptions | Effect.Effect<DirectMountOptions, MakeConfigError, MakeConfigContext> = [
+      options,
+      makeEffect,
+    ][0];
+    const layerEffect: Effect.Effect<DirectMountOptions, LayerConfigError, LayerConfigContext> =
+      Effect.succeed(options);
+    const layerInput: DirectMountOptions | Effect.Effect<DirectMountOptions, LayerConfigError, LayerConfigContext> = [
+      options,
+      layerEffect,
+    ][0];
+
+    expectTypeOf(Volume.makeDirect(options)).toEqualTypeOf<Effect.Effect<VolumeService, MountError, Scope.Scope>>();
+    expectTypeOf(Volume.makeDirect(makeEffect)).toEqualTypeOf<
+      Effect.Effect<VolumeService, MountError | MakeConfigError, Scope.Scope | MakeConfigContext>
+    >();
+    expectTypeOf(Volume.makeDirect(makeInput)).toEqualTypeOf<
+      Effect.Effect<VolumeService, MountError | MakeConfigError, Scope.Scope | MakeConfigContext>
+    >();
+    expectTypeOf(Volume.layerDirect(options)).toEqualTypeOf<Layer.Layer<Volume.Volume, MountError>>();
+    expectTypeOf(Volume.layerDirect(layerEffect)).toEqualTypeOf<
+      Layer.Layer<Volume.Volume, MountError | LayerConfigError, LayerConfigContext>
+    >();
+    expectTypeOf(Volume.layerDirect(layerInput)).toEqualTypeOf<
+      Layer.Layer<Volume.Volume, MountError | LayerConfigError, LayerConfigContext>
+    >();
   });
 
   it('rejects invalid names through inspect', async () => {

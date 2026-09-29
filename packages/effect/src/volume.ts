@@ -200,6 +200,9 @@ export function makeDirect(input: DirectMountOptions): Effect.Effect<VolumeServi
 export function makeDirect<E, R>(
   input: Effect.Effect<DirectMountOptions, E, R>,
 ): Effect.Effect<VolumeService, MountError | E, Scope.Scope | R>;
+export function makeDirect<E = never, R = never>(
+  input: Input<E, R>,
+): Effect.Effect<VolumeService, MountError | E, Scope.Scope | R>;
 export function makeDirect<E, R>(input: Input<E, R>) {
   return make<E, R>(input);
 }
@@ -208,6 +211,7 @@ export function layerDirect(input: DirectMountOptions): Layer.Layer<Volume, Moun
 export function layerDirect<E, R>(
   input: Effect.Effect<DirectMountOptions, E, R>,
 ): Layer.Layer<Volume, MountError | E, R>;
+export function layerDirect<E = never, R = never>(input: Input<E, R>): Layer.Layer<Volume, MountError | E, R>;
 export function layerDirect<E, R>(input: Input<E, R>) {
   return Layer.effect(Volume, make<E, R>(input));
 }
