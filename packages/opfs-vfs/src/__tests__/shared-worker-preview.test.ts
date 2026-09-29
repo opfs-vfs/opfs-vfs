@@ -153,6 +153,47 @@ it('aborts automatic probing without retaining its port', async () => {
   expect(port.closed).toBe(true);
 });
 
+it('bounds and cancels automatic discovery while the lock query is pending', async () => {
+  const query = vi.spyOn(navigator.locks, 'query').mockImplementation(() => new Promise(() => {}));
+  try {
+    await expect(openOpfsVfsWorker('query-timeout.bin', { initTimeout: 5 })).rejects.toMatchObject({
+      code: 'VFS_INITIALIZATION_TIMEOUT',
+    });
+
+    const controller = new AbortController();
+    const opening = openOpfsVfsWorker('query-abort.bin', { signal: controller.signal });
+    await Promise.resolve();
+    controller.abort();
+    await expect(opening).rejects.toMatchObject({ name: 'AbortError' });
+    expect(query).toHaveBeenCalledTimes(2);
+  } finally {
+    query.mockRestore();
+  }
+});
+
+it('uses a no-signal ifAvailable lock probe when LockManager.query is unavailable', async () => {
+  const own = Object.getOwnPropertyDescriptor(navigator, 'locks');
+  const request = vi.fn((_name: string, _options: LockOptions, callback: LockGrantedCallback<Lock>) =>
+    Promise.resolve(callback({ name: 'available' } as Lock)),
+  );
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: { request } });
+  expect(navigator.locks.query).toBeUndefined();
+  expect(navigator.locks.request).toBe(request);
+  vi.stubGlobal('SharedWorker', undefined);
+  try {
+    const client = await openOpfsVfsWorker('no-query.bin', {
+      initTimeout: 10,
+    });
+    expect(request).toHaveBeenCalledWith('opfs-vfs-lock-no-query.bin', { ifAvailable: true }, expect.any(Function));
+    expect(request.mock.calls[0]?.[1]).not.toHaveProperty('signal');
+    client.dispose();
+  } finally {
+    vi.unstubAllGlobals();
+    if (own) Object.defineProperty(navigator, 'locks', own);
+    else delete (navigator as unknown as { locks?: unknown }).locks;
+  }
+});
+
 it('does not fall back after a successful probe whose fresh ATTACH port times out', async () => {
   const ports: FakePort[] = [];
   const attached: unknown[] = [];

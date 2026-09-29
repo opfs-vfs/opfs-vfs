@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const root = resolve(packageRoot, '../..');
 assert.equal(resolve('.'), packageRoot, 'run test:packed from effect');
-const packed = resolve('.packed');
+const packed = resolve(packageRoot, '.packed');
 rmSync(packed, { recursive: true, force: true });
-mkdirSync(packed, { recursive: true });
+mkdirSync(resolve(packed, 'examples'), { recursive: true });
 const run = (command, args, options = {}) => execFileSync(command, args, { stdio: 'inherit', ...options });
 run('pnpm', ['--filter', '@opfs-vfs/effect...', 'build'], { cwd: root });
 const pack = (cwd) => {
@@ -19,12 +19,15 @@ const pack = (cwd) => {
   return resolve(packed, filename);
 };
 const core = pack(resolve(packageRoot, '../opfs-vfs'));
-const plugins = pack(resolve(packageRoot, '../plugin-subscriptions'));
+const subscriptions = pack(resolve(packageRoot, '../plugin-subscriptions'));
 const effect = pack(packageRoot);
-const example = run('tar', ['-xOzf', effect, 'package/examples/direct.ts'], { encoding: 'utf8', stdio: 'pipe' });
-const exampleFile = resolve(packed, 'examples/direct.ts');
-mkdirSync(resolve(packed, 'examples'));
-writeFileSync(exampleFile, example);
+const effectRuntime = pack(resolve(packageRoot, 'node_modules/effect'));
+const example = (name) =>
+  run('tar', ['-xOzf', effect, `package/examples/${name}.ts`], { encoding: 'utf8', stdio: 'pipe' });
+const directFile = resolve(packed, 'examples/direct.ts');
+const workerFile = resolve(packed, 'examples/worker-session.ts');
+writeFileSync(directFile, example('direct'));
+writeFileSync(workerFile, example('worker-session'));
 writeFileSync(
   resolve(packed, 'package.json'),
   JSON.stringify({ name: 'effect-packed-check', private: true, type: 'module' }),
@@ -38,25 +41,28 @@ run('npm', [
   '--no-fund',
   '--package-lock=false',
   core,
-  plugins,
+  subscriptions,
   effect,
+  effectRuntime,
 ]);
-run('node', [
-  resolve(root, 'node_modules/typescript/bin/tsc'),
-  '--ignoreConfig',
-  '--noEmit',
-  '--skipLibCheck',
-  '--strict',
-  '--lib',
-  'ES2024,WebWorker',
-  '--target',
-  'ES2024',
-  '--module',
-  'ESNext',
-  '--moduleResolution',
-  'bundler',
-  exampleFile,
-]);
+for (const file of [directFile, workerFile]) {
+  run('node', [
+    resolve(root, 'node_modules/typescript/bin/tsc'),
+    '--ignoreConfig',
+    '--noEmit',
+    '--skipLibCheck',
+    '--strict',
+    '--lib',
+    'ES2024,WebWorker',
+    '--target',
+    'ES2024',
+    '--module',
+    'ESNext',
+    '--moduleResolution',
+    'bundler',
+    file,
+  ]);
+}
 run(
   'node',
   [
@@ -65,6 +71,7 @@ run(
     '--config',
     'vitest.packed.config.ts',
     'src/volume-real.test.ts',
+    'tests/packed-worker-session.test.ts',
   ],
   {
     env: { ...process.env, VITE_PACKED_EFFECT_EXAMPLE: '/.packed/examples/direct.ts' },
