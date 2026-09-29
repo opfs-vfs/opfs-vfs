@@ -7,7 +7,13 @@ export default defineConfig({
   resolve: { alias: {} },
   test: {
     ...((base as { test?: object }).test ?? {}),
-    include: ['src/volume-real.test.ts', 'tests/packed-worker-session.test.ts', 'tests/packed-subscriptions.test.ts'],
+    include: [
+      'src/volume-real.test.ts',
+      'src/watch-real.test.ts',
+      'tests/packed-worker-session.test.ts',
+      'tests/packed-subscriptions.test.ts',
+      'tests/packed-reconciled-view.test.ts',
+    ],
   },
   optimizeDeps: {
     noDiscovery: true,

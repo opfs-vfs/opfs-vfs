@@ -25,14 +25,36 @@ The adapter also supports path metadata, permissions, links, directory creation,
 listing, removal, rename, recursive copy and volume-local temporary paths.
 Filesystem operands must be absolute paths; relative symlink targets are
 preserved. Recursive copy does not follow symlinks, is not atomic, and does not
-preserve hard-link topology. `chown`, `glob` and `watch` return typed unsupported
-errors in this slice. Scoped temporary paths remove only their private directory
+preserve hard-link topology. `chown` and `glob` return typed unsupported errors
+in this slice. Scoped temporary paths remove only their private directory
 when the scope closes; the default parent is `/tmp` inside the volume. A temporary
 path uses its resolved physical parent, so retargeting the caller-supplied parent
 symlink does not redirect cleanup. Ownership covers the created root pathname and
 its current descendants; cleanup is not an atomic inode-identity check. Keep the
 resolved physical ancestors stable until cleanup completes. Shutdown, owner
 replacement, or cleanup failure can leave temporary paths for explicit reclamation.
+
+`FileSystem.watch` uses the same logical-change registration and cleanup path as
+rich subscriptions. It checks the target when the stream is acquired: a missing
+path fails with `NotFound`, and a symlink target fails with `BadResource`. It
+watches regular files or directories and emits absolute volume paths as
+`Create`, `Update`, or `Remove`. Recursive directory watching preserves the
+native descendant records for directory renames; symlink entries inside a
+watched directory are reported, but a symlink target is not followed.
+
+Watch notifications are hints, not a replayable log. Preflight checks and
+directory scans are not atomic snapshots; logical event counts and ordering can
+differ from native operating-system watchers. Reconciliation marks its view
+stale when stream consumption observes a failure, so that callback can lag the
+terminal notification. A takeover ends the stream
+with `Unknown` and a `SubscriptionError` whose code is
+`SUBSCRIPTION_INTERRUPTED`; the standard API does not silently resubscribe.
+Readiness and retirement timeouts map to `TimedOut`. Use a bounded retry only
+when the application also invalidates and reconciles its current view. The
+standard watch API has no registration-ready signal, so use rich subscriptions
+when a view must subscribe before its initial scan. See
+`examples/reconciled-view.ts` for subscribe-before-scan recovery with bounded
+retries and retirement waiting.
 
 `Subscriptions.layer` provides the Effect subscriptions service when the mounted
 volume has the compatible logical-change capability. Worker mounts request it

@@ -17,9 +17,11 @@ import { OpenFlags, type OpfsVfs, type VfsStat } from '@opfs-vfs/opfs-vfs';
 import { VfsCommandError } from '@opfs-vfs/opfs-vfs/worker';
 import type { OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
 import { getCoordinator, type Coordinator } from './coordinator.js';
+import { makeSubscriptionInternal } from './subscriptions-internal.js';
+import type { SubscriptionAdmission } from './subscriptions-internal.js';
 import { Volume } from './volume.js';
 import type { VolumeService } from './volume.js';
-import { EncryptionError, VolumeError, mountError, remoteDetails } from './errors.js';
+import { EncryptionError, SubscriptionError, VolumeError, mountError, remoteDetails } from './errors.js';
 
 const moduleName = 'FileSystem';
 const maxWholeFileBytes = 16 * 1024 * 1024;
@@ -132,6 +134,63 @@ const unsupported = (method: string, path?: string, fileName: string | null = nu
       details: null,
     }),
   });
+
+const watchInterrupted = (state: Coordinator, path: string, cause: unknown) => {
+  const subscriptionError = new SubscriptionError({
+    code: 'SUBSCRIPTION_INTERRUPTED',
+    fileName: state.fileName,
+    path,
+    sourceCode: 'VFS_ATTACHMENT_LOST',
+    details: remoteDetails(cause),
+  });
+  return PlatformError.systemError({
+    _tag: 'Unknown',
+    module: moduleName,
+    method: 'watch',
+    pathOrDescriptor: path,
+    cause: subscriptionError,
+  });
+};
+
+const watchFailure = (state: Coordinator, path: string, error: unknown): PlatformError.PlatformError => {
+  if (PlatformError.isPlatformError(error)) {
+    const cause = error.reason.cause;
+    return Schema.is(VolumeError)(cause) && cause.code === 'VFS_ATTACHMENT_LOST'
+      ? watchInterrupted(state, path, cause)
+      : error;
+  }
+  if (!Schema.is(SubscriptionError)(error)) return platform(error, 'watch', path, state.fileName);
+  if (Schema.is(VolumeError)(error.cause) && error.cause.kind === 'unsupported')
+    return platform(error.cause, 'watch', path, state.fileName);
+  if (error.code === 'SUBSCRIPTION_INTERRUPTED')
+    return PlatformError.systemError({
+      _tag: 'Unknown',
+      module: moduleName,
+      method: 'watch',
+      pathOrDescriptor: path,
+      cause: error,
+    });
+  if (error.sourceCode === 'VFS_ATTACHMENT_LOST')
+    return watchInterrupted(state, path, error);
+  if (
+    error.sourceCode === 'VFS_OWNER_READY_TIMEOUT' ||
+    error.sourceCode === 'VFS_SUBSCRIPTION_RETIREMENT_TIMEOUT'
+  )
+    return PlatformError.systemError({
+      _tag: 'TimedOut',
+      module: moduleName,
+      method: 'watch',
+      pathOrDescriptor: path,
+      cause: error,
+    });
+  return PlatformError.systemError({
+    _tag: 'Unknown',
+    module: moduleName,
+    method: 'watch',
+    pathOrDescriptor: path,
+    cause: error,
+  });
+};
 
 const execute = <A>(
   state: Coordinator,
@@ -1673,6 +1732,93 @@ const takeCursor = <A>(handle: FileHandle, method: string, run: () => Effect.Eff
 const make = (volume: VolumeService): FileSystem.FileSystem => {
   const state = getCoordinator(volume);
   if (!state) throw new TypeError('Volume service was not created by this adapter');
+  const watch = (path: string, options?: FileSystem.WatchOptions) =>
+    Stream.suspend(() => {
+      const pathFailure = invalidPath('watch', path);
+      if (pathFailure) return Stream.fail(pathFailure);
+      const acquire = Effect.gen(function* () {
+        const budget = { remaining: state.readinessTimeout };
+        const generation = yield* state
+          .awaitReady(budget, 'watch')
+          .pipe(Effect.mapError((error) => watchFailure(state, path, error)));
+        const target = yield* pinnedLstat(state, generation, path, budget).pipe(
+          Effect.mapError((error) => watchFailure(state, path, error)),
+        );
+        if (isSymlink(target))
+          return yield* Effect.fail(
+            PlatformError.systemError({
+              _tag: 'BadResource',
+              module: moduleName,
+              method: 'watch',
+              pathOrDescriptor: path,
+              cause: new VolumeError({
+                kind: 'filesystem',
+                fileName: state.fileName,
+                operation: 'watch',
+                path,
+                code: 'ELOOP',
+                outcome: 'not-applied',
+                details: remoteDetails(Object.assign(new Error('Cannot watch a symlink target'), { code: 'ELOOP' })),
+              }),
+            }),
+          );
+        if (!target.is_dir && !target.is_file)
+          return yield* Effect.fail(
+            PlatformError.systemError({
+              _tag: 'BadResource',
+              module: moduleName,
+              method: 'watch',
+              pathOrDescriptor: path,
+              cause: new VolumeError({
+                kind: 'filesystem',
+                fileName: state.fileName,
+                operation: 'watch',
+                path,
+                code: 'EINVAL',
+                outcome: 'not-applied',
+                details: remoteDetails(Object.assign(new Error('Target is not a regular file or directory'), { code: 'EINVAL' })),
+              }),
+            }),
+          );
+        const admission: SubscriptionAdmission = { generation, budget };
+        const subscription = yield* makeSubscriptionInternal(
+          state,
+          {
+            path,
+            scope: target.is_dir ? 'directory' : 'file',
+            recursive: target.is_dir && (options?.recursive ?? false),
+            content: false,
+          },
+          admission,
+        ).pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, (error) => watchFailure(state, path, error)))),
+        );
+        return subscription.changes.pipe(
+          Stream.catchCause((cause) =>
+            Stream.failCause(Cause.map(cause, (error) => watchFailure(state, path, error))),
+          ),
+          Stream.map((change): FileSystem.WatchEvent => {
+            switch (change.type) {
+              case 'create':
+                return { _tag: 'Create', path: change.path };
+              case 'update':
+                return { _tag: 'Update', path: change.path };
+              case 'delete':
+                return { _tag: 'Remove', path: change.path };
+            }
+          }),
+        );
+      });
+      return Stream.scoped(
+        Stream.unwrap(
+          acquire.pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, (error) => watchFailure(state, path, error))),
+            ),
+          ),
+        ),
+      );
+    });
   const fs = FileSystem.make({
     access: (path, options) =>
       (options?.ok !== undefined && typeof options.ok !== 'boolean') ||
@@ -2058,7 +2204,7 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         true,
       );
     },
-    watch: () => Stream.fail(unsupported('watch', undefined, state.fileName)),
+    watch,
   });
   return fs;
 };

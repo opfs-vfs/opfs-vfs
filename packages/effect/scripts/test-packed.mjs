@@ -29,11 +29,13 @@ const workerFile = resolve(packed, 'examples/worker-session.ts');
 const filesystemFile = resolve(packed, 'examples/filesystem-save.ts');
 const streamFile = resolve(packed, 'examples/filesystem-stream.ts');
 const subscriptionsFile = resolve(packed, 'examples/subscriptions.ts');
+const reconciledViewFile = resolve(packed, 'examples/reconciled-view.ts');
 writeFileSync(directFile, example('direct'));
 writeFileSync(workerFile, example('worker-session'));
 writeFileSync(filesystemFile, example('filesystem-save'));
 writeFileSync(streamFile, example('filesystem-stream'));
 writeFileSync(subscriptionsFile, example('subscriptions'));
+writeFileSync(reconciledViewFile, example('reconciled-view'));
 writeFileSync(
   resolve(packed, 'package.json'),
   JSON.stringify({ name: 'effect-packed-check', private: true, type: 'module' }),
@@ -51,7 +53,7 @@ run('npm', [
   effect,
   effectRuntime,
 ]);
-for (const file of [directFile, workerFile, filesystemFile, streamFile, subscriptionsFile]) {
+for (const file of [directFile, workerFile, filesystemFile, streamFile, subscriptionsFile, reconciledViewFile]) {
   run('node', [
     resolve(root, 'node_modules/typescript/bin/tsc'),
     '--ignoreConfig',
@@ -95,4 +97,20 @@ run(
     'tests/packed-subscriptions.test.ts',
   ],
   { env: { ...process.env, VITE_PACKED_EFFECT_SUBSCRIPTIONS_EXAMPLE: '/.packed/examples/subscriptions.ts' } },
+);
+run(
+  'node',
+  [
+    resolve(packageRoot, 'node_modules/vitest/vitest.mjs'),
+    'run',
+    '--config',
+    'vitest.packed.config.ts',
+    'tests/packed-reconciled-view.test.ts',
+  ],
+  {
+    env: {
+      ...process.env,
+      VITE_PACKED_EFFECT_RECONCILED_VIEW_EXAMPLE: '/.packed/examples/reconciled-view.ts',
+    },
+  },
 );
