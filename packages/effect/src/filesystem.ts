@@ -170,12 +170,8 @@ const watchFailure = (state: Coordinator, path: string, error: unknown): Platfor
       pathOrDescriptor: path,
       cause: error,
     });
-  if (error.sourceCode === 'VFS_ATTACHMENT_LOST')
-    return watchInterrupted(state, path, error);
-  if (
-    error.sourceCode === 'VFS_OWNER_READY_TIMEOUT' ||
-    error.sourceCode === 'VFS_SUBSCRIPTION_RETIREMENT_TIMEOUT'
-  )
+  if (error.sourceCode === 'VFS_ATTACHMENT_LOST') return watchInterrupted(state, path, error);
+  if (error.sourceCode === 'VFS_OWNER_READY_TIMEOUT' || error.sourceCode === 'VFS_SUBSCRIPTION_RETIREMENT_TIMEOUT')
     return PlatformError.systemError({
       _tag: 'TimedOut',
       module: moduleName,
@@ -1776,7 +1772,9 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
                 path,
                 code: 'EINVAL',
                 outcome: 'not-applied',
-                details: remoteDetails(Object.assign(new Error('Target is not a regular file or directory'), { code: 'EINVAL' })),
+                details: remoteDetails(
+                  Object.assign(new Error('Target is not a regular file or directory'), { code: 'EINVAL' }),
+                ),
               }),
             }),
           );
@@ -1794,9 +1792,7 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
           Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, (error) => watchFailure(state, path, error)))),
         );
         return subscription.changes.pipe(
-          Stream.catchCause((cause) =>
-            Stream.failCause(Cause.map(cause, (error) => watchFailure(state, path, error))),
-          ),
+          Stream.catchCause((cause) => Stream.failCause(Cause.map(cause, (error) => watchFailure(state, path, error)))),
           Stream.map((change): FileSystem.WatchEvent => {
             switch (change.type) {
               case 'create':

@@ -10,7 +10,7 @@ it.skipIf(!examplePath)(
   async () => {
     const example = (await import(/* @vite-ignore */ examplePath!)) as typeof import('../examples/reconciled-view');
     const fileName = `effect-packed-reconciled-${crypto.randomUUID()}.bin`;
-    const { Effect, Fiber, FileSystem, Layer, Queue, Volume } = example;
+    const { Effect, Fiber, FileSystem, Queue, Volume } = example;
     const live = example.makeLayer(fileName);
 
     try {
@@ -28,8 +28,7 @@ it.skipIf(!examplePath)(
 
             yield* fs.makeDirectory('/tree');
             yield* fs.makeDirectory('/tree/old');
-            for (let index = 0; index < 2050; index++)
-              yield* fs.writeFileString(`/tree/old/file-${index}.txt`, 'x');
+            for (let index = 0; index < 2050; index++) yield* fs.writeFileString(`/tree/old/file-${index}.txt`, 'x');
 
             const source = Volume.unsafeBackend(volume) as unknown as FileChangeSource;
             const open = source.openFileChangeChannel.bind(source);

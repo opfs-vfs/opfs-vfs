@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, Fiber, Layer, PlatformError, Queue, Scope, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, FileSystem, Layer, PlatformError, Queue, Scope, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import type { ChangeFrame, ChangeReply, FileChangeChannel, FileChangeSource } from '@opfs-vfs/opfs-vfs/changes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -961,6 +961,121 @@ describe('Effect subscriptions', () => {
     expect(stale).toBe(1);
     expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
     expect(source.commands.filter((command) => command.type === 'cancel')).toHaveLength(1);
+    expect(state.files.size).toBe(0);
+  });
+
+  it('rescans after a mutation queued during the initial scan', async () => {
+    const started = Deferred.makeUnsafe<void>();
+    const release = Deferred.makeUnsafe<void>();
+    const current = Deferred.makeUnsafe<void>();
+    let scans = 0;
+    let paths = ['before.txt'];
+    const views: Array<ReadonlyArray<string>> = [];
+    const fs = {
+      ...OpfsFileSystem.make(volume),
+      readDirectory: () =>
+        Effect.gen(function* () {
+          const snapshot = [...paths];
+          expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
+          if (++scans === 1) {
+            yield* Deferred.succeed(started, undefined);
+            yield* Deferred.await(release);
+          }
+          return snapshot;
+        }),
+    };
+    const layers = Layer.merge(liveLayer, Layer.succeed(FileSystem.FileSystem, fs));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const watcher = yield* Effect.forkChild(
+            keepViewCurrent({
+              path: '/',
+              publish: (view) =>
+                Effect.gen(function* () {
+                  views.push(view);
+                  if (view.includes('during.txt')) yield* Deferred.succeed(current, undefined);
+                }),
+              markStale: () => Effect.void,
+            }),
+          );
+          yield* Deferred.await(started);
+          paths = ['before.txt', 'during.txt'];
+          source.emit();
+          yield* Effect.yieldNow;
+          yield* Deferred.succeed(release, undefined);
+          yield* Deferred.await(current);
+          yield* Fiber.interrupt(watcher);
+        }),
+      ).pipe(Effect.provide(layers)),
+    );
+
+    expect(views[0]).toEqual(['before.txt']);
+    expect(views.at(-1)).toEqual(['before.txt', 'during.txt']);
+    expect(scans).toBe(2);
+    expect(state.files.size).toBe(0);
+  });
+
+  it('does not let a canceled old scan publish into a new workflow', async () => {
+    let resolveOld: ((paths: Array<string>) => void) | undefined;
+    const oldRead = new Promise<Array<string>>((resolve) => {
+      resolveOld = resolve;
+    });
+    const started = Deferred.makeUnsafe<void>();
+    const publishedNew = Deferred.makeUnsafe<void>();
+    let scans = 0;
+    const views: Array<string> = [];
+    const fs = {
+      ...OpfsFileSystem.make(volume),
+      readDirectory: () =>
+        Effect.gen(function* () {
+          if (++scans === 1) {
+            yield* Deferred.succeed(started, undefined);
+            return yield* Effect.promise(() => oldRead);
+          }
+          return ['new.txt'];
+        }),
+    };
+    const layers = Layer.merge(liveLayer, Layer.succeed(FileSystem.FileSystem, fs));
+
+    try {
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const old = yield* Effect.forkChild(
+              keepViewCurrent({
+                path: '/',
+                publish: () => Effect.sync(() => views.push('old')),
+                markStale: () => Effect.void,
+              }),
+            );
+            yield* Deferred.await(started);
+            yield* Fiber.interrupt(old);
+            const next = yield* Effect.forkChild(
+              keepViewCurrent({
+                path: '/',
+                publish: () =>
+                  Effect.gen(function* () {
+                    views.push('new');
+                    yield* Deferred.succeed(publishedNew, undefined);
+                  }),
+                markStale: () => Effect.void,
+              }),
+            );
+            yield* Deferred.await(publishedNew);
+            resolveOld?.(['old.txt']);
+            yield* Effect.yieldNow;
+            expect(views).toEqual(['new']);
+            expect(scans).toBe(2);
+            yield* Fiber.interrupt(next);
+          }),
+        ).pipe(Effect.provide(layers)),
+      );
+    } finally {
+      resolveOld?.(['old.txt']);
+    }
+
     expect(state.files.size).toBe(0);
   });
 

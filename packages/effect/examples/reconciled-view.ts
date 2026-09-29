@@ -2,16 +2,13 @@ import { Cause, Effect, Fiber, FileSystem, Layer, Queue, Schedule, Schema, Strea
 import { OpfsFileSystem, Subscriptions, SubscriptionError, Volume } from '@opfs-vfs/effect';
 import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
 
-export { Effect, Fiber, FileSystem, Layer, OpfsFileSystem, Queue, Subscriptions, Volume };
+export { Effect, Fiber, FileSystem, Queue, Volume };
 
 export const makeLayer = (fileName: string) => {
   const volume = Volume.layer({ fileName, plugins: [subscriptionsRequest()] });
   return Layer.merge(
     volume,
-    Layer.merge(
-      Layer.provide(Subscriptions.layer, volume),
-      Layer.provide(OpfsFileSystem.layer, volume),
-    ),
+    Layer.merge(Layer.provide(Subscriptions.layer, volume), Layer.provide(OpfsFileSystem.layer, volume)),
   );
 };
 
@@ -21,11 +18,7 @@ export interface ReconciledViewOptions {
   readonly markStale: () => Effect.Effect<void>;
 }
 
-const recoverable = new Set([
-  'SUBSCRIPTION_INTERRUPTED',
-  'SUBSCRIPTION_OVERFLOW',
-  'SUBSCRIPTION_RESYNC_REQUIRED',
-]);
+const recoverable = new Set(['SUBSCRIPTION_INTERRUPTED', 'SUBSCRIPTION_OVERFLOW', 'SUBSCRIPTION_RESYNC_REQUIRED']);
 
 const isRecoverableCause = (cause: Cause.Cause<unknown>): boolean => {
   const [reason] = cause.reasons;

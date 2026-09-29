@@ -4,12 +4,11 @@ import {
   subscribe as subscribePlugin,
   type FileChange,
   type SubscribeLifecycle,
-  type SubscribeOptions as PluginSubscribeOptions,
   type Subscription as PluginSubscription,
   type SubscriptionRetirement as PluginRetirement,
   type SubscriptionSetup,
 } from '@opfs-vfs/plugin-subscriptions/client';
-import { getCoordinator, type Coordinator, type SubscriptionSetupRecord } from './coordinator.js';
+import { type Coordinator, type SubscriptionSetupRecord } from './coordinator.js';
 import { remoteDetails, SubscriptionError, VolumeError } from './errors.js';
 import type { SubscribeOptions, Subscription, SubscriptionRetirement } from './subscriptions.js';
 
