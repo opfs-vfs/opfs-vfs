@@ -11,9 +11,11 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
         persistence: { state: string };
         copyTemp: {
           directCopy: boolean;
+          regularReplacement: boolean;
           scopedTempDirectoryRemoved: boolean;
           scopedTempFileRemoved: boolean;
           siblingSurvived: boolean;
+          physicalTempParents: boolean;
         };
         namespace: {
           relativeLink: string;
@@ -56,9 +58,11 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
       persistence: { state: 'clean' },
       copyTemp: {
         directCopy: true,
+        regularReplacement: true,
         scopedTempDirectoryRemoved: true,
         scopedTempFileRemoved: true,
         siblingSurvived: true,
+        physicalTempParents: true,
       },
       namespace: {
         relativeLink: 'sub/note',

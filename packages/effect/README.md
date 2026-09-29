@@ -27,7 +27,9 @@ Filesystem operands must be absolute paths; relative symlink targets are
 preserved. Recursive copy does not follow symlinks, is not atomic, and does not
 preserve hard-link topology. `chown`, `glob` and `watch` return typed unsupported
 errors in this slice. Scoped temporary paths remove only their private directory
-when the scope closes; the default parent is `/tmp` inside the volume.
+when the scope closes; the default parent is `/tmp` inside the volume. A temporary
+path uses its resolved physical parent, so later parent-symlink changes cannot
+redirect cleanup and the returned path is canonical.
 
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';

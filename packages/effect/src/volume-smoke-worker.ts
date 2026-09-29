@@ -29,6 +29,17 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           const directCopy =
             sameBytes(yield* fs.readFile('/copy-file.bin'), copyBytes) &&
             sameBytes(yield* fs.readFile('/copy-parent/missing/destination/nested/data.bin'), copyBytes);
+          yield* fs.writeFileString('/copy-regular-source', 'source');
+          yield* fs.writeFileString('/copy-regular-destination', 'old');
+          yield* fs.link('/copy-regular-destination', '/copy-regular-old-alias');
+          yield* fs.chmod('/copy-regular-destination', 0o400);
+          const regularCopy = yield* Effect.result(
+            fs.copy('/copy-regular-source', '/copy-regular-destination', { overwrite: true }),
+          );
+          yield* fs.link('/copy-regular-source', '/copy-regular-same');
+          const sameInodeCopy = yield* Effect.result(
+            fs.copy('/copy-regular-source', '/copy-regular-same', { overwrite: true }),
+          );
           yield* fs.makeDirectory('/tmp/copy-temp', { recursive: true });
           yield* fs.writeFileString('/tmp/copy-temp/sibling', 'owned by caller');
           const scopedTempDirectory = yield* Effect.scoped(
@@ -49,11 +60,56 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
               return path;
             }),
           );
+          yield* fs.makeDirectory('/copy-temp-a');
+          yield* fs.makeDirectory('/copy-temp-b');
+          yield* fs.symlink('/copy-temp-a', '/copy-temp-parent');
+          const retargetedDirectory = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempDirectoryScoped({ directory: '/copy-temp-parent', prefix: 'directory-' });
+              const name = path.slice(path.lastIndexOf('/') + 1);
+              yield* fs.remove('/copy-temp-parent');
+              yield* fs.symlink('/copy-temp-b', '/copy-temp-parent');
+              yield* fs.makeDirectory(`/copy-temp-b/${name}`);
+              yield* fs.writeFileString(`/copy-temp-b/${name}/victim`, 'keep');
+              return { path, name };
+            }),
+          );
+          yield* fs.remove('/copy-temp-parent');
+          yield* fs.symlink('/copy-temp-a', '/copy-temp-parent');
+          const retargetedFile = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempFileScoped({
+                directory: '/copy-temp-parent',
+                prefix: 'file-',
+                suffix: '.tmp',
+              });
+              const fileName = path.slice(path.lastIndexOf('/') + 1);
+              const root = path.slice(0, path.lastIndexOf('/')).split('/').at(-1)!;
+              yield* fs.remove('/copy-temp-parent');
+              yield* fs.symlink('/copy-temp-b', '/copy-temp-parent');
+              yield* fs.makeDirectory(`/copy-temp-b/${root}`);
+              yield* fs.writeFileString(`/copy-temp-b/${root}/${fileName}`, 'keep');
+              return { path, root, fileName };
+            }),
+          );
           const copyTemp = {
             directCopy,
+            regularReplacement:
+              regularCopy._tag === 'Success' &&
+              (yield* fs.readFileString('/copy-regular-destination')) === 'source' &&
+              (yield* fs.readFileString('/copy-regular-old-alias')) === 'old' &&
+              sameInodeCopy._tag === 'Failure' &&
+              (yield* fs.readFileString('/copy-regular-same')) === 'source',
             scopedTempDirectoryRemoved: !(yield* fs.exists(scopedTempDirectory)),
             scopedTempFileRemoved: !(yield* fs.exists(scopedTempFile)),
             siblingSurvived: (yield* fs.readFileString('/tmp/copy-temp/sibling')) === 'owned by caller',
+            physicalTempParents:
+              retargetedDirectory.path.startsWith('/copy-temp-a/') &&
+              !(yield* fs.exists(`/copy-temp-a/${retargetedDirectory.name}`)) &&
+              (yield* fs.readFileString(`/copy-temp-b/${retargetedDirectory.name}/victim`)) === 'keep' &&
+              retargetedFile.path.startsWith('/copy-temp-a/') &&
+              !(yield* fs.exists(`/copy-temp-a/${retargetedFile.root}`)) &&
+              (yield* fs.readFileString(`/copy-temp-b/${retargetedFile.root}/${retargetedFile.fileName}`)) === 'keep',
           };
           yield* fs.makeDirectory('/namespace/tree/sub', { recursive: true, mode: 0o750 });
           yield* fs.writeFileString('/namespace/tree/sub/note', 'linked');

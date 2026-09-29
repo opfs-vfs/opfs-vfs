@@ -275,6 +275,83 @@ it('copies trees without following symlinks and cleans only scoped temporary roo
   expect(result.unscopedExists).toBe(true);
 });
 
+it('replaces regular destinations and owns temporary roots through their physical parent', async () => {
+  const result = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const volume = yield* Volume.make({ fileName: fileName(), transport: 'auto', worker });
+        const fs = OpfsFileSystem.make(volume);
+        yield* fs.writeFileString('/regular-source', 'source');
+        yield* fs.writeFileString('/regular-destination', 'old');
+        yield* fs.link('/regular-destination', '/regular-old-alias');
+        yield* fs.chmod('/regular-destination', 0o400);
+        const overwrite = yield* Effect.result(fs.copy('/regular-source', '/regular-destination', { overwrite: true }));
+        yield* fs.link('/regular-source', '/regular-same');
+        const sameInode = yield* Effect.result(fs.copy('/regular-source', '/regular-same', { overwrite: true }));
+
+        yield* fs.makeDirectory('/retarget-a');
+        yield* fs.makeDirectory('/retarget-b');
+        yield* fs.symlink('/retarget-a', '/retarget-parent');
+        const directory = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const path = yield* fs.makeTempDirectoryScoped({ directory: '/retarget-parent', prefix: 'directory-' });
+            const name = path.slice(path.lastIndexOf('/') + 1);
+            yield* fs.remove('/retarget-parent');
+            yield* fs.symlink('/retarget-b', '/retarget-parent');
+            yield* fs.makeDirectory(`/retarget-b/${name}`);
+            yield* fs.writeFileString(`/retarget-b/${name}/victim`, 'keep');
+            return { path, name };
+          }),
+        );
+
+        yield* fs.remove('/retarget-parent');
+        yield* fs.symlink('/retarget-a', '/retarget-parent');
+        const file = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const path = yield* fs.makeTempFileScoped({
+              directory: '/retarget-parent',
+              prefix: 'file-',
+              suffix: '.tmp',
+            });
+            const fileName = path.slice(path.lastIndexOf('/') + 1);
+            const root = path.slice(0, path.lastIndexOf('/')).split('/').at(-1)!;
+            yield* fs.remove('/retarget-parent');
+            yield* fs.symlink('/retarget-b', '/retarget-parent');
+            yield* fs.makeDirectory(`/retarget-b/${root}`);
+            yield* fs.writeFileString(`/retarget-b/${root}/${fileName}`, 'keep');
+            return { path, root, fileName };
+          }),
+        );
+
+        return {
+          overwrite,
+          destination: yield* fs.readFileString('/regular-destination'),
+          oldAlias: yield* fs.readFileString('/regular-old-alias'),
+          sameInode,
+          sameInodePath: yield* fs.readFileString('/regular-same'),
+          directory,
+          directoryRemoved: yield* fs.exists(`/retarget-a/${directory.name}`),
+          directoryVictim: yield* fs.readFileString(`/retarget-b/${directory.name}/victim`),
+          file,
+          fileRootRemoved: yield* fs.exists(`/retarget-a/${file.root}`),
+          fileVictim: yield* fs.readFileString(`/retarget-b/${file.root}/${file.fileName}`),
+        };
+      }),
+    ),
+  );
+  expect(result.overwrite._tag).toBe('Success');
+  expect(result.destination).toBe('source');
+  expect(result.oldAlias).toBe('old');
+  expect(result.sameInode._tag).toBe('Failure');
+  expect(result.sameInodePath).toBe('source');
+  expect(result.directory.path.startsWith('/retarget-a/')).toBe(true);
+  expect(result.directoryRemoved).toBe(false);
+  expect(result.directoryVictim).toBe('keep');
+  expect(result.file.path.startsWith('/retarget-a/')).toBe(true);
+  expect(result.fileRootRemoved).toBe(false);
+  expect(result.fileVictim).toBe('keep');
+});
+
 it('keeps an injected worker crash terminal at the Effect service boundary', async () => {
   let actualWorker: Worker | undefined;
   const error = await Effect.runPromise(

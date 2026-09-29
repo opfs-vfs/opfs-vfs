@@ -1079,7 +1079,9 @@ const copyPinned = (
         }
         if (source.is_file) {
           if (!destination || overwrite) {
-            if (destination && isSymlink(destination))
+            if (destination && destination.is_file && source.ino === destination.ino)
+              return yield* Effect.fail(badArgument('copy', 'source and destination refer to the same file'));
+            if (destination) {
               yield* pinned(
                 state,
                 generation,
@@ -1092,7 +1094,8 @@ const copyPinned = (
                 true,
                 budget,
               );
-            if (destination && isSymlink(destination)) changed = true;
+              changed = true;
+            }
             yield* copyFilePinned(state, generation, sourcePath, destinationPath, budget);
             changed = true;
             yield* pinned(
@@ -1347,9 +1350,10 @@ const tempDirectoryResource = (
           budget,
         );
         owner.mutated = true;
+        const physicalDirectory = yield* pinnedRealPath(state, generation, directory, budget);
         let lastError: PlatformError.PlatformError | undefined;
         for (let attempt = 0; attempt < 128; attempt++) {
-          const path = joinPath(directory, `${prefix}${randomHex()}`);
+          const path = joinPath(physicalDirectory, `${prefix}${randomHex()}`);
           const created = yield* Effect.result(
             pinned(
               state,
@@ -1421,9 +1425,10 @@ const tempFileResource = (
           budget,
         );
         owner.mutated = true;
+        const physicalDirectory = yield* pinnedRealPath(state, generation, directory, budget);
         let lastError: PlatformError.PlatformError | undefined;
         for (let attempt = 0; attempt < 128; attempt++) {
-          const root = joinPath(directory, `${prefix}${randomHex()}`);
+          const root = joinPath(physicalDirectory, `${prefix}${randomHex()}`);
           const madeDirectory = yield* Effect.result(
             pinned(
               state,
