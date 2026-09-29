@@ -1,6 +1,7 @@
-import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
+import { ByteSize, Deferred, Effect, Exit, Fiber, Option as EffectOption, Scope } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VfsCommandError } from '@opfs-vfs/opfs-vfs/worker';
+import type { VfsDirEntry, VfsStat } from '@opfs-vfs/opfs-vfs';
 import type { OpfsVfsWorkerClient, ClientStatus } from '@opfs-vfs/opfs-vfs/worker-client';
 import type { VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
 import { Volume } from './index.js';
@@ -39,12 +40,17 @@ class FakeWorkerClient {
   onDescriptorWrite: (() => Promise<void>) | undefined;
   onDescriptorRead: (() => Promise<void>) | undefined;
   onDescriptorOpen: (() => Promise<void>) | undefined;
+  onNamespaceCommand: ((generation: string, method: string, args: ReadonlyArray<unknown>) => Promise<void>) | undefined;
   afterDescriptorWrite: (() => void) | undefined;
   maxWrite = Number.POSITIVE_INFINITY;
   writes: Array<{ generation: string; path: string }> = [];
   reads: Array<{ generation: string; path: string; limit: number }> = [];
   descriptorCalls: Array<{ generation: string; method: string }> = [];
   descriptorWriteLengths: number[] = [];
+  namespaceCalls: Array<{ generation: string; method: string; args: ReadonlyArray<unknown> }> = [];
+  pathStats = new Map<string, VfsStat>();
+  directoryEntries = new Map<string, Array<VfsDirEntry>>();
+  linkTarget = '../target';
   bytes = new Uint8Array();
   nextFd = 1;
   openFlags = new Map<number, number>();
@@ -89,7 +95,55 @@ class FakeWorkerClient {
           'refused',
         );
     };
+    const namespace = async (method: string, ...args: ReadonlyArray<unknown>) => {
+      ensureOwner();
+      this.namespaceCalls.push({ generation, method, args });
+      await this.onNamespaceCommand?.(generation, method, args);
+    };
+    const statPath = (path: string): VfsStat =>
+      this.pathStats.get(path) ?? {
+        mode: 0o100644,
+        size: 3,
+        ino: 1,
+        nlink: 1,
+        blksize: 4096,
+        blocks: 1,
+        is_file: true,
+        is_dir: false,
+        mtimeMs: 1000,
+        atimeMs: 2000,
+      };
     return {
+      stat: async (path: string) => {
+        await namespace('stat', path);
+        return statPath(path);
+      },
+      lstat: async (path: string) => {
+        await namespace('lstat', path);
+        return statPath(path);
+      },
+      readdirEntries: async (path: string) => {
+        await namespace('readdirEntries', path);
+        return this.directoryEntries.get(path) ?? [];
+      },
+      mkdir: async (path: string, options?: unknown) => namespace('mkdir', path, options),
+      chmod: async (path: string, mode: number) => namespace('chmod', path, mode),
+      utimes: async (path: string, atimeMs: number, mtimeMs: number) => namespace('utimes', path, atimeMs, mtimeMs),
+      link: async (existingPath: string, newPath: string) => namespace('link', existingPath, newPath),
+      symlink: async (target: string, path: string) => namespace('symlink', target, path),
+      readlink: async (path: string) => {
+        await namespace('readlink', path);
+        return this.linkTarget;
+      },
+      realpath: async (path: string) => {
+        await namespace('realpath', path);
+        return path.replace(/\/$/, '') || '/';
+      },
+      unlink: async (path: string) => namespace('unlink', path),
+      rmdir: async (path: string) => namespace('rmdir', path),
+      remove: async (path: string) => namespace('remove', path),
+      rename: async (oldPath: string, newPath: string) => namespace('rename', oldPath, newPath),
+      truncate: async (path: string, size: number) => namespace('truncate', path, size),
       open: async (_path: string, flags = 0) => {
         ensureOwner();
         this.descriptorCalls.push({ generation, method: 'open' });
@@ -375,6 +429,290 @@ describe('Volume worker acquisition and sessions', () => {
         }),
       ),
     );
+  });
+
+  it('routes namespace methods through the pinned worker facade and preserves relative symlink targets', async () => {
+    const client = new FakeWorkerClient();
+    client.linkTarget = '../dangling';
+    client.pathStats.set('/meta', {
+      mode: 0o100640,
+      size: 12,
+      ino: 7,
+      nlink: 2,
+      blksize: 4096,
+      blocks: 1,
+      is_file: true,
+      is_dir: false,
+      mtimeMs: 1000,
+      atimeMs: 2000,
+    });
+    client.pathStats.set('/malformed', {
+      mode: 0o100644,
+      size: Number.MAX_SAFE_INTEGER + 1,
+      ino: 1,
+      nlink: 1,
+      blksize: 4096,
+      blocks: 1,
+      is_file: true,
+      is_dir: false,
+    });
+    client.directoryEntries.set('/tree', [
+      { name: 'z', mode: 0o100644, is_dir: false, is_file: true },
+      { name: 'dir', mode: 0o040755, is_dir: true, is_file: false },
+      { name: 'link', mode: 0o120777, is_dir: false, is_file: false },
+      { name: 'a', mode: 0o100644, is_dir: false, is_file: true },
+    ]);
+    client.directoryEntries.set('/tree/dir', [{ name: 'nested', mode: 0o100644, is_dir: false, is_file: true }]);
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.makeDirectory('/tree/new/deep', { recursive: true, mode: 0o750 });
+          yield* fs.chmod('/meta', 0o600);
+          yield* fs.link('/meta', '/meta-hard');
+          yield* fs.symlink('../dangling', '/tree/link-new');
+          const link = yield* fs.readLink('/tree/link-new');
+          const real = yield* fs.realPath('/tree/');
+          yield* fs.rename('/meta-hard', '/meta-moved');
+          yield* fs.truncate('/meta-moved', 4);
+          yield* fs.utimes('/meta', 1.25, new Date(2500));
+          yield* fs.access('/meta', { readable: true, writable: true });
+          const info = yield* fs.stat('/meta');
+          const malformed = yield* Effect.result(fs.stat('/malformed'));
+          const tree = yield* fs.readDirectory('/tree', { recursive: true });
+          return { info, malformed, tree, link, real };
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      info: {
+        type: 'File',
+        dev: 0,
+        mode: 0o100640,
+        size: ByteSize.bytes(12n),
+        ino: EffectOption.some(7),
+        nlink: EffectOption.some(2),
+        blksize: EffectOption.some(ByteSize.bytes(4096n)),
+        blocks: EffectOption.some(1),
+        atime: EffectOption.some(new Date(2000)),
+        mtime: EffectOption.some(new Date(1000)),
+        uid: EffectOption.none(),
+        gid: EffectOption.none(),
+        rdev: EffectOption.none(),
+        birthtime: EffectOption.none(),
+      },
+      tree: ['a', 'dir', 'dir/nested', 'link', 'z'],
+      link: '../dangling',
+      real: '/tree',
+    });
+    expect(client.namespaceCalls.map(({ method, args }) => [method, ...args])).toEqual([
+      ['mkdir', '/tree/new/deep', { mode: 0o750, recursive: true }],
+      ['chmod', '/meta', 0o600],
+      ['link', '/meta', '/meta-hard'],
+      ['symlink', '../dangling', '/tree/link-new'],
+      ['readlink', '/tree/link-new'],
+      ['realpath', '/tree/'],
+      ['rename', '/meta-hard', '/meta-moved'],
+      ['truncate', '/meta-moved', 4],
+      ['utimes', '/meta', 1250, 2500],
+      ['stat', '/meta'],
+      ['stat', '/meta'],
+      ['stat', '/malformed'],
+      ['readdirEntries', '/tree'],
+      ['readdirEntries', '/tree/dir'],
+    ]);
+    expect(result.malformed).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
+    expect(Object.hasOwn(result.info, 'ctime')).toBe(false);
+  });
+
+  it('validates every namespace path before worker dispatch and rejects malformed timestamps', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          for (const operation of [
+            fs.access('relative'),
+            fs.chmod('relative', 0o600),
+            fs.makeDirectory('relative'),
+            fs.readLink('relative'),
+            fs.realPath('relative'),
+            fs.remove('relative'),
+            fs.stat('relative'),
+            fs.truncate('relative'),
+            fs.utimes('relative', 1, 1),
+            fs.link('relative', '/destination'),
+            fs.rename('relative', '/destination'),
+            fs.rename('/source', 'relative'),
+            fs.link('/source', 'relative'),
+            fs.symlink('../target', 'relative'),
+            fs.readDirectory('relative'),
+            fs.chown('relative', 1, 1),
+            fs.glob('**/*.txt', { root: 'relative' }),
+            fs.utimes('/file', '1' as unknown as number, 1),
+            fs.utimes('/file', Symbol('time') as unknown as number, 1),
+            fs.utimes('/file', Number.NaN, 1),
+            fs.utimes('/file', Number.POSITIVE_INFINITY, 1),
+            fs.utimes('/file', new Date(Number.NaN), 1),
+            fs.utimes('/file', 8.64e12 + 1, 1),
+          ]) {
+            const result = yield* Effect.result(operation);
+            expect(result._tag).toBe('Failure');
+          }
+          const unsupportedGlob = yield* Effect.result(fs.glob('**/*.txt'));
+          expect(unsupportedGlob).toMatchObject({
+            _tag: 'Failure',
+            failure: {
+              reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'unsupported', code: 'ENOTSUP' } },
+            },
+          });
+          const unsupportedChown = yield* Effect.result(fs.chown('/file', 1, 1));
+          expect(unsupportedChown).toMatchObject({
+            _tag: 'Failure',
+            failure: {
+              reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'unsupported', code: 'ENOTSUP' } },
+            },
+          });
+        }),
+      ),
+    );
+    expect(client.namespaceCalls).toEqual([]);
+  });
+
+  it('uses one pinned generation for recursive listing and nonrecursive remove', async () => {
+    const client = new FakeWorkerClient();
+    client.directoryEntries.set('/tree', [{ name: 'dir', mode: 0o040755, is_dir: true, is_file: false }]);
+    client.directoryEntries.set('/tree/dir', [{ name: 'child', mode: 0o100644, is_dir: false, is_file: true }]);
+    client.pathStats.set('/tree/dir', {
+      mode: 0o040755,
+      size: 0,
+      ino: 2,
+      nlink: 2,
+      blksize: 4096,
+      blocks: 0,
+      is_dir: true,
+      is_file: false,
+    });
+    let reads = 0;
+    client.onNamespaceCommand = async (_generation, method) => {
+      if (method === 'readdirEntries' && ++reads === 1) client.publish({ ownerGeneration: 'generation-2' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).readDirectory('/tree', { recursive: true }));
+        }),
+      ),
+    );
+    expect(result._tag).toBe('Failure');
+    expect(client.namespaceCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'readdirEntries'],
+    ]);
+
+    const removal = new FakeWorkerClient();
+    removal.pathStats.set('/dir', {
+      mode: 0o040755,
+      size: 0,
+      ino: 2,
+      nlink: 2,
+      blksize: 4096,
+      blocks: 0,
+      is_dir: true,
+      is_file: false,
+    });
+    workerMocks.open.mockResolvedValue(clientAsCore(removal));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).remove('/dir');
+        }),
+      ),
+    );
+    expect(removal.namespaceCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'lstat'],
+      ['generation-1', 'rmdir'],
+    ]);
+  });
+
+  it('keeps force removal narrow and refuses a delete after takeover between lstat and unlink', async () => {
+    const client = new FakeWorkerClient();
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      const path = args[0];
+      if (method === 'lstat' && path === '/missing') throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      if (method === 'unlink' && path === '/gone') throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      if (method === 'unlink' && path === '/denied') throw Object.assign(new Error('denied'), { code: 'EACCES' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.remove('/missing', { force: true });
+          yield* fs.remove('/gone', { force: true });
+          const denied = yield* Effect.result(fs.remove('/denied', { force: true }));
+          return denied;
+        }),
+      ),
+    );
+    expect(result).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'PermissionDenied' } } });
+    expect(client.namespaceCalls.map(({ method, args }) => [method, ...args])).toEqual([
+      ['lstat', '/missing'],
+      ['lstat', '/gone'],
+      ['unlink', '/gone'],
+      ['lstat', '/denied'],
+      ['unlink', '/denied'],
+    ]);
+
+    const stale = new FakeWorkerClient();
+    stale.onNamespaceCommand = async (_generation, method) => {
+      if (method === 'lstat') stale.publish({ ownerGeneration: 'generation-2' });
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(stale));
+    const staleResult = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).remove('/entry'));
+        }),
+      ),
+    );
+    expect(staleResult._tag).toBe('Failure');
+    expect(stale.namespaceCalls.map(({ generation, method }) => [generation, method])).toEqual([
+      ['generation-1', 'lstat'],
+    ]);
+  });
+
+  it('tracks namespace mutation outcomes without retrying sent or replied commands', async () => {
+    for (const dispatch of ['refused', 'sent', 'replied'] as const) {
+      const client = new FakeWorkerClient();
+      client.onNamespaceCommand = async (_generation, method) => {
+        if (method === 'mkdir')
+          throw new VfsCommandError(Object.assign(new Error('mkdir failed'), { code: 'EIO' }), dispatch);
+      };
+      workerMocks.open.mockResolvedValue(clientAsCore(client));
+      const sync = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const volume = yield* Volume.make(mount());
+            const failed = yield* Effect.result(OpfsFileSystem.make(volume).makeDirectory('/once'));
+            expect(failed._tag).toBe('Failure');
+            expect(client.namespaceCalls.map(({ method }) => method)).toEqual(['mkdir']);
+            client.publish({ ownerGeneration: 'generation-2' });
+            return yield* Effect.result(volume.sync);
+          }),
+        ),
+      );
+      expect(sync._tag).toBe(dispatch === 'refused' ? 'Success' : 'Failure');
+      if (sync._tag === 'Failure') expect(sync.failure).toMatchObject({ code: 'VFS_SYNC_OWNER_CHANGED' });
+    }
   });
 
   it('uses File.sync as a same-owner persistence barrier', async () => {
