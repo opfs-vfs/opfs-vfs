@@ -641,6 +641,89 @@ describe('Volume worker acquisition and sessions', () => {
     ]);
   });
 
+  it('interrupts a recursive listing before a late directory reply can dispatch its child', async () => {
+    const client = new FakeWorkerClient();
+    client.directoryEntries.set('/tree', [{ name: 'child', mode: 0o040755, is_dir: true, is_file: false }]);
+    client.directoryEntries.set('/tree/child', []);
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'readdirEntries' && args[0] === '/tree') {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fs = OpfsFileSystem.make(yield* Volume.make(mount()));
+          const listing = yield* Effect.forkChild(Effect.exit(fs.readDirectory('/tree', { recursive: true })));
+          yield* Deferred.await(entered);
+          yield* Fiber.interrupt(listing);
+          const exit = yield* Fiber.await(listing);
+          expect(exit._tag).toBe('Failure');
+          if (exit._tag === 'Failure')
+            expect(exit.cause.reasons.some((reason) => reason._tag === 'Interrupt')).toBe(true);
+          yield* Deferred.succeed(resume, undefined);
+          yield* Effect.sleep(0);
+        }),
+      ),
+    );
+    expect(client.namespaceCalls.map(({ args }) => args[0])).toEqual(['/tree']);
+  });
+
+  it('does not dispatch the next recursive directory read after its volume closes', async () => {
+    const client = new FakeWorkerClient();
+    client.directoryEntries.set('/tree', [{ name: 'child', mode: 0o040755, is_dir: true, is_file: false }]);
+    client.directoryEntries.set('/tree/child', []);
+    const entered = await Effect.runPromise(Deferred.make<void>());
+    const resume = await Effect.runPromise(Deferred.make<void>());
+    client.onNamespaceCommand = async (_generation, method, args) => {
+      if (method === 'readdirEntries' && args[0] === '/tree') {
+        await Effect.runPromise(Deferred.succeed(entered, undefined));
+        await Effect.runPromise(Deferred.await(resume));
+      }
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const volumeScope = Scope.makeUnsafe('sequential');
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const volume = yield* Effect.provideService(Volume.make(mount()), Scope.Scope, volumeScope);
+        const listing = yield* Effect.forkChild(
+          Effect.exit(OpfsFileSystem.make(volume).readDirectory('/tree', { recursive: true })),
+        );
+        yield* Deferred.await(entered);
+        yield* Scope.close(volumeScope, Exit.void);
+        yield* Deferred.succeed(resume, undefined);
+        const exit = yield* Fiber.join(listing);
+        expect(exit._tag).toBe('Failure');
+      }),
+    );
+    expect(client.namespaceCalls.map(({ args }) => args[0])).toEqual(['/tree']);
+  });
+
+  it('gives a reused directory listing effect a fresh readiness budget', async () => {
+    const client = new FakeWorkerClient();
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount({ initTimeout: 200 }));
+          const listing = OpfsFileSystem.make(volume).readDirectory('/tree');
+          for (const delay of [140, 100]) {
+            client.publish({ state: 'recovering', ownerGeneration: null });
+            const timer = setTimeout(() => client.publish({ state: 'ready', ownerGeneration: 'generation-1' }), delay);
+            const result = yield* Effect.result(listing);
+            clearTimeout(timer);
+            client.publish({ state: 'ready', ownerGeneration: 'generation-1' });
+            expect(result._tag).toBe('Success');
+          }
+        }),
+      ),
+    );
+  });
+
   it('keeps force removal narrow and refuses a delete after takeover between lstat and unlink', async () => {
     const client = new FakeWorkerClient();
     client.onNamespaceCommand = async (_generation, method, args) => {

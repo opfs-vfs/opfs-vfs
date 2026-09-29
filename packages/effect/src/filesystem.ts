@@ -141,11 +141,12 @@ const execute = <A>(
   mutate = false,
   recapture = true,
   expectedGeneration?: string,
+  readinessBudget?: { remaining: number },
 ): Effect.Effect<A, PlatformError.PlatformError> => {
   const pathFailure = invalidPath(method, path);
   if (pathFailure) return Effect.fail(pathFailure);
   return Effect.gen(function* () {
-    const budget = { remaining: state.readinessTimeout };
+    const budget = readinessBudget ?? { remaining: state.readinessTimeout };
     let recaptures = 0;
     let refusal: VfsCommandError | undefined;
     let differentGeneration: string | undefined;
@@ -1067,36 +1068,54 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
       if (options?.recursive !== undefined && typeof options.recursive !== 'boolean')
         return Effect.fail(badArgument('readDirectory', 'recursive must be a boolean'));
       const recursive = options?.recursive ?? false;
-      return execute(
-        state,
-        'readDirectory',
-        path,
-        async (backend, generation) => {
-          const readEntries = (directory: string) =>
-            'forGeneration' in backend
-              ? backend.forGeneration(generation).readdirEntries(directory)
-              : Promise.resolve(backend.readdirEntriesSync(directory));
-          const result: Array<string> = [];
-          const visit = async (directory: string, prefix: string): Promise<void> => {
-            const entries = [...(await readEntries(directory))].sort((left, right) =>
-              left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
-            );
-            for (const entry of entries) {
-              const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-              result.push(relative);
-              if (recursive && entry.is_dir)
-                await visit(
-                  directory === '/' ? `/${entry.name}` : `${directory.replace(/\/$/, '')}/${entry.name}`,
-                  relative,
+      return Effect.suspend(() => {
+        const budget = { remaining: state.readinessTimeout };
+        return execute(
+          state,
+          'readDirectory',
+          path,
+          (_backend, generation) => {
+            const readEntries = (directory: string) =>
+              execute(
+                state,
+                'readDirectory',
+                directory,
+                (backend, current) =>
+                  'forGeneration' in backend
+                    ? backend.forGeneration(current).readdirEntries(directory)
+                    : backend.readdirEntriesSync(directory),
+                false,
+                false,
+                generation,
+                budget,
+              );
+            const result: Array<string> = [];
+            const visit = (directory: string, prefix: string): Effect.Effect<void, PlatformError.PlatformError> =>
+              Effect.gen(function* () {
+                const entries = [...(yield* readEntries(directory))].sort((left, right) =>
+                  left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
                 );
-            }
-          };
-          await visit(path, '');
-          return result;
-        },
-        false,
-        false,
-      );
+                for (const entry of entries) {
+                  const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+                  result.push(relative);
+                  if (recursive && entry.is_dir)
+                    yield* visit(
+                      directory === '/' ? `/${entry.name}` : `${directory.replace(/\/$/, '')}/${entry.name}`,
+                      relative,
+                    );
+                }
+              });
+            return Effect.gen(function* () {
+              yield* visit(path, '');
+              return result;
+            });
+          },
+          false,
+          false,
+          undefined,
+          budget,
+        );
+      });
     },
     readLink: (path) =>
       execute(state, 'readLink', path, (backend, generation) =>
