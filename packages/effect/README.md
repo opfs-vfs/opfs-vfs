@@ -25,11 +25,13 @@ unsupported error. See `examples/filesystem-save.ts` for handling errors from
 import { Effect, FileSystem, Layer } from 'effect';
 import { OpfsFileSystem, Volume } from '@opfs-vfs/effect';
 
-const FileSystemLive = Layer.provide(OpfsFileSystem.layer, Volume.layer({ fileName: 'app.bin' }));
+const FileSystemLive = Layer.provideMerge(OpfsFileSystem.layer, Volume.layer({ fileName: 'app.bin' }));
 
 const app = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const volume = yield* Volume.Volume;
   yield* fs.writeFileString('/note.txt', 'Hello');
+  yield* volume.sync;
 }).pipe(Effect.provide(FileSystemLive));
 ```
 

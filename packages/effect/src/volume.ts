@@ -33,6 +33,7 @@ export interface WorkerMountOptions extends Omit<OpenOpfsVfsWorkerOptions, 'sign
   readonly plugins?: readonly VfsPluginRequest[] | (() => readonly VfsPluginRequest[]);
 }
 export interface PersistenceSnapshot {
+  /** Current backend telemetry; `clean` does not prove an earlier logical save survived, so await `sync`. */
   readonly state: LocalPersistenceState | 'unknown';
   readonly error: RemoteErrorDetails | null;
 }
