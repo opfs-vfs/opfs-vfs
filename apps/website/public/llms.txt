@@ -14,39 +14,39 @@ The repository uses the source-available PolyForm Noncommercial License 1.0.0. C
 
 - [Overview](https://opfs.dev/): Product benefits, integrations, and demos.
 - [Motivation](https://opfs.dev/motivation/): The storage problem and design choices.
-- [Documentation](https://opfs.dev/docs/): Guide index.
-- [Getting started](https://opfs.dev/docs/getting-started/): Install, write, synchronize, and reopen a volume.
-- [Browser setup](https://opfs.dev/docs/guides/browser-setup/): Secure context and isolation headers.
-- [Volumes and lifecycle](https://opfs.dev/docs/concepts/): Volume names, buffering, and closing.
+- [Documentation](https://opfs.dev/docs.md): Guide index.
+- [Getting started](https://opfs.dev/docs/getting-started.md): Install, write, synchronize, and reopen a volume.
+- [Browser setup](https://opfs.dev/docs/guides/browser-setup.md): Secure context and isolation headers.
+- [Volumes and lifecycle](https://opfs.dev/docs/concepts.md): Volume names, buffering, and closing.
 
 ## File operations and tools
 
-- [Files and directories](https://opfs.dev/docs/guides/files-and-directories/): Worker operations and truncation behavior.
-- [Persistence and recovery](https://opfs.dev/docs/guides/persistence/): Save points, recovery logs, and buffer-mode changes.
-- [Volume Explorer](https://opfs.dev/docs/guides/devtools/): Inspect, edit, and transfer volumes. Connections start read-only.
-- [File preview extensions](https://opfs.dev/docs/guides/file-previews/): Trusted custom renderers and shared React previews.
-- [API overview](https://opfs.dev/docs/reference/): Imports, options, inspection, and deletion.
-- [Troubleshooting](https://opfs.dev/docs/troubleshooting/): Resolve errors without destructive recovery.
+- [Files and directories](https://opfs.dev/docs/guides/files-and-directories.md): Worker operations and truncation behavior.
+- [Persistence and recovery](https://opfs.dev/docs/guides/persistence.md): Save points, recovery logs, and buffer-mode changes.
+- [Volume Explorer](https://opfs.dev/docs/guides/devtools.md): Inspect, edit, and transfer volumes. Connections start read-only.
+- [File preview extensions](https://opfs.dev/docs/guides/file-previews.md): Trusted custom renderers and shared React previews.
+- [API overview](https://opfs.dev/docs/reference.md): Imports, options, inspection, and deletion.
+- [Troubleshooting](https://opfs.dev/docs/troubleshooting.md): Resolve errors without destructive recovery.
 
 ## Plugins
 
-- [Plugins](https://opfs.dev/docs/plugins/): community subscriptions, separate premium encryption, and planned premium cloud sync.
-- [File subscriptions](https://opfs.dev/docs/plugins/subscriptions/): npm installation, custom workers, filtering, content, and resubscribe/rescan recovery.
+- [Plugins](https://opfs.dev/docs/plugins.md): community subscriptions, separate premium encryption, and planned premium cloud sync.
+- [File subscriptions](https://opfs.dev/docs/plugins/subscriptions.md): npm installation, custom workers, filtering, content, and resubscribe/rescan recovery.
 
 ## Choose an API
 
-- [TypeScript](https://opfs.dev/docs/getting-started/): Create a volume and read or write files.
-- [React SDK preview](https://opfs.dev/docs/react/): Connect components to a volume with providers and subscribed reads.
-- [React API reference](https://opfs.dev/docs/react/reference/): Providers, resource hooks, and lifecycle commands.
+- [TypeScript](https://opfs.dev/docs/getting-started.md): Create a volume and read or write files.
+- [React SDK preview](https://opfs.dev/docs/react.md): Connect components to a volume with providers and subscribed reads.
+- [React API reference](https://opfs.dev/docs/react/reference.md): Providers, resource hooks, and lifecycle commands.
 - [React demo](https://opfs.dev/demos/react/): File inbox and todo lists using dedicated workers.
-- [Effect v4 adapter](https://opfs.dev/docs/effect/): Scoped volumes, the FileSystem service, and change streams. Requires `effect@4.0.0-rc.118`.
+- [Effect v4 adapter](https://opfs.dev/docs/effect.md): Scoped volumes, the FileSystem service, and change streams. Requires `effect@4.0.0-rc.118`.
 
 ## Integrations
 
-- [PGlite](https://opfs.dev/docs/integrations/pglite/): PostgreSQL storage and synchronization settings.
-- [just-bash](https://opfs.dev/docs/integrations/just-bash/): Shell access to workspace files.
-- [DuckDB](https://opfs.dev/docs/integrations/duckdb/): Experimental adapter and compatible engine downloads.
-- [EdgeJS](https://opfs.dev/docs/integrations/edgejs/): Experimental live file access and compatible host downloads.
+- [PGlite](https://opfs.dev/docs/integrations/pglite.md): PostgreSQL storage and synchronization settings.
+- [just-bash](https://opfs.dev/docs/integrations/just-bash.md): Shell access to workspace files.
+- [DuckDB](https://opfs.dev/docs/integrations/duckdb.md): Experimental adapter and compatible engine downloads.
+- [EdgeJS](https://opfs.dev/docs/integrations/edgejs.md): Experimental live file access and compatible host downloads.
 
 ## Benchmarks
 
