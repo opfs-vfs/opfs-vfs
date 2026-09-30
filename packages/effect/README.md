@@ -28,8 +28,11 @@ preserved. Recursive copy does not follow symlinks, is not atomic, and does not
 preserve hard-link topology. `chown`, `glob` and `watch` return typed unsupported
 errors in this slice. Scoped temporary paths remove only their private directory
 when the scope closes; the default parent is `/tmp` inside the volume. A temporary
-path uses its resolved physical parent, so later parent-symlink changes cannot
-redirect cleanup and the returned path is canonical.
+path uses its resolved physical parent, so retargeting the caller-supplied parent
+symlink does not redirect cleanup. Ownership covers the created root pathname and
+its current descendants; cleanup is not an atomic inode-identity check. Keep the
+resolved physical ancestors stable until cleanup completes. Shutdown, owner
+replacement, or cleanup failure can leave temporary paths for explicit reclamation.
 
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';
