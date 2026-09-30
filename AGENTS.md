@@ -16,7 +16,7 @@
 | Markdown pages | `src/pages/[...slug].md.ts` builds one `.md` per docs entry from its title, description, and body. | A docs entry lacks a title or description, or uses MDX outside `import` lines and self-closing component tags. |
 | Structured data | `src/components/StructuredData.astro`. Breadcrumb names are the page title minus the suffix. The `sections` map lists section index pages that exist. | A section index page is added or removed, or the homepage description changes. |
 | Icons | `src/components/SiteIcons.astro`, `public/favicon.svg`, `favicon.ico`, `favicon-48x48.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `site.webmanifest`. | The logo changes. Render every raster file from `favicon.svg` with `sharp` (an Astro dependency). Draw segments as explicit arc paths, because `sharp` ignores `pathLength` and would render a different mark than browsers. Check the result at 16 pixels. The Apple icon has square corners, and the ICO holds 16, 32, and 48 pixel PNGs. |
-| Social image | `public/images/opfs-social.png`, wired in `SocialImage.astro` and shown at the top of the root `README.md`. | The brand or tagline changes. |
+| Social image | `public/images/opfs-social.png`, wired in `SocialImage.astro` and shown above the package table in the root `README.md`. | The brand or tagline changes. |
 | `robots.txt` | `public/robots.txt`. Content-Signal is `search=yes, ai-input=yes, ai-train=yes`, an owner decision. | Crawler policy changes, only on the owner's instruction. |
 
 **Verify.** Build the website, then read the output in `apps/website/.vercel/output/static`: titles, descriptions, JSON-LD, `sitemap-0.xml`, and the `.md` files for every page you touched.
