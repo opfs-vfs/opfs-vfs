@@ -5,6 +5,7 @@ import { Icon } from '@astrojs/starlight/components';
 import ThemeControl from '../components/ThemeControl.astro';
 import Brand from '../components/Brand.astro';
 import SocialImage from '../components/SocialImage.astro';
+import SiteIcons from '../components/SiteIcons.astro';
 import ContactDialog from '../components/ContactDialog';
 interface Props { title?: string; description: string; noindex?: boolean }
 const { title = 'OPFS VFS', description, noindex = false } = Astro.props;
@@ -15,7 +16,7 @@ const activeLink = links.find(([href]) => href !== '/#plugins' && Astro.url.path
 <!doctype html>
 <html lang="en" class="marketing-page">
   <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width" /><meta name="theme-color" content="#fbfaf5" /><meta name="description" content={description} /><title>{title}</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <SiteIcons />
     <link rel="canonical" href={canonical} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="OPFS VFS" />
