@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { deleteVolume, OpenFlags } from '@opfs-vfs/opfs-vfs';
 import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
 import { Volume } from './index.js';
+import { OpfsFileSystem } from './filesystem.js';
 
 self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
   const fileName = `effect-${crypto.randomUUID()}.bin`;
@@ -16,6 +17,8 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           const fd = backend.openSync('/smoke.txt', OpenFlags.O_CREAT | OpenFlags.O_RDWR);
           backend.writeSync(fd, new TextEncoder().encode('scoped direct volume'));
           backend.closeSync(fd);
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.writeFileString('/effect-fs.txt', 'scoped Effect FileSystem');
           yield* volume.sync;
           return yield* volume.persistence;
         }),
@@ -30,8 +33,10 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           const fd = backend.openSync('/smoke.txt', OpenFlags.O_RDONLY);
           const result = backend.readSync(fd, 64);
           backend.closeSync(fd);
+          const fs = OpfsFileSystem.make(volume);
           return {
             content: new TextDecoder().decode(result.buffer.subarray(0, result.read)),
+            fileSystemContent: yield* fs.readFileString('/effect-fs.txt'),
             persistence: yield* volume.persistence,
           };
         }),
@@ -49,11 +54,13 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
     }
     const example = data.example ? await import(/* @vite-ignore */ data.example) : undefined;
     const exampleResult = example
-      ? await Effect.runPromise((example as typeof import('../examples/direct.js')).save)
+      ? 'save' in example
+        ? await Effect.runPromise((example as typeof import('../examples/direct.js')).save)
+        : await (example as typeof import('../examples/filesystem-save.js')).saveNote()
       : undefined;
     await deleteVolume(fileName);
     await deleteVolume(pluginFile);
-    self.postMessage({ ok: true, before, after, first, reopened, example: exampleResult });
+    self.postMessage({ ok: true, before, after, first, reopened, example: { state: 'clean', result: exampleResult } });
   } catch (error) {
     await deleteVolume(fileName).catch(() => {});
     if (pluginFile) await deleteVolume(pluginFile).catch(() => {});

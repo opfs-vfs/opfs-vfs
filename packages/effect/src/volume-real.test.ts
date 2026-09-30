@@ -9,7 +9,7 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
       ok: boolean;
       before?: { exists: boolean };
       after?: { exists: boolean };
-      reopened?: { content: string; persistence: { state: string } };
+      reopened?: { content: string; fileSystemContent: string; persistence: { state: string } };
       example?: { state: string };
       error?: string;
     }>((resolve, reject) => {
@@ -27,7 +27,11 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
     expect(result.ok, result.error).toBe(true);
     expect(result.before?.exists).toBe(false);
     expect(result.after?.exists).toBe(true);
-    expect(result.reopened).toMatchObject({ content: 'scoped direct volume', persistence: { state: 'clean' } });
+    expect(result.reopened).toMatchObject({
+      content: 'scoped direct volume',
+      fileSystemContent: 'scoped Effect FileSystem',
+      persistence: { state: 'clean' },
+    });
     if (packedExample) expect(result.example).toMatchObject({ state: 'clean' });
   } finally {
     worker.terminate();

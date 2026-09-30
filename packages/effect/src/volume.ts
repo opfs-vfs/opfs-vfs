@@ -1,4 +1,4 @@
-import { Context, Effect, Exit, Layer, Scope, Schema } from 'effect';
+import { Context, Deferred, Effect, Exit, Layer, Scope, Schema, Semaphore } from 'effect';
 import {
   OpfsVfs,
   peekVolume,
@@ -22,6 +22,7 @@ import {
   type MountError,
   type RemoteErrorDetails,
 } from './errors.js';
+import { getCoordinator, latchTerminal, makeCoordinator, registerCoordinator } from './coordinator.js';
 
 export interface DirectMountOptions extends Omit<OpfsVfsOptions, 'plugins'> {
   readonly fileName: string;
@@ -32,6 +33,7 @@ export interface WorkerMountOptions extends Omit<OpenOpfsVfsWorkerOptions, 'sign
   readonly plugins?: readonly VfsPluginRequest[] | (() => readonly VfsPluginRequest[]);
 }
 export interface PersistenceSnapshot {
+  /** Current backend telemetry; `clean` does not prove an earlier logical save survived, so await `sync`. */
   readonly state: LocalPersistenceState | 'unknown';
   readonly error: RemoteErrorDetails | null;
 }
@@ -87,6 +89,7 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
       let backend: OpfsVfs | undefined;
       let release: Promise<void> | undefined;
       let service: VolumeService | undefined;
+      let coordinator: ReturnType<typeof makeCoordinator> | undefined;
       const ensureOpen = (fileName: string | null) =>
         closed || owner.state._tag === 'Closed'
           ? Effect.fail(
@@ -94,6 +97,9 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
             )
           : Effect.void;
       const closeBackend = () => {
+        closed = true;
+        if (coordinator)
+          latchTerminal(coordinator, volumeError(new Error('Volume is closed'), null, 'close', 'lifecycle', 'unknown'));
         if (service) closedBackends.add(service);
         if (backend) release ??= Promise.resolve(backend.closeVfs()).then(() => undefined);
         return release ?? Promise.resolve();
@@ -167,7 +173,21 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
           }),
         );
         yield* ensureOpen(fileName);
-        service = createService(backend!, fileName, () => closed);
+        coordinator = makeCoordinator({
+          fileName,
+          readinessTimeout: Infinity,
+          backend: backend!,
+          isClosed: () => closed,
+          currentGeneration: () => (closed ? undefined : 'direct'),
+          canRecapture: () => false,
+          terminal: () => undefined,
+          awaitReady: (_budget, operation) =>
+            closed
+              ? Effect.fail(volumeError(new Error('Volume is closed'), fileName, operation, 'lifecycle', 'not-applied'))
+              : Effect.succeed('direct'),
+        });
+        service = createService(backend!, fileName, () => closed, coordinator!);
+        registerCoordinator(service, coordinator!);
         backends.set(service, backend!);
         yield* Scope.addFinalizer(
           resource,
@@ -194,22 +214,61 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
     }),
   );
 
-const createService = (backend: OpfsVfs, fileName: string, isClosed: () => boolean): VolumeService => {
+const createService = (
+  backend: OpfsVfs,
+  fileName: string,
+  isClosed: () => boolean,
+  coordinator: ReturnType<typeof makeCoordinator>,
+): VolumeService => {
   const check = (operation: string) =>
     isClosed()
       ? volumeError(new Error('Volume is closed'), fileName, operation, 'lifecycle', 'not-applied')
       : undefined;
-  const sync: Effect.Effect<void, MountError> = Effect.try({
-    try: () => {
-      const failure = check('sync');
-      if (failure) throw failure;
-      backend.syncSync();
-    },
-    catch: (error) =>
-      error instanceof VolumeError || error instanceof EncryptionError
-        ? error
-        : mountError(error, fileName, 'sync', 'persistence'),
-  });
+  const sync: Effect.Effect<void, MountError> = Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const status = yield* restore(coordinator.awaitReady({ remaining: Infinity }, 'sync'));
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* restore(
+            Effect.raceFirst(
+              Effect.acquireRelease(Semaphore.take(coordinator.gate, 1), () => Semaphore.release(coordinator.gate, 1), {
+                interruptible: true,
+              }),
+              Deferred.await(coordinator.terminalSignal).pipe(Effect.flatMap((error) => Effect.fail(syncError(error)))),
+            ),
+          );
+          const failure = check('sync');
+          if (failure) return yield* Effect.fail(syncError(failure));
+          if (
+            coordinator.continuity._tag === 'lost' ||
+            (coordinator.continuity._tag === 'pending' && coordinator.continuity.generation !== status)
+          ) {
+            const generation = coordinator.continuity.generation;
+            coordinator.continuity = { _tag: 'lost', generation };
+            return yield* Effect.fail(
+              volumeError(
+                Object.assign(new Error('Writes accepted by a previous owner may not be durable'), {
+                  code: 'VFS_SYNC_OWNER_CHANGED',
+                }),
+                fileName,
+                'sync',
+                'persistence',
+                'unknown',
+              ),
+            );
+          }
+          yield* Effect.try({
+            try: () => backend.syncSync(),
+            catch: (error) =>
+              error instanceof EncryptionError || error instanceof VolumeError
+                ? error
+                : mountError(error, fileName, 'sync', 'persistence'),
+          });
+          if (coordinator.continuity._tag === 'pending') coordinator.continuity = { _tag: 'clean' };
+        }),
+      );
+    }),
+  );
   const persistence: Effect.Effect<PersistenceSnapshot, VolumeError> = Effect.try({
     try: () => {
       const failure = check('persistence');
@@ -225,14 +284,22 @@ const createService = (backend: OpfsVfs, fileName: string, isClosed: () => boole
     },
     catch: (error) => (error instanceof VolumeError ? error : volumeError(error, fileName, 'persistence', 'lifecycle')),
   });
-  const acknowledgeOwnerChange: Effect.Effect<void, VolumeError> = Effect.try({
-    try: () => {
-      const failure = check('acknowledgeOwnerChange');
-      if (failure) throw failure;
-    },
-    catch: (error) =>
-      error instanceof VolumeError ? error : volumeError(error, fileName, 'acknowledgeOwnerChange', 'lifecycle'),
-  });
+  const acknowledgeOwnerChange: Effect.Effect<void, VolumeError> = Effect.uninterruptibleMask((restore) =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* restore(
+          Effect.raceFirst(
+            Effect.acquireRelease(Semaphore.take(coordinator.gate, 1), () => Semaphore.release(coordinator.gate, 1), {
+              interruptible: true,
+            }),
+            Deferred.await(coordinator.terminalSignal).pipe(Effect.flatMap(Effect.fail)),
+          ),
+        );
+        const failure = check('acknowledgeOwnerChange');
+        if (failure) return yield* Effect.fail(failure);
+      }),
+    ),
+  );
   return { fileName, sync, persistence, acknowledgeOwnerChange };
 };
 
@@ -269,6 +336,7 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
       let discoveryCleanup: Promise<void> | undefined;
       let service: VolumeService | undefined;
       let terminal: VolumeError | undefined;
+      let coordinator: ReturnType<typeof makeCoordinator> | undefined;
       const abort = new AbortController();
       const ensureOpen = (fileName: string | null) =>
         closed || owner.state._tag === 'Closed'
@@ -279,6 +347,8 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
       const closeClient = (value: OpfsVfsWorkerClient) => {
         if (releasedClient === value) return release!;
         releasedClient = value;
+        if (coordinator)
+          latchTerminal(coordinator, volumeError(new Error('Volume is closed'), null, 'close', 'lifecycle', 'unknown'));
         release = Promise.resolve().then(() => value.closeVfs());
         return release;
       };
@@ -317,6 +387,11 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
         Effect.sync(() => {
           closed = true;
           abort.abort();
+          if (coordinator)
+            latchTerminal(
+              coordinator,
+              volumeError(new Error('Volume is closed'), null, 'close', 'lifecycle', 'unknown'),
+            );
         }),
       );
       yield* ensureOpen(null);
@@ -387,6 +462,10 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
           const status = client!.getStatus();
           if (!terminal && (status.state === 'closing' || status.state === 'failed' || status.state === 'closed'))
             terminal = terminalError(status, fileName, 'worker');
+          if (terminal && service) {
+            const coordinator = getCoordinator(service);
+            if (coordinator) latchTerminal(coordinator, terminal);
+          }
         };
         const unsubscribe = client.subscribeStatus(latchStatus);
         yield* Scope.addFinalizer(resource, Effect.sync(unsubscribe));
@@ -409,6 +488,30 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
           if (Schema.is(EncryptionError)(terminal.cause)) return yield* Effect.fail(terminal.cause);
           return yield* Effect.fail(terminal);
         }
+        coordinator = makeCoordinator({
+          fileName,
+          readinessTimeout: initTimeout,
+          backend: client!,
+          isClosed: () => closed,
+          currentGeneration: () => {
+            latchStatus();
+            const status = client!.getStatus();
+            return status.state === 'ready' ? (status.ownerGeneration ?? undefined) : undefined;
+          },
+          canRecapture: () => !closed && !terminal && client!.getStatus().transport === 'dedicated',
+          terminal: () => {
+            latchStatus();
+            return terminal;
+          },
+          awaitReady: (budget, operation) =>
+            waitForReady(client!, fileName, operation, budget, () => {
+              latchStatus();
+              return terminal;
+            }).pipe(
+              Effect.map((status) => status.ownerGeneration!),
+              Effect.mapError((error) => error as VolumeError),
+            ),
+        });
         service = createWorkerService(
           client,
           fileName,
@@ -418,7 +521,9 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
             return terminal;
           },
           initTimeout,
+          coordinator!,
         );
+        registerCoordinator(service, coordinator!);
         backends.set(service, client);
         yield* ensureOpen(fileName);
         return service;
@@ -460,6 +565,7 @@ const createWorkerService = (
   isClosed: () => boolean,
   terminal: () => VolumeError | undefined,
   initTimeout: number,
+  coordinator: ReturnType<typeof makeCoordinator>,
 ): VolumeService => {
   const failIfUnavailable = (operation: string) => {
     if (isClosed()) return volumeError(new Error('Volume is closed'), fileName, operation, 'lifecycle', 'not-applied');
@@ -476,32 +582,159 @@ const createWorkerService = (
     },
     catch: (error) => (error instanceof VolumeError ? error : volumeError(error, fileName, 'persistence', 'lifecycle')),
   });
-  const sync: VolumeService['sync'] = Effect.gen(function* () {
-    const failure = failIfUnavailable('sync');
-    if (failure) return yield* Effect.fail(syncError(failure));
-    const budget = { remaining: initTimeout };
-    const status = yield* waitForReady(client, fileName, 'sync', budget, terminal, syncError);
-    yield* Effect.tryPromise({
-      try: () => client.forGeneration(status.ownerGeneration!).sync(),
-      catch: (error) => {
-        const terminalFailure = failIfUnavailable('sync');
-        if (terminalFailure) {
-          return syncError(terminalFailure);
-        }
-        const dispatch = error instanceof VfsCommandError ? error.dispatch : undefined;
-        const raw = error instanceof VfsCommandError ? error.cause : error;
-        return mountError(raw, fileName, 'sync', undefined, dispatch === 'refused' ? 'not-applied' : 'unknown');
-      },
-    });
-  });
-  const acknowledgeOwnerChange: VolumeService['acknowledgeOwnerChange'] = Effect.gen(function* () {
-    const failure = failIfUnavailable('acknowledgeOwnerChange');
-    if (failure) return yield* Effect.fail(failure);
-    yield* waitForReady(client, fileName, 'acknowledgeOwnerChange', { remaining: initTimeout }, terminal);
-    const after = failIfUnavailable('acknowledgeOwnerChange');
-    if (after) return yield* Effect.fail(after);
-    return yield* Effect.void;
-  });
+  const sync: VolumeService['sync'] = Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const failure = failIfUnavailable('sync');
+      if (failure) return yield* Effect.fail(syncError(failure));
+      const status = yield* restore(
+        waitForReady(client, fileName, 'sync', { remaining: initTimeout }, terminal, (error) =>
+          error.code === 'VFS_OWNER_READY_TIMEOUT' && coordinator.continuity._tag !== 'clean'
+            ? volumeError(error, fileName, 'sync', 'lifecycle', 'unknown')
+            : syncError(error),
+        ),
+      );
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* restore(
+            Effect.raceFirst(
+              Effect.acquireRelease(Semaphore.take(coordinator.gate, 1), () => Semaphore.release(coordinator.gate, 1), {
+                interruptible: true,
+              }),
+              Deferred.await(coordinator.terminalSignal).pipe(Effect.flatMap((error) => Effect.fail(syncError(error)))),
+            ),
+          );
+          const now = client.getStatus();
+          const terminalFailure = failIfUnavailable('sync');
+          if (terminalFailure) return yield* Effect.fail(syncError(terminalFailure));
+          const generation = status.ownerGeneration!;
+          if (now.state !== 'ready') {
+            return yield* Effect.fail(
+              volumeError(
+                Object.assign(new Error('Owner is not ready before SYNC dispatch'), { code: 'VFS_ATTACHMENT_LOST' }),
+                fileName,
+                'sync',
+                'lifecycle',
+                'not-applied',
+              ),
+            );
+          }
+          if (now.ownerGeneration !== generation) {
+            if (coordinator.continuity._tag === 'pending') {
+              coordinator.continuity = { _tag: 'lost', generation: coordinator.continuity.generation };
+              return yield* Effect.fail(
+                volumeError(
+                  Object.assign(new Error('Writes accepted by a previous owner may not be durable'), {
+                    code: 'VFS_SYNC_OWNER_CHANGED',
+                  }),
+                  fileName,
+                  'sync',
+                  'persistence',
+                  'unknown',
+                ),
+              );
+            }
+            return yield* Effect.fail(
+              volumeError(
+                Object.assign(new Error('Owner changed before SYNC dispatch'), { code: 'VFS_ATTACHMENT_LOST' }),
+                fileName,
+                'sync',
+                'lifecycle',
+                'not-applied',
+              ),
+            );
+          }
+          if (
+            coordinator.continuity._tag === 'lost' ||
+            (coordinator.continuity._tag === 'pending' && coordinator.continuity.generation !== generation)
+          ) {
+            const oldest = coordinator.continuity.generation;
+            coordinator.continuity = { _tag: 'lost', generation: oldest };
+            return yield* Effect.fail(
+              volumeError(
+                Object.assign(new Error('Writes accepted by a previous owner may not be durable'), {
+                  code: 'VFS_SYNC_OWNER_CHANGED',
+                }),
+                fileName,
+                'sync',
+                'persistence',
+                'unknown',
+              ),
+            );
+          }
+          yield* Effect.tryPromise({
+            try: () => client.forGeneration(generation).sync(),
+            catch: (error) => {
+              const terminalNow = failIfUnavailable('sync');
+              if (terminalNow) return syncError(terminalNow);
+              const dispatch = error instanceof VfsCommandError ? error.dispatch : undefined;
+              const raw = error instanceof VfsCommandError ? error.cause : error;
+              const rawCode = remoteDetails(raw).code;
+              if (
+                dispatch === 'refused' &&
+                rawCode === 'VFS_ATTACHMENT_LOST' &&
+                coordinator.continuity._tag === 'pending'
+              ) {
+                const oldest = coordinator.continuity.generation;
+                coordinator.continuity = { _tag: 'lost', generation: oldest };
+                return volumeError(
+                  Object.assign(new Error('Writes accepted by a previous owner may not be durable'), {
+                    code: 'VFS_SYNC_OWNER_CHANGED',
+                  }),
+                  fileName,
+                  'sync',
+                  'persistence',
+                  'unknown',
+                );
+              }
+              return mountError(raw, fileName, 'sync', undefined, dispatch === 'refused' ? 'not-applied' : 'unknown');
+            },
+          });
+          if (coordinator.continuity._tag === 'pending') coordinator.continuity = { _tag: 'clean' };
+        }),
+      );
+    }),
+  );
+  const acknowledgeOwnerChange: VolumeService['acknowledgeOwnerChange'] = Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const failure = failIfUnavailable('acknowledgeOwnerChange');
+      if (failure) return yield* Effect.fail(failure);
+      const admitted = yield* restore(
+        waitForReady(client, fileName, 'acknowledgeOwnerChange', { remaining: initTimeout }, terminal),
+      );
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* restore(
+            Effect.raceFirst(
+              Effect.acquireRelease(Semaphore.take(coordinator.gate, 1), () => Semaphore.release(coordinator.gate, 1), {
+                interruptible: true,
+              }),
+              Deferred.await(coordinator.terminalSignal).pipe(Effect.flatMap(Effect.fail)),
+            ),
+          );
+          const after = failIfUnavailable('acknowledgeOwnerChange');
+          if (after) return yield* Effect.fail(after);
+          const current = client.getStatus();
+          if (current.state !== 'ready' || current.ownerGeneration !== admitted.ownerGeneration) {
+            return yield* Effect.fail(
+              volumeError(
+                Object.assign(new Error('Owner changed before acknowledgment'), { code: 'VFS_ACK_OWNER_CHANGED' }),
+                fileName,
+                'acknowledgeOwnerChange',
+                'persistence',
+                'not-applied',
+              ),
+            );
+          }
+          if (
+            coordinator.continuity._tag === 'lost' ||
+            (coordinator.continuity._tag === 'pending' &&
+              coordinator.continuity.generation !== admitted.ownerGeneration)
+          )
+            coordinator.continuity = { _tag: 'pending', generation: admitted.ownerGeneration! };
+        }),
+      );
+    }),
+  );
   return { fileName, sync, persistence, acknowledgeOwnerChange };
 };
 
@@ -539,10 +772,10 @@ const waitForReady = <E extends MountError = VolumeError>(
       operation,
       'lifecycle',
       'not-applied',
-    ) as E;
-    if (budget.remaining <= 0) return yield* Effect.fail(timeoutError);
+    );
+    if (budget.remaining <= 0) return yield* Effect.fail(mapTerminal(timeoutError));
     const start = yield* Effect.clockWith((clock) => clock.currentTimeMillis);
-    const timeout = Effect.sleep(budget.remaining).pipe(Effect.andThen(Effect.fail(timeoutError)));
+    const timeout = Effect.sleep(budget.remaining).pipe(Effect.andThen(Effect.fail(mapTerminal(timeoutError))));
     return yield* Effect.raceFirst(waiting, timeout).pipe(
       Effect.onExit(() =>
         Effect.clockWith((clock) => clock.currentTimeMillis).pipe(
