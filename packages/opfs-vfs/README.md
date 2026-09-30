@@ -64,7 +64,7 @@ For experimental live EdgeJS mounts, use `createWasmerFileSystem(vfs)` with a re
 
 ## Protected volumes
 
-Core deliberately refuses volumes with reserved protection markers unless a configured storage plugin declares them. Legacy JavaScript `{ encryption: ... }` options also fail explicitly. Encryption, keys, protected archives and migration belong to the premium `@opfs-vfs/plugin-encryption` storage plugin: register `encryption` in an application worker and pass `encryptionRequest({ secret })` from `@opfs-vfs/plugin-encryption/config` in `plugins`. See [storage plugins](https://github.com/opfs-vfs/opfs-vfs/blob/main/docs/API.md#storage-plugins). Moving imports does not require erasing existing volumes.
+Core refuses volumes with reserved protection markers unless a configured storage plugin declares them. The error code is `VFS_STORAGE_PLUGIN_REQUIRED` (errno 22); applications that used `EINVAL` to detect protected volumes should check this code instead. Legacy JavaScript `{ encryption: ... }` options also fail explicitly. Encryption, keys, protected archives and migration belong to the premium `@opfs-vfs/plugin-encryption` storage plugin: register `encryption` in an application worker and pass `encryptionRequest({ secret })` from `@opfs-vfs/plugin-encryption/config` in `plugins`. See [storage plugins](https://github.com/opfs-vfs/opfs-vfs/blob/main/docs/API.md#storage-plugins). Moving imports does not require erasing existing volumes.
 
 ## License
 

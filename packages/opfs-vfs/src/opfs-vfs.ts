@@ -31,7 +31,7 @@ import {
   encodeDataWalRecord,
   replayDataWalRecords,
 } from './data-wal';
-import { createVfsError, isVfsErrno, VfsCorruptionError } from './fs-errors';
+import { createVfsError, isVfsErrno, StoragePluginRequiredError, VfsCorruptionError } from './fs-errors';
 import type {
   ChangeClient,
   ChangeFrame,
@@ -1048,7 +1048,7 @@ export class OpfsVfs implements FileChangeSource {
         if (!this.storageSidecars.includes(suffix)) {
           try {
             await root.getFileHandle(fileName.replace(/\.bin$/, suffix), { create: false });
-            throw createVfsError('EINVAL', fileName, `This volume requires a plugin that owns ${suffix}`);
+            throw new StoragePluginRequiredError(fileName, suffix);
           } catch (error) {
             if (!error || typeof error !== 'object' || (error as { name?: unknown }).name !== 'NotFoundError')
               throw error;

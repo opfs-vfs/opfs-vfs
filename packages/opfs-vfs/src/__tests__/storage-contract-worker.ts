@@ -32,12 +32,13 @@ function sameFiles(left: Map<string, Uint8Array>, right: Map<string, Uint8Array>
   );
 }
 
-async function rejects(run: () => Promise<unknown>, code: string) {
+async function rejects(run: () => Promise<unknown>, code: string, errno?: number) {
   try {
     await run();
     return false;
   } catch (error) {
-    return (error as { code?: unknown }).code === code;
+    const details = error as { code?: unknown; errno?: unknown };
+    return details.code === code && (errno === undefined || details.errno === errno);
   }
 }
 
@@ -68,17 +69,19 @@ async function markerChecks(root: FileSystemDirectoryHandle, checks: Check[]) {
     await writable.write(new Uint8Array([1, 2, 3]));
     await writable.close();
     const before = await snapshot(root, name);
-    const missingFactory = await rejects(() => new OpfsVfs(name).ready, 'EINVAL');
+    const missingFactory = await rejects(() => new OpfsVfs(name).ready, 'VFS_STORAGE_PLUGIN_REQUIRED', 22);
     const unchanged = sameFiles(before, await snapshot(root, name));
     const unrelated = await rejects(
       () => new OpfsVfs(name, { plugins: [testPlugin(trackingFactory([]))] }).ready,
-      'EINVAL',
+      'VFS_STORAGE_PLUGIN_REQUIRED',
+      22,
     );
     const partial =
       suffix === '.vault' ||
       (await rejects(
         () => new OpfsVfs(name, { plugins: [testPlugin(trackingFactory([]), ['.vault'])] }).ready,
-        'EINVAL',
+        'VFS_STORAGE_PLUGIN_REQUIRED',
+        22,
       ));
     const createNew = await rejects(() => new OpfsVfs(name, { openMode: 'create-new' }).ready, 'EEXIST');
     checks.push({

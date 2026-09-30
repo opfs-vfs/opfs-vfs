@@ -49,8 +49,19 @@ export function configurationError(operation: string, volume: string | null, mes
 
 export function classify(details: RemoteErrorDetails | null, operation: string): VolumeErrorKind {
   const code = details?.code;
-  if (['EVOLUMELOCKED', 'EVAULTCORRUPT', 'EKDF', 'ECRYPTOINTEGRITY', 'ECRYPTSIDECAR'].includes(code ?? ''))
+  if (
+    [
+      'EVOLUMELOCKED',
+      'EVAULTCORRUPT',
+      'EVAULTFORMAT',
+      'EKDF',
+      'ECRYPTOINTEGRITY',
+      'ECRYPTSIDECAR',
+      'EPLAINTEXTVOLUME',
+    ].includes(code ?? '')
+  )
     return 'encryption';
+  if (code === 'VFS_STORAGE_PLUGIN_REQUIRED') return 'unsupported';
   if (
     [
       'VFS_SHUTTING_DOWN',

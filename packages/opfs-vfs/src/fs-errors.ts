@@ -15,6 +15,18 @@ export type VfsErrno =
   | 'ENOTSUP'
   | 'EPERM';
 
+export class StoragePluginRequiredError extends Error {
+  readonly code = 'VFS_STORAGE_PLUGIN_REQUIRED';
+  readonly errno = 22;
+  readonly path: string;
+
+  constructor(path: string, sidecar: string) {
+    super(`VFS_STORAGE_PLUGIN_REQUIRED: This volume requires a plugin that owns ${sidecar} (${path})`);
+    this.name = 'StoragePluginRequiredError';
+    this.path = path;
+  }
+}
+
 const ERROR_NUMBERS: Record<VfsErrno, number> = {
   EACCES: 13,
   EBADF: 9,

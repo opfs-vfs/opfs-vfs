@@ -25,8 +25,18 @@ describe('errors', () => {
       'VOLUME_IMPORTING',
     ])
       expect(classify(details(code), 'readFileBuffer')).toBe('lifecycle');
-    for (const code of ['EVOLUMELOCKED', 'EVAULTCORRUPT', 'EKDF', 'ECRYPTOINTEGRITY', 'ECRYPTSIDECAR'])
+    for (const code of [
+      'EVOLUMELOCKED',
+      'EVAULTCORRUPT',
+      'EVAULTFORMAT',
+      'EKDF',
+      'ECRYPTOINTEGRITY',
+      'ECRYPTSIDECAR',
+      'EPLAINTEXTVOLUME',
+    ])
       expect(classify(details(code), 'open')).toBe('encryption');
+    expect(classify(details('VFS_STORAGE_PLUGIN_REQUIRED'), 'open')).toBe('unsupported');
+    expect(classify(details('EINVAL'), 'open')).toBe('filesystem');
     expect(classify(details('SUBSCRIPTION_CLOSED'), 'sync')).toBe('subscription');
     expect(classify(details(undefined, 'VfsCorruptionError'), 'readFileBuffer')).toBe('corruption');
     expect(classify(details(undefined, 'MetaSnapshotCorruptionError'), 'readFileBuffer')).toBe('corruption');
