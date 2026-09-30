@@ -1,5 +1,7 @@
 # OPFS VFS
 
+![OPFS VFS wordmark with green segmented storage rings on a dark background](apps/website/public/images/opfs-social.png)
+
 A browser filesystem backed by the Origin Private File System, with POSIX-style file operations, write-ahead logging, crash recovery, and shared worker transport.
 
 Use the core API from TypeScript or JavaScript, connect file-backed interfaces with the React SDK, or compose storage through the Effect v4 adapter. Volume Explorer and reusable file previews help you inspect and edit browser-local files. Ordinary filesystem use through the core package has no runtime dependencies.
