@@ -102,6 +102,22 @@ describe('Volume direct acquisition', () => {
     expect(error).toMatchObject({ _tag: 'VolumeError', kind: 'configuration' });
   });
 
+  it('normalizes untyped invalid names through inspect', async () => {
+    for (const fileName of [
+      undefined,
+      null,
+      42,
+      {
+        toString: () => {
+          throw new Error('coerced');
+        },
+      },
+    ]) {
+      const error = await Effect.runPromise(Effect.flip(Volume.inspect(fileName as never)));
+      expect(error).toMatchObject({ _tag: 'VolumeError', kind: 'configuration', fileName: null });
+    }
+  });
+
   it('returns a typed error when storage inspection fails', async () => {
     const expected = new Error('storage unavailable');
     const getDirectory = vi.spyOn(navigator.storage, 'getDirectory').mockRejectedValue(expected);
@@ -148,6 +164,22 @@ describe('Volume direct acquisition', () => {
       kind: 'configuration',
       details: { message: 'Plugin configuration failed' },
     });
+  });
+
+  it('wraps plugin configuration failures with an untyped name', async () => {
+    const error = await Effect.runPromise(
+      Effect.flip(
+        Effect.scoped(
+          Volume.makeDirect({
+            fileName: 42,
+            plugins: () => {
+              throw new Error('plugin setup failed');
+            },
+          } as never),
+        ),
+      ),
+    );
+    expect(error).toMatchObject({ _tag: 'VolumeError', kind: 'configuration', fileName: null });
   });
 
   it('supports guarded direct observations and closes the borrowed backend with its scope', async () => {

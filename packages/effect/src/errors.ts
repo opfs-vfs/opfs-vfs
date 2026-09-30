@@ -202,7 +202,7 @@ export const volumeError = (
   const details = remoteDetails(error);
   const cause = trustedCause(error);
   const fields = {
-    fileName,
+    fileName: typeof fileName === 'string' ? fileName : null,
     operation,
     ...(path === undefined ? {} : { path }),
     ...(details.code ? { code: details.code } : {}),
