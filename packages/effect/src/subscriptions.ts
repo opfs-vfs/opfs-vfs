@@ -444,16 +444,33 @@ const makeSubscription = (
                 .awaitReady(budget, 'subscribe')
                 .pipe(Effect.mapError((error) => subscriptionError(error, state.fileName, path))),
             );
-            if (ready !== generation) return yield* Effect.fail(currentFailure(state, generation, path)!);
+            if (ready !== generation)
+              return yield* Effect.fail(
+                currentFailure(state, generation, path) ??
+                  subscriptionError(
+                    Object.assign(new Error('Owner changed during subscription setup'), {
+                      code: 'VFS_ATTACHMENT_LOST',
+                    }),
+                    state.fileName,
+                    path,
+                  ),
+              );
             yield* restore(waitForRetiring(state, generation, budget, clock, path));
             continue;
           }
           return yield* Effect.fail(subscriptionError(cause, state.fileName, path));
         }
 
-        const retirement: Promise<SubscriptionRetirement> = setup!.closed.then((result) =>
-          asRetirement(result, state.fileName, path),
-        );
+        const retirement: Promise<SubscriptionRetirement> = setup!.closed.then((result) => {
+          if (result.status === 'released')
+            // The plugin queues onError before this continuation can queue normal completion.
+            setTimeout(() => {
+              if (closing || terminal) return;
+              Queue.endUnsafe(queue);
+              Deferred.doneUnsafe(terminalSignal, Effect.succeed(undefined));
+            }, 0);
+          return asRetirement(result, state.fileName, path);
+        });
         const changes = Stream.suspend(() => {
           if (consumed) return Stream.die(new Error('A subscription stream can only be consumed once'));
           consumed = true;

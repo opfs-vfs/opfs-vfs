@@ -17,6 +17,7 @@ class FakeSource implements FileChangeSource {
   next: ChangeReply | undefined;
   onOpen: (() => void) | undefined;
   onInterrupted!: (code: 'SUBSCRIPTION_INTERRUPTED' | 'SUBSCRIPTION_RESYNC_REQUIRED') => void;
+  onChannelClosed!: () => void;
   holdRegister = false;
   acknowledgeCancel = true;
   openDelay = 0;
@@ -24,12 +25,13 @@ class FakeSource implements FileChangeSource {
   async openFileChangeChannel(
     receive: (frame: ChangeFrame) => void,
     interrupted: (code: 'SUBSCRIPTION_INTERRUPTED' | 'SUBSCRIPTION_RESYNC_REQUIRED') => void,
-    _closed: () => void,
+    closed: () => void,
   ): Promise<FileChangeChannel> {
     this.onOpen?.();
     if (this.openDelay) await new Promise((resolve) => setTimeout(resolve, this.openDelay));
     this.receive = receive;
     this.onInterrupted = interrupted;
+    this.onChannelClosed = closed;
     return {
       generation: this.generation,
       request: async (command) => {
@@ -161,6 +163,36 @@ describe('Effect subscriptions', () => {
     expect(source.commands.map((command) => command.type)).toContain('cancel');
   });
 
+  it.each([['channel closed callback'], ['closed frame']])(
+    'drains buffered changes and completes after %s',
+    async (retirement) => {
+      const result = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const service = yield* Subscriptions;
+            const subscription = yield* service.subscribe(options);
+            const delivered: string[] = [];
+            source.emit();
+            yield* Effect.tryPromise({
+              try: () => vi.waitFor(() => expect(source.acknowledgements).toBe(1)),
+              catch: (cause) => cause,
+            });
+            if (retirement === 'channel closed callback') source.onChannelClosed();
+            else source.close(source.commands.find((command) => command.type === 'register')!.subscriptionId!);
+            yield* Effect.raceFirst(
+              Stream.runForEach(subscription.changes, (change) => Effect.sync(() => delivered.push(change.path))),
+              Effect.sleep(1000).pipe(Effect.andThen(Effect.die(new Error('subscription stream did not complete')))),
+            );
+            return { delivered, retired: yield* subscription.retired };
+          }),
+        ).pipe(Effect.provide(liveLayer)),
+      );
+
+      expect(result.delivered).toEqual(['/note.txt']);
+      expect(result.retired).toEqual({ status: 'released' });
+    },
+  );
+
   it('rejects acquisition into a scope that was already closed', async () => {
     const scope = await Effect.runPromise(Scope.make('sequential'));
     await Effect.runPromise(Scope.close(scope, Exit.void));
@@ -186,14 +218,18 @@ describe('Effect subscriptions', () => {
           const subscription = yield* service.subscribe(options);
           source.emit();
           source.terminate();
-          return yield* Effect.exit(Stream.runHead(subscription.changes));
+          const retired = yield* subscription.retired;
+          return { retired, stream: yield* Effect.exit(Stream.runHead(subscription.changes)) };
         }),
       ).pipe(Effect.provide(liveLayer)),
     );
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isFailure(exit))
-      expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ error: expect.any(SubscriptionError) }));
+    expect(exit.retired).toEqual({ status: 'released' });
+    expect(Exit.isFailure(exit.stream)).toBe(true);
+    if (Exit.isFailure(exit.stream))
+      expect(exit.stream.cause.reasons).toContainEqual(
+        expect.objectContaining({ error: expect.any(SubscriptionError) }),
+      );
   });
 
   it('stops buffered delivery after terminal failure reaches the first consumer', async () => {
@@ -295,6 +331,43 @@ describe('Effect subscriptions', () => {
 
     expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
     expect(source.generation).toBe(currentGeneration);
+  });
+
+  it('reports attachment loss when retry readiness changes without a current failure', async () => {
+    let readyCalls = 0;
+    let finish!: (result: { status: 'released' }) => void;
+    const pending = new Promise<{ status: 'released' }>((resolve) => (finish = resolve));
+    const record = { generation: currentGeneration, closed: pending, state: 'active' as 'active' | 'retiring' };
+    state.subscriptionSetups.set(pending, record);
+    const ready = vi
+      .spyOn(state, 'awaitReady')
+      .mockImplementation(() => Effect.succeed(++readyCalls < 3 ? currentGeneration : 'generation-2'));
+    source.onOpen = () => {
+      source.onOpen = undefined;
+      record.state = 'retiring';
+    };
+
+    try {
+      const exit = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const service = yield* Subscriptions;
+            return yield* Effect.exit(service.subscribe(options));
+          }),
+        ).pipe(Effect.provide(liveLayer)),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit))
+        expect(exit.cause.reasons).toContainEqual(
+          expect.objectContaining({
+            error: expect.objectContaining({ code: 'SUBSCRIPTION_SETUP_FAILED', sourceCode: 'VFS_ATTACHMENT_LOST' }),
+          }),
+        );
+    } finally {
+      finish({ status: 'released' });
+      state.subscriptionSetups.delete(pending);
+      ready.mockRestore();
+    }
   });
 
   it('blocks same-generation unknown retirement and forgets obsolete pending generations', async () => {
