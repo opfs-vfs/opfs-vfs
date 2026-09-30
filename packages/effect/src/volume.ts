@@ -10,6 +10,7 @@ import { openOpfsVfsWorker, VfsCommandError } from '@opfs-vfs/opfs-vfs/worker';
 import type { OpenOpfsVfsWorkerOptions, VfsWorkerFactory } from '@opfs-vfs/opfs-vfs/worker';
 import type { OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
 import type { ConfiguredVfsPlugin, VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
+import { SUBSCRIPTIONS_COMPATIBILITY_KEY } from '@opfs-vfs/plugin-subscriptions/config';
 // @ts-expect-error Vite inline worker import.
 import SubscriptionsWorker from './subscriptions.worker?worker&inline';
 import {
@@ -110,6 +111,7 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
       let release: Promise<void> | undefined;
       let service: VolumeService | undefined;
       let coordinator: ReturnType<typeof makeCoordinator> | undefined;
+      let subscriptionsAvailable = false;
       const ensureOpen = (fileName: string | null) =>
         closed || owner.state._tag === 'Closed'
           ? Effect.fail(
@@ -160,6 +162,7 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
             );
           }
         }
+        subscriptionsAvailable = plugins?.some((plugin) => plugin.logicalChanges?.version === 1) ?? false;
         const { fileName, plugins: _plugins, ...coreOptions } = options;
         yield* ensureOpen(fileName);
         if (invalidName(fileName))
@@ -212,6 +215,7 @@ const makeDirectInternal = <E, R>(input: Input<E, R>): Effect.Effect<VolumeServi
           fileName,
           scope: resource,
           readinessTimeout: Infinity,
+          subscriptionsAvailable,
           backend: backend!,
           isClosed: () => closed,
           currentGeneration: () => (closed ? undefined : 'direct'),
@@ -464,6 +468,12 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
             ),
           );
         }
+        const subscriptionsAvailable = plugins.some(
+          (plugin) =>
+            plugin.id === 'subscriptions' &&
+            plugin.contractVersion === 1 &&
+            plugin.compatibilityKey === SUBSCRIPTIONS_COMPATIBILITY_KEY,
+        );
         yield* ensureOpen(fileName);
 
         const defaultWorker = () => new SubscriptionsWorker();
@@ -540,6 +550,7 @@ const makeWorker = <E, R>(input: WorkerInput<E, R>): Effect.Effect<VolumeService
           fileName,
           scope: resource,
           readinessTimeout: initTimeout,
+          subscriptionsAvailable,
           backend: client!,
           isClosed: () => closed,
           currentGeneration: () => {

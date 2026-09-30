@@ -160,10 +160,12 @@ class OwnerHarness {
 
 class HarnessSource implements FileChangeSource {
   readonly commands: ChangeCommand[] = [];
+  onRequest?: (command: ChangeCommand) => void;
   private readonly interceptors = new Map<
     ChangeCommand['type'],
     { kind: 'hold'; held: Held[] } | { kind: 'reject'; error: unknown } | { kind: 'drop' }
   >();
+  private readonly synchronousFailures = new Map<ChangeCommand['type'], unknown>();
   private current?: Channel;
 
   constructor(
@@ -199,6 +201,10 @@ class HarnessSource implements FileChangeSource {
     this.interceptors.set(type, { kind: 'drop' });
   }
 
+  throwSynchronously(type: ChangeCommand['type'], cause: unknown): void {
+    this.synchronousFailures.set(type, cause);
+  }
+
   interrupt(code: 'SUBSCRIPTION_INTERRUPTED' | 'SUBSCRIPTION_RESYNC_REQUIRED'): void {
     if (this.current) this.harness.interrupt(this.current, code);
   }
@@ -211,18 +217,26 @@ class HarnessSource implements FileChangeSource {
     const channel = (this.current = this.harness.open(this.clientId, receive, interrupted, closed));
     return Promise.resolve({
       generation: this.harness.generation,
-      request: async (command) => {
-        await Promise.resolve();
-        if (channel.isClosed) throw coded('EBADF');
-        this.commands.push(command);
-        const interceptor = this.interceptors.get(command.type);
-        if (interceptor?.kind === 'hold')
-          return new Promise<ChangeReply>((resolve, reject) =>
-            interceptor.held.push({ channel, command, resolve, reject }),
-          );
-        if (interceptor?.kind === 'reject') throw interceptor.error;
-        if (interceptor?.kind === 'drop') return new Promise<ChangeReply>(() => {});
-        return this.harness.session.control(channel.client, command);
+      request: (command) => {
+        const synchronousFailure = this.synchronousFailures.get(command.type);
+        if (synchronousFailure !== undefined) {
+          this.synchronousFailures.delete(command.type);
+          this.commands.push(command);
+          throw synchronousFailure;
+        }
+        this.onRequest?.(command);
+        return Promise.resolve().then(() => {
+          if (channel.isClosed) throw coded('EBADF');
+          this.commands.push(command);
+          const interceptor = this.interceptors.get(command.type);
+          if (interceptor?.kind === 'hold')
+            return new Promise<ChangeReply>((resolve, reject) =>
+              interceptor.held.push({ channel, command, resolve, reject }),
+            );
+          if (interceptor?.kind === 'reject') throw interceptor.error;
+          if (interceptor?.kind === 'drop') return new Promise<ChangeReply>(() => {});
+          return this.harness.session.control(channel.client, command);
+        });
       },
       close: () => this.harness.close(channel),
     });
@@ -434,6 +448,220 @@ describe('acknowledged subscription retirement', () => {
     await expect(subscribe(source, options, () => {})).resolves.toHaveProperty('closed');
     expect(harness.clientCount('client')).toBe(1);
   });
+
+  it('calls the failed-setup wait bridge only for matching-generation pending setups', async () => {
+    const source = harness.source('client');
+    let waitCalls = 0;
+    const lifecycle = {
+      awaitSetupRetirements: async (wait: (signal?: AbortSignal) => Promise<void>) => {
+        waitCalls++;
+        await wait();
+      },
+    };
+    const first = await subscribe(source, options, () => {}, lifecycle);
+    expect(waitCalls).toBe(0);
+    first.unsubscribe();
+    await first.closed;
+
+    const releaseRegister = source.hold('register');
+    const controller = new AbortController();
+    const setup = subscribe(source, { ...options, signal: controller.signal }, () => {});
+    await flush();
+    controller.abort();
+    await expect(setup).rejects.toMatchObject({ name: 'AbortError' });
+    const waiting = new Promise<void>((resolve) => {
+      void (async () => {
+        while (waitCalls === 0) await flush();
+        resolve();
+      })();
+    });
+    const retry = subscribe(source, options, () => {}, lifecycle);
+    await waiting;
+    expect(waitCalls).toBe(1);
+    source.interrupt('SUBSCRIPTION_INTERRUPTED');
+    releaseRegister();
+    await expect(retry).rejects.toMatchObject({ code: 'SUBSCRIPTION_RETIREMENT_UNKNOWN' });
+
+    harness.nextGeneration();
+    await expect(subscribe(source, options, () => {}, lifecycle)).resolves.toHaveProperty('closed');
+    expect(waitCalls).toBe(1);
+  });
+
+  it('releases a preparing setup locally when registration aborts or its hook throws', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    let abortedSetup!: import('../types').SubscriptionSetup;
+    const aborting = subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+      registering(setup) {
+        abortedSetup = setup;
+        controller.abort();
+      },
+    });
+    await expect(aborting).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(abortedSetup.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands).toEqual([]);
+
+    const hookFailure = new Error('registration hook failed');
+    let failedSetup!: import('../types').SubscriptionSetup;
+    await expect(
+      subscribe(source, options, () => {}, {
+        registering(setup) {
+          failedSetup = setup;
+          throw hookFailure;
+        },
+        retiring() {
+          throw new Error('observer failure');
+        },
+      }),
+    ).rejects.toBe(hookFailure);
+    await expect(failedSetup.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands).toEqual([]);
+  });
+
+  it('observes registration in the same turn as the register request', async () => {
+    const source = harness.source('client');
+    const order: string[] = [];
+    source.onRequest = (command) => {
+      if (command.type === 'register') order.push('request');
+    };
+    const handle = await subscribe(source, options, () => {}, {
+      registering() {
+        order.push('registering');
+      },
+    });
+    expect(order).toEqual(['registering', 'request']);
+    handle.unsubscribe();
+    await handle.closed;
+  });
+
+  it('treats a synchronous register request throw as unknown for that generation', async () => {
+    const source = harness.source('client');
+    const failure = new Error('synchronous request failure');
+    source.throwSynchronously('register', failure);
+    let setup!: import('../types').SubscriptionSetup;
+    await expect(subscribe(source, options, () => {}, { registering: (value) => (setup = value) })).rejects.toBe(
+      failure,
+    );
+    await expect(setup.closed).resolves.toMatchObject({ status: 'unknown' });
+    const registrations = source.commands.filter(({ type }) => type === 'register').length;
+    await expect(subscribe(source, options, () => {})).rejects.toMatchObject({
+      code: 'SUBSCRIPTION_RETIREMENT_UNKNOWN',
+    });
+    expect(source.commands.filter(({ type }) => type === 'register')).toHaveLength(registrations);
+
+    harness.nextGeneration();
+    await expect(subscribe(source, options, () => {})).resolves.toHaveProperty('closed');
+  });
+
+  it('swallows retiring-observer failures and still completes remote cleanup', async () => {
+    const source = harness.source('client');
+    const handle = await subscribe(source, options, () => {}, {
+      retiring() {
+        throw new Error('retiring observer failed');
+      },
+    });
+    handle.unsubscribe();
+    await expect(handle.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands.map(({ type }) => type)).toContain('cancel');
+  });
+
+  it('sends one cancellation when a retiring observer re-enters', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    let retirements = 0;
+    const handle = await subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+      retiring() {
+        retirements++;
+        controller.abort();
+      },
+    });
+    handle.unsubscribe();
+    await expect(handle.closed).resolves.toEqual({ status: 'released' });
+    expect(retirements).toBe(1);
+    expect(source.commands.filter(({ type }) => type === 'cancel')).toHaveLength(1);
+  });
+
+  for (const frameType of ['terminal', 'closed'] as const)
+    it(`${frameType} observer re-entry sends one acknowledgement without cancellation`, async () => {
+      const source = harness.source(`client-${frameType}`);
+      const controller = new AbortController();
+      const handle = await subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+        retiring() {
+          controller.abort();
+        },
+      });
+      const registration = source.commands.find(({ type }) => type === 'register')!;
+      const channel = [...harness.channels.values()][0]!;
+      if (frameType === 'terminal')
+        channel.receive({
+          type: 'terminal',
+          subscriptionId: registration.subscriptionId,
+          code: 'SUBSCRIPTION_OVERFLOW',
+        });
+      else channel.receive({ type: 'closed', subscriptionId: registration.subscriptionId });
+      await expect(handle.closed).resolves.toEqual({ status: 'released' });
+      expect(source.commands.filter(({ type }) => type === 'cancel')).toHaveLength(0);
+      expect(source.commands.filter(({ type }) => type === 'terminal-ack')).toHaveLength(1);
+    });
+
+  it('does not cancel from a retiring observer after known setup rejection', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    source.reject('register', coded('EACCES'));
+    let setup!: import('../types').SubscriptionSetup;
+    await expect(
+      subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+        registering(value) {
+          setup = value;
+        },
+        retiring() {
+          controller.abort();
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'EACCES' });
+    await expect(setup.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands.filter(({ type }) => type === 'cancel')).toHaveLength(0);
+  });
+
+  it('does not dispatch from a retiring observer after a preparing hook veto', async () => {
+    const source = harness.source('client');
+    const controller = new AbortController();
+    const veto = new Error('veto');
+    let setup!: import('../types').SubscriptionSetup;
+    await expect(
+      subscribe(source, { ...options, signal: controller.signal }, () => {}, {
+        registering(value) {
+          setup = value;
+          throw veto;
+        },
+        retiring() {
+          controller.abort();
+        },
+      }),
+    ).rejects.toBe(veto);
+    await expect(setup.closed).resolves.toEqual({ status: 'released' });
+    expect(source.commands).toEqual([]);
+  });
+
+  for (const frameType of ['terminal', 'closed'] as const)
+    it(`acknowledges repeated ${frameType} frames once`, async () => {
+      const source = harness.source(`client-repeat-${frameType}`);
+      const handle = await subscribe(source, options, () => {});
+      const registration = source.commands.find(({ type }) => type === 'register')!;
+      const channel = [...harness.channels.values()][0]!;
+      const frame =
+        frameType === 'terminal'
+          ? {
+              type: 'terminal' as const,
+              subscriptionId: registration.subscriptionId,
+              code: 'SUBSCRIPTION_OVERFLOW' as const,
+            }
+          : { type: 'closed' as const, subscriptionId: registration.subscriptionId };
+      channel.receive(frame);
+      channel.receive(frame);
+      await expect(handle.closed).resolves.toEqual({ status: 'released' });
+      expect(source.commands.filter(({ type }) => type === 'terminal-ack')).toHaveLength(1);
+    });
 
   it('settles a deferred activation failure as unknown', async () => {
     const source = harness.source('client');

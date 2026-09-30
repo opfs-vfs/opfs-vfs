@@ -34,6 +34,49 @@ its current descendants; cleanup is not an atomic inode-identity check. Keep the
 resolved physical ancestors stable until cleanup completes. Shutdown, owner
 replacement, or cleanup failure can leave temporary paths for explicit reclamation.
 
+`Subscriptions.layer` provides the Effect subscriptions service when the mounted
+volume has the compatible logical-change capability. Worker mounts request it
+with `subscriptionsRequest()`; direct mounts configure a logical-change plugin.
+Without that capability, layer acquisition fails with a typed unsupported
+`VolumeError`.
+
+```ts
+import { Effect, Layer, Stream } from 'effect';
+import { Subscriptions, Volume } from '@opfs-vfs/effect';
+import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
+
+const liveLayer = Layer.provide(
+  Subscriptions.layer,
+  Volume.layer({ fileName: 'app.bin', plugins: () => [subscriptionsRequest()] }),
+);
+
+const observe = Effect.scoped(
+  Effect.gen(function* () {
+    const subscriptions = yield* Subscriptions.Subscriptions;
+    const subscription = yield* subscriptions.subscribe({ path: '/', scope: 'directory', recursive: true });
+    yield* Stream.runForEach(subscription.changes, (change) => Effect.sync(() => console.log(change.path)));
+  }),
+).pipe(Effect.provide(liveLayer));
+```
+
+Each `changes` stream can be consumed once. Stream completion, interruption, or
+scope close unsubscribes it; `retired` can be evaluated repeatedly to read the
+same released or unknown cleanup result. The stream has bounded delivery and
+preserves terminal subscription errors. It has no initial snapshot or replay;
+subscribe before scanning and reconcile notifications received during the scan.
+See `examples/subscriptions.ts` for a complete worker-backed example.
+
+The adapter buffers at most 16 changes and permits one additional producer
+offer to wait; a terminal error clears buffered changes and fails the stream.
+Content capture is off by default (`content: false`). The adapter queue and its
+one pending offer retain up to 17 * `maxBytes` of included payloads, in addition
+to source buffers and any data a caller retains. If retirement is unknown,
+new subscriptions on that same owner generation fail until the volume observes
+a different ready generation. Recreating a handle in the same generation does
+not clear the barrier; a new generation does, while an old handle's `retired`
+result remains unchanged. Direct mounts cannot observe a new owner generation,
+so an unknown retirement requires remounting.
+
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';
 import { OpfsFileSystem, Volume } from '@opfs-vfs/effect';

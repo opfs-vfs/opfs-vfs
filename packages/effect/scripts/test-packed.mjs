@@ -28,10 +28,12 @@ const directFile = resolve(packed, 'examples/direct.ts');
 const workerFile = resolve(packed, 'examples/worker-session.ts');
 const filesystemFile = resolve(packed, 'examples/filesystem-save.ts');
 const streamFile = resolve(packed, 'examples/filesystem-stream.ts');
+const subscriptionsFile = resolve(packed, 'examples/subscriptions.ts');
 writeFileSync(directFile, example('direct'));
 writeFileSync(workerFile, example('worker-session'));
 writeFileSync(filesystemFile, example('filesystem-save'));
 writeFileSync(streamFile, example('filesystem-stream'));
+writeFileSync(subscriptionsFile, example('subscriptions'));
 writeFileSync(
   resolve(packed, 'package.json'),
   JSON.stringify({ name: 'effect-packed-check', private: true, type: 'module' }),
@@ -49,7 +51,7 @@ run('npm', [
   effect,
   effectRuntime,
 ]);
-for (const file of [directFile, workerFile, filesystemFile, streamFile]) {
+for (const file of [directFile, workerFile, filesystemFile, streamFile, subscriptionsFile]) {
   run('node', [
     resolve(root, 'node_modules/typescript/bin/tsc'),
     '--ignoreConfig',
@@ -83,3 +85,14 @@ const runBrowserExamples = (example) =>
 runBrowserExamples('/.packed/examples/direct.ts');
 runBrowserExamples('/.packed/examples/filesystem-save.ts');
 runBrowserExamples('/.packed/examples/filesystem-stream.ts');
+run(
+  'node',
+  [
+    resolve(packageRoot, 'node_modules/vitest/vitest.mjs'),
+    'run',
+    '--config',
+    'vitest.packed.config.ts',
+    'tests/packed-subscriptions.test.ts',
+  ],
+  { env: { ...process.env, VITE_PACKED_EFFECT_SUBSCRIPTIONS_EXAMPLE: '/.packed/examples/subscriptions.ts' } },
+);

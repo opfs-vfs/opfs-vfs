@@ -1,5 +1,13 @@
 import type { ChangeFrame, FileChangeChannel, FileChangeSource, TerminalCode } from '@opfs-vfs/opfs-vfs/changes';
-import type { FileChange, SubscribeOptions, Subscription, SubscriptionError, SubscriptionRetirement } from './types';
+import type {
+  FileChange,
+  SubscribeLifecycle,
+  SubscribeOptions,
+  Subscription,
+  SubscriptionError,
+  SubscriptionRetirement,
+  SubscriptionSetup,
+} from './types';
 import { abortError, error, validateOptions } from './validation';
 
 type Local = {
@@ -9,15 +17,17 @@ type Local = {
   readonly settle: (retirement: SubscriptionRetirement) => void;
   listener?: (change: FileChange) => void | Promise<void>;
   onError?: SubscribeOptions['onError'];
-  state: 'registering' | 'active' | 'retiring' | 'closed';
+  state: 'preparing' | 'registering' | 'active' | 'retiring' | 'closed';
   resolved: boolean;
   settled: boolean;
+  retiringNotified: boolean;
   cancelSent: boolean;
   terminalAcked: boolean;
   terminalCode?: TerminalCode;
   signal?: AbortSignal;
   abort?: () => void;
   failSetup?: (cause: unknown) => void;
+  lifecycle?: SubscribeLifecycle;
 };
 
 type Context = {
@@ -31,8 +41,9 @@ type Context = {
 type Opening = { promise: Promise<Context>; pending: number; context?: Context };
 // Only the latest unknown setup cleanup matters: an older generation can no longer register.
 type SetupRetirements = {
-  pending: Set<Promise<SubscriptionRetirement>>;
-  unknown?: { generation: string; error: SubscriptionError };
+  pending: Map<Promise<SubscriptionRetirement>, string>;
+  unknown: Map<string, SubscriptionError>;
+  currentGeneration?: string;
 };
 
 const channels = new WeakMap<object, Opening>();
@@ -64,7 +75,7 @@ function cleanup(entry: Local): void {
 function setupFor(source: object): SetupRetirements {
   let setup = setupRetirements.get(source);
   if (!setup) {
-    setup = { pending: new Set() };
+    setup = { pending: new Map(), unknown: new Map() };
     setupRetirements.set(source, setup);
   }
   return setup;
@@ -131,16 +142,44 @@ function settle(context: Context, entry: Local, retirement: SubscriptionRetireme
   if (entry.settled) return;
   entry.settled = true;
   entry.state = 'closed';
+  notifyRetiring(entry);
   cleanup(entry);
   context.entries.delete(entry.id);
   entry.settle(retirement);
   closeIfUnused(context);
 }
 
+function setupOf(entry: Local): SubscriptionSetup {
+  return { generation: entry.generation, closed: entry.closed };
+}
+
+function notifyRetiring(entry: Local): void {
+  if (entry.retiringNotified) return;
+  entry.retiringNotified = true;
+  try {
+    entry.lifecycle?.retiring?.(setupOf(entry));
+  } catch {
+    // Lifecycle observers cannot prevent local or remote cleanup.
+  }
+}
+
+function releaseBeforeRegister(context: Context, entry: Local, cause: unknown): void {
+  if (entry.state !== 'preparing') return;
+  entry.failSetup?.(cause);
+  entry.failSetup = undefined;
+  settle(context, entry, { status: 'released' });
+}
+
 function interrupt(context: Context, code: TerminalCode = 'SUBSCRIPTION_INTERRUPTED', cause?: unknown): void {
   if (context.closed) return;
   context.closed = true;
   evict(context);
+  for (const entry of context.entries.values()) {
+    if (entry.state !== 'preparing') {
+      entry.state = 'retiring';
+      notifyRetiring(entry);
+    }
+  }
   try {
     context.channel.close();
   } catch {
@@ -148,7 +187,11 @@ function interrupt(context: Context, code: TerminalCode = 'SUBSCRIPTION_INTERRUP
   }
   for (const entry of [...context.entries.values()]) {
     const onError = entry.resolved ? entry.onError : undefined;
-    if (!entry.resolved) trackSetup(context, entry);
+    if (!entry.resolved && entry.state !== 'preparing') trackSetup(context, entry);
+    if (entry.state === 'preparing') {
+      releaseBeforeRegister(context, entry, subscriptionError(code, cause));
+      continue;
+    }
     entry.failSetup?.(subscriptionError(code, cause));
     entry.failSetup = undefined;
     cleanup(entry);
@@ -163,7 +206,14 @@ function request(
   command: Parameters<FileChangeChannel['request']>[0],
 ): void {
   if (context.closed) return;
-  void context.channel.request(command).then(
+  let pending: Promise<Awaited<ReturnType<FileChangeChannel['request']>>>;
+  try {
+    pending = context.channel.request(command);
+  } catch (cause) {
+    interrupt(context, 'SUBSCRIPTION_INTERRUPTED', cause);
+    return;
+  }
+  void pending.then(
     () => {
       if (command.type === 'terminal-ack' && entry) settle(context, entry, { status: 'released' });
     },
@@ -175,38 +225,47 @@ function retire(context: Context, entry: Local): void {
   if (entry.state === 'closed' || entry.cancelSent || entry.terminalAcked) return;
   entry.state = 'retiring';
   entry.cancelSent = true;
+  notifyRetiring(entry);
   cleanup(entry);
   request(context, undefined, { type: 'cancel', subscriptionId: entry.id });
 }
 
 function terminal(context: Context, entry: Local, code: TerminalCode): void {
   if (entry.state === 'closed') return;
+  if (entry.state === 'preparing') {
+    releaseBeforeRegister(context, entry, subscriptionError(code));
+    return;
+  }
+  if (entry.terminalAcked) return;
   const onError = entry.resolved ? entry.onError : undefined;
   entry.terminalCode = code;
   if (!entry.resolved) trackSetup(context, entry);
+  entry.state = 'retiring';
+  entry.terminalAcked = true;
+  notifyRetiring(entry);
   entry.failSetup?.(subscriptionError(code));
   entry.failSetup = undefined;
   cleanup(entry);
-  entry.state = 'retiring';
-  if (!entry.terminalAcked) {
-    entry.terminalAcked = true;
-    request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
-  }
+  request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
   report(onError, code);
 }
 
 function handleFrame(context: Context, entry: Local, frame: ChangeFrame): void {
   if (frame.type === 'terminal') return terminal(context, entry, frame.code);
   if (frame.type === 'closed') {
-    if (!entry.resolved) trackSetup(context, entry);
+    if (!entry.resolved && entry.state !== 'preparing') trackSetup(context, entry);
+    if (entry.state === 'preparing') {
+      releaseBeforeRegister(context, entry, error('EBADF', 'Filesystem is closed'));
+      return;
+    }
+    if (entry.terminalAcked) return;
+    entry.state = 'retiring';
+    entry.terminalAcked = true;
+    notifyRetiring(entry);
     entry.failSetup?.(error('EBADF', 'Filesystem is closed'));
     entry.failSetup = undefined;
     cleanup(entry);
-    entry.state = 'retiring';
-    if (!entry.terminalAcked) {
-      entry.terminalAcked = true;
-      request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
-    }
+    request(context, entry, { type: 'terminal-ack', subscriptionId: entry.id });
     return;
   }
   if (entry.state !== 'active') return;
@@ -278,22 +337,36 @@ function awaitSetup(promise: Promise<void>, signal?: AbortSignal): Promise<void>
   });
 }
 
-async function waitForSetups(source: object, signal?: AbortSignal): Promise<void> {
+async function waitForSetups(source: object, generation: string | undefined, signal?: AbortSignal): Promise<void> {
   const setup = setupFor(source);
-  while (setup.pending.size)
+  while (
+    [...setup.pending.values()].some((entryGeneration) => generation === undefined || entryGeneration === generation)
+  ) {
+    const pending = [...setup.pending]
+      .filter(([, entryGeneration]) => generation === undefined || entryGeneration === generation)
+      .map(([closed]) => closed);
+    if (!pending.length) return;
     await awaitSetup(
-      Promise.all([...setup.pending]).then(() => {}),
+      Promise.all(pending).then(() => {}),
       signal,
     );
+  }
+}
+
+function observeGeneration(setup: SetupRetirements, generation: string): void {
+  if (setup.currentGeneration === generation) return;
+  setup.currentGeneration = generation;
+  setup.unknown.clear();
 }
 
 function trackSetup(context: Context, entry: Local): void {
   const setup = setupFor(context.source);
   if (setup.pending.has(entry.closed)) return;
-  setup.pending.add(entry.closed);
+  setup.pending.set(entry.closed, entry.generation);
   void entry.closed.then((retirement) => {
     setup.pending.delete(entry.closed);
-    if (retirement.status === 'unknown') setup.unknown = { generation: entry.generation, error: retirement.error };
+    if (retirement.status === 'unknown' && setup.currentGeneration === entry.generation)
+      setup.unknown.set(entry.generation, retirement.error);
   });
 }
 
@@ -301,6 +374,7 @@ export async function subscribe(
   fs: FileChangeSource,
   options: SubscribeOptions,
   listener: (change: FileChange) => void | Promise<void>,
+  lifecycle?: SubscribeLifecycle,
 ): Promise<Subscription> {
   const { wire, signal, onError } = validateOptions(options);
   if (typeof listener !== 'function') throw error('EINVAL', 'Listener must be a function');
@@ -312,11 +386,18 @@ export async function subscribe(
   let entry: Local | undefined;
   try {
     context = await awaitOpen(opening, signal);
-    await waitForSetups(source, signal);
-    if (context.closed) throw error('EBADF', 'Filesystem is closed');
-    if (signal?.aborted) throw abortError();
-    const unknown = setupFor(source).unknown;
-    const previous = unknown?.generation === context.channel.generation ? unknown.error : undefined;
+    const setup = setupFor(source);
+    observeGeneration(setup, context.channel.generation);
+    if (lifecycle?.awaitSetupRetirements) {
+      const hasPending = [...setup.pending.values()].some((generation) => generation === context.channel.generation);
+      if (hasPending)
+        await lifecycle.awaitSetupRetirements((waitSignal) =>
+          waitForSetups(source, context.channel.generation, waitSignal),
+        );
+    } else {
+      await waitForSetups(source, undefined, signal);
+    }
+    const previous = setup.unknown.get(context.channel.generation);
     if (previous)
       throw Object.assign(
         error(
@@ -325,6 +406,8 @@ export async function subscribe(
         ),
         { cause: previous },
       );
+    if (context.closed) throw error('EBADF', 'Filesystem is closed');
+    if (signal?.aborted) throw abortError();
     const id = crypto.randomUUID();
     let resolveClosed!: (retirement: SubscriptionRetirement) => void;
     const closed = new Promise<SubscriptionRetirement>((resolve) => (resolveClosed = resolve));
@@ -332,6 +415,10 @@ export async function subscribe(
     const setupTerminal = new Promise<never>((_, reject) => (failSetup = reject));
     const unsubscribe = () => {
       if (!entry) return;
+      if (entry.state === 'preparing') {
+        releaseBeforeRegister(context, entry, abortError());
+        return;
+      }
       const wasRegistering = entry.state === 'registering';
       if (wasRegistering) trackSetup(context, entry);
       retire(context, entry);
@@ -344,25 +431,57 @@ export async function subscribe(
       settle: resolveClosed,
       listener,
       onError,
-      state: 'registering',
+      state: 'preparing',
       resolved: false,
       settled: false,
+      retiringNotified: false,
       cancelSent: false,
       signal,
       terminalAcked: false,
       failSetup,
+      lifecycle,
     };
+    void setupTerminal.catch(() => {});
     entry.abort = unsubscribe;
     signal?.addEventListener('abort', unsubscribe, { once: true });
     context.entries.set(id, entry);
-    const registration = context.channel.request({ type: 'register', subscriptionId: id, options: wire });
+    if (signal?.aborted || context.closed) {
+      const cause = signal?.aborted ? abortError() : error('EBADF', 'Filesystem is closed');
+      releaseBeforeRegister(context, entry, cause);
+      throw cause;
+    }
+    try {
+      lifecycle?.registering?.(setupOf(entry));
+    } catch (cause) {
+      releaseBeforeRegister(context, entry, cause);
+      throw cause;
+    }
+    if (entry.state !== 'preparing' || signal?.aborted || context.closed) {
+      const cause = signal?.aborted
+        ? abortError()
+        : entry.terminalCode
+          ? subscriptionError(entry.terminalCode)
+          : error('EBADF', 'Filesystem is closed');
+      releaseBeforeRegister(context, entry, cause);
+      throw cause;
+    }
+    entry.state = 'registering';
+    let registration: Promise<Awaited<ReturnType<FileChangeChannel['request']>>>;
+    try {
+      registration = context.channel.request({ type: 'register', subscriptionId: id, options: wire });
+    } catch (cause) {
+      interrupt(context, 'SUBSCRIPTION_INTERRUPTED', cause);
+      throw cause;
+    }
     void registration.then(
       () => {},
       () => {
         // An owner or core admission rejection reserves nothing. Transport failures make core queue
         // interrupted() before this rejection is observed, which has already settled the entry unknown.
-        if (!entry!.resolved) trackSetup(context, entry!);
-        settle(context, entry!, { status: 'released' });
+        if (!entry!.settled) {
+          if (!entry!.resolved) trackSetup(context, entry!);
+          settle(context, entry!, { status: 'released' });
+        }
       },
     );
     let reply: Awaited<ReturnType<FileChangeChannel['request']>>;
@@ -408,4 +527,6 @@ export type {
   Subscription,
   SubscriptionError,
   SubscriptionRetirement,
+  SubscribeLifecycle,
+  SubscriptionSetup,
 } from './types';

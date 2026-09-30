@@ -32,3 +32,15 @@ export interface Subscription {
   readonly closed: Promise<SubscriptionRetirement>;
   unsubscribe(): void;
 }
+
+export interface SubscriptionSetup {
+  readonly generation: string;
+  readonly closed: Promise<SubscriptionRetirement>;
+}
+
+/** Optional adapter lifecycle observation. Existing three-argument subscribe calls are unchanged. */
+export interface SubscribeLifecycle {
+  readonly awaitSetupRetirements?: (wait: (signal?: AbortSignal) => Promise<void>) => Promise<void>;
+  readonly registering?: (setup: SubscriptionSetup) => void;
+  readonly retiring?: (setup: SubscriptionSetup) => void;
+}

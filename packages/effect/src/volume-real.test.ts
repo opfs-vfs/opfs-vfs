@@ -9,6 +9,10 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
       ok: boolean;
       first?: {
         persistence: { state: string };
+        directSubscription: {
+          change: { type: string; path: string } | null;
+          retired: { status: string };
+        };
         copyTemp: {
           directCopy: boolean;
           regularReplacement: boolean;
@@ -56,6 +60,10 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
     expect(result.after?.exists).toBe(true);
     expect(result.first).toMatchObject({
       persistence: { state: 'clean' },
+      directSubscription: {
+        change: { type: 'create', path: '/subscribed.txt' },
+        retired: { status: 'released' },
+      },
       copyTemp: {
         directCopy: true,
         regularReplacement: true,
