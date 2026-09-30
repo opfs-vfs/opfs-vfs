@@ -2,19 +2,24 @@
 
 A browser filesystem backed by the Origin Private File System, with POSIX-style file operations, write-ahead logging, crash recovery, and shared worker transport.
 
-This pnpm workspace contains the [opfs-vfs library](packages/opfs-vfs/README.md), its browser tests, and optional PGlite and just-bash adapters. Ordinary filesystem use has no runtime dependencies.
+Use the core API from TypeScript or JavaScript, connect file-backed interfaces with the React SDK, or compose storage through the Effect v4 adapter. Volume Explorer and reusable file previews help you inspect and edit browser-local files. Ordinary filesystem use through the core package has no runtime dependencies.
 
 New mounts default to disk buffering and balanced background synchronization. See [storage defaults](docs/API.md#storage-defaults) for save boundaries and switching buffer modes.
 
-## Packages
+## Published packages
 
-| Directory                       | Package                          | Contents                                    |
-| ------------------------------- | -------------------------------- | ------------------------------------------- |
-| `packages/opfs-vfs`             | `@opfs-vfs/opfs-vfs`             | Library and browser tests                   |
-| `packages/plugin-subscriptions` | `@opfs-vfs/plugin-subscriptions` | Bounded file-change notifications           |
-| `apps/website`                  | `@opfs-vfs/website`              | Marketing, docs, demos, and live benchmarks |
+| Package                                                                                        | Purpose                                                                 | Documentation                                                  |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [@opfs-vfs/opfs-vfs](https://www.npmjs.com/package/@opfs-vfs/opfs-vfs)                         | Core filesystem, worker clients, and PGlite and just-bash adapters      | [Core guide](packages/opfs-vfs/README.md)                      |
+| [@opfs-vfs/plugin-subscriptions](https://www.npmjs.com/package/@opfs-vfs/plugin-subscriptions) | Bounded file-change notifications                                       | [Subscriptions guide](packages/plugin-subscriptions/README.md) |
+| [@opfs-vfs/react](https://www.npmjs.com/package/@opfs-vfs/react)                               | React providers, lifecycle hooks, and subscribed reads, in preview      | [React SDK guide](packages/react/README.md)                    |
+| [@opfs-vfs/effect](https://www.npmjs.com/package/@opfs-vfs/effect)                             | Effect v4 scoped volumes, FileSystem service, and change streams        | [Effect adapter guide](packages/effect/README.md)              |
+| [@opfs-vfs/devtools](https://www.npmjs.com/package/@opfs-vfs/devtools)                         | Volume Explorer with file actions, a shell, previews, and app debugging | [Volume Explorer guide](packages/devtools/README.md)           |
+| [@opfs-vfs/file-preview](https://www.npmjs.com/package/@opfs-vfs/file-preview)                 | Reusable React file previews and a virtualized text editor              | [File preview guide](packages/file-preview/README.md)          |
 
-The private website consumes the library through `workspace:*` and its public exports. See [website development](apps/website/README.md) to run it locally. The [experimental DuckDB adapter](docs/DUCKDB.md) persists analytics databases through OPFS VFS using separately built, compatible DuckDB-Wasm assets.
+The React SDK preview requires React 19. The Effect adapter requires `effect@4.0.0-rc.118`. See each package guide for installation and peer dependencies.
+
+The private [website workspace](apps/website/README.md) contains marketing, docs, demos, and live benchmarks. It consumes the public packages through `workspace:*`; it is not published to npm. The [experimental DuckDB adapter](docs/DUCKDB.md) persists analytics databases through OPFS VFS using separately built, compatible DuckDB-Wasm assets.
 
 ## Development
 
