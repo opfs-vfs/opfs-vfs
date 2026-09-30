@@ -26,9 +26,13 @@
     "packages/effect/examples/reconciled-view.ts",
     "packages/effect/examples/subscriptions.ts",
     "packages/effect/examples/worker-session.ts",
+    "packages/effect/examples/encrypted-session.ts",
+    "packages/effect/examples/encrypted-session.worker.ts",
     "packages/effect/tests/packed-subscriptions.test.ts",
     "packages/effect/tests/packed-reconciled-view.test.ts",
     "packages/effect/tests/packed-worker-session.test.ts",
+    "packages/effect/tests/packed-encrypted-session.test.ts",
+    "packages/effect/tests/encrypted-tamper.worker.ts",
     "packages/effect/vitest.packed.config.ts",
     "examples/duckdb/main.ts",
     "packages/devtools/.storybook/middleware.mjs",
@@ -46,7 +50,7 @@
     "packages/opfs-vfs/src/__tests__/benchmark-worker-client-sab-worker.ts",
     "packages/react/src/__tests__/benchmark-sdk-page.tsx"
   ],
-  "ignoreDependencies": ["@webgpu/types", "tw-animate-css"],
+  "ignoreDependencies": ["@webgpu/types", "tw-animate-css", "@opfs-vfs/plugin-encryption"],
   "ignorePatterns": [
     "apps/website/public/vendor/duckdb/**",
     "apps/website/public/vendor/edgejs/**",

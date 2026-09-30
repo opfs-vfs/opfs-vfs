@@ -13,10 +13,17 @@ export default defineConfig({
       'tests/packed-worker-session.test.ts',
       'tests/packed-subscriptions.test.ts',
       'tests/packed-reconciled-view.test.ts',
+      ...(process.env.VITE_PACKED_EFFECT_ENCRYPTED_SESSION ? ['tests/packed-encrypted-session.test.ts'] : []),
     ],
   },
   optimizeDeps: {
     noDiscovery: true,
-    exclude: ['effect', '@opfs-vfs/effect', '@opfs-vfs/opfs-vfs', '@opfs-vfs/plugin-subscriptions'],
+    exclude: [
+      'effect',
+      '@opfs-vfs/effect',
+      '@opfs-vfs/opfs-vfs',
+      '@opfs-vfs/plugin-subscriptions',
+      '@opfs-vfs/plugin-encryption',
+    ],
   },
 });

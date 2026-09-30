@@ -37,6 +37,7 @@
     "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
     "test": "vitest run",
     "test:packed": "node scripts/test-packed.mjs",
+    "test:encrypted-packed": "node scripts/test-packed.mjs --encrypted",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

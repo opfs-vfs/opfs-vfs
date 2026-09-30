@@ -129,3 +129,30 @@ it after the owning scope closes.
 
 `examples/worker-session.ts` is a runnable worker-backed save/read session.
 `examples/direct.ts` shows the direct API.
+
+`examples/encrypted-session.ts` shows an application-owned worker that registers
+encryption and subscriptions, inspects before opening an existing encrypted
+volume, and keeps one `ManagedRuntime` for the session. Its save controller
+serializes work and credential replacement, preserves use and disposal exits,
+and never replays the failed save. Closing stops admission immediately, abandons
+a pending credential prompt, ignores late answers, and waits for runtime disposal.
+The creation helper is the only path that
+accepts an initial passkey. Its controller config must match the initial
+runtime's file name, profile, and plugin order; a replacement supplies a new
+secret only. The paired
+`examples/encrypted-session.worker.ts` is application code; the base adapter
+does not depend on the premium encryption package.
+
+An existing unlocked owner can accept a follower without authenticating that
+follower's secret. The secret is checked only if the follower takes ownership,
+which can then fail. `Redacted` protects display while wrapped, but requests
+and layers can retain revealed secrets and do not zeroize them. Mounting does
+not encrypt or migrate existing plaintext storage; no format migration is
+introduced here.
+
+The encrypted packed check is explicit and requires a reviewed local candidate:
+
+```sh
+OPFS_VFS_ENCRYPTION_TARBALL=/absolute/path/plugin-encryption.tgz \
+OPFS_VFS_ENCRYPTION_SHA256=<sha256> pnpm --filter @opfs-vfs/effect test:encrypted-packed
+```
