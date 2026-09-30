@@ -383,6 +383,36 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@22.20.3)(@vitest/browser-playwright@4.1.11)(vite@8.2.2(@types/node@22.20.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  packages/effect:
+    devDependencies:
+      '@opfs-vfs/opfs-vfs':
+        specifier: workspace:*
+        version: link:../opfs-vfs
+      '@opfs-vfs/plugin-subscriptions':
+        specifier: workspace:*
+        version: link:../plugin-subscriptions
+      '@types/node':
+        specifier: 22.20.3
+        version: 22.20.3
+      '@vitest/browser':
+        specifier: 4.1.11
+        version: 4.1.11(bufferutil@4.1.0)(vite@8.2.2(@types/node@22.20.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
+      '@vitest/browser-playwright':
+        specifier: 4.1.11
+        version: 4.1.11(bufferutil@4.1.0)(playwright@1.59.1)(vite@8.2.2(@types/node@22.20.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
+      effect:
+        specifier: 4.0.0-rc.118
+        version: 4.0.0-rc.118
+      playwright:
+        specifier: 1.59.1
+        version: 1.59.1
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@22.20.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@22.20.3)(@vitest/browser-playwright@4.1.11)(vite@8.2.2(@types/node@22.20.3)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   packages/file-preview:
     dependencies:
       '@codemirror/commands':
@@ -3835,6 +3865,9 @@ packages:
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
+
+  effect@4.0.0-rc.118:
+    resolution: {integrity: sha512-hxhpCd+swzrtu9lnyPpEFre2ODQzJ9qxgyL1oHIEY8NKnW4PxTbM1XzplMZXiAsLD62HO+KJc41Nqxr9T791ZQ==}
 
   electron-to-chromium@1.5.433:
     resolution: {integrity: sha512-5lCAbyZBjtmUt/RAGHRqrL2q0oEFRThDAsZHHDn9XHa89Qw7gMYOeSicBTy+AHfvo0r6vwsZvqNJTQIQy1BLzA==}
@@ -9304,6 +9337,8 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       es-errors: 1.3.0
       gopd: 1.2.0
+
+  effect@4.0.0-rc.118: {}
 
   electron-to-chromium@1.5.433: {}
 

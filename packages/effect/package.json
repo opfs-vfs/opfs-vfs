@@ -1,0 +1,61 @@
+{
+  "name": "@opfs-vfs/effect",
+  "version": "0.1.0",
+  "description": "Effect v4 adapter for OPFS VFS.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/opfs-vfs.git",
+    "directory": "packages/effect"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./volume": {
+      "types": "./dist/volume.d.ts",
+      "import": "./dist/volume.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
+    "test": "vitest run",
+    "test:packed": "node scripts/test-packed.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:*",
+    "@opfs-vfs/plugin-subscriptions": "workspace:*",
+    "@types/node": "22.20.3",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
+    "effect": "4.0.0-rc.118",
+    "playwright": "1.59.1",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@opfs-vfs/opfs-vfs": "workspace:^",
+    "@opfs-vfs/plugin-subscriptions": "workspace:^",
+    "effect": "4.0.0-rc.118"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
