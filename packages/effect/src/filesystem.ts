@@ -618,7 +618,7 @@ const file = (
                 let written = 0;
                 return Effect.gen(function* () {
                   while (written < bytes.byteLength) {
-                    const chunk = Uint8Array.from(bytes.subarray(written));
+                    const chunk = Uint8Array.from(bytes.subarray(written, written + 64 * 1024));
                     const chunkLength = chunk.byteLength;
                     const count = yield* executeHandle(
                       handle,

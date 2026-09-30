@@ -44,6 +44,7 @@ class FakeWorkerClient {
   writes: Array<{ generation: string; path: string }> = [];
   reads: Array<{ generation: string; path: string; limit: number }> = [];
   descriptorCalls: Array<{ generation: string; method: string }> = [];
+  descriptorWriteLengths: number[] = [];
   bytes = new Uint8Array();
   nextFd = 1;
   openFlags = new Map<number, number>();
@@ -125,6 +126,7 @@ class FakeWorkerClient {
         ensureOwner();
         await this.onDescriptorWrite?.();
         this.descriptorCalls.push({ generation, method: 'write' });
+        this.descriptorWriteLengths.push(data.byteLength);
         const part = data.subarray(0, Math.min(data.byteLength, this.maxWrite));
         if ((this.openFlags.get(fd) ?? 0) & 1024) this.bytes = Uint8Array.from([...this.bytes, ...part]);
         else {
@@ -190,6 +192,10 @@ describe('Volume worker acquisition and sessions', () => {
     workerMocks.open.mockResolvedValue(clientAsCore(client));
     const source = new Uint8Array(16 * 1024 * 1024 + 1);
     source.fill(37);
+    client.onDescriptorWrite = async () => {
+      source.fill(0);
+      client.onDescriptorWrite = undefined;
+    };
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -198,15 +204,34 @@ describe('Volume worker acquisition and sessions', () => {
         }),
       ),
     );
-    expect(source.byteLength).toBe(16 * 1024 * 1024 + 1);
+    expect(source.every((value) => value === 0)).toBe(true);
     expect(client.bytes.byteLength).toBe(source.byteLength);
-    expect(client.bytes.every((value, index) => value === source[index])).toBe(true);
+    expect(client.bytes.every((value) => value === 37)).toBe(true);
     expect(client.writes).toEqual([]);
-    expect(client.descriptorCalls.map(({ generation, method }) => [generation, method])).toEqual([
-      ['generation-1', 'open'],
-      ['generation-1', 'write'],
-      ['generation-1', 'close'],
-    ]);
+    expect(client.descriptorWriteLengths).toEqual([...Array(256).fill(64 * 1024), 1]);
+    expect(client.descriptorCalls.every(({ generation }) => generation === 'generation-1')).toBe(true);
+    expect(client.descriptorCalls[0]).toEqual({ generation: 'generation-1', method: 'open' });
+    expect(client.descriptorCalls.at(-1)).toEqual({ generation: 'generation-1', method: 'close' });
+    expect(client.descriptorCalls.filter(({ method }) => method === 'write')).toHaveLength(257);
+  });
+
+  it('bounds writeAll dispatches after short writes', async () => {
+    const client = new FakeWorkerClient();
+    client.maxWrite = 32 * 1024;
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const source = new Uint8Array(64 * 1024 + 1);
+    source.fill(37);
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          const file = yield* OpfsFileSystem.make(volume).open('/short', { flag: 'w' });
+          yield* file.writeAll(source);
+        }),
+      ),
+    );
+    expect(client.descriptorWriteLengths).toEqual([64 * 1024, 32 * 1024 + 1, 1]);
+    expect(client.bytes).toEqual(source);
   });
 
   it('keeps an open File pinned to its owner and closes it through that owner after takeover', async () => {
