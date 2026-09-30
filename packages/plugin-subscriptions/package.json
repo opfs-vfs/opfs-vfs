@@ -1,6 +1,6 @@
 {
   "name": "@opfs-vfs/plugin-subscriptions",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Bounded file change subscriptions for OPFS VFS.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {

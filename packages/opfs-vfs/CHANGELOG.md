@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0
+
+### Minor Changes
+
+- c860528: Protected-volume initialization now reports `VFS_STORAGE_PLUGIN_REQUIRED` instead of `EINVAL`; React classifies that code as unsupported and recognizes `EVAULTFORMAT` and `EPLAINTEXTVOLUME` as encryption errors.
+
+### Patch Changes
+
+- b4bccdf: Add generation-bound asynchronous descriptor operations and prevent a late `OPEN` result from escaping after its owner changes. React command handles continue to expose only path-based operations.
+- 8e6e420: Add worker-backed Effect volume sessions with optional subscription plugin registration.
+
 ## 2.0.0
 
 ### Major Changes

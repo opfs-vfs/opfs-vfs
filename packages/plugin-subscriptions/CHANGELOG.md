@@ -1,5 +1,18 @@
 # @opfs-vfs/plugin-subscriptions
 
+## 1.2.0
+
+### Minor Changes
+
+- de5c621: Add bounded Effect subscription streams and a lifecycle bridge for safe subscription retirement.
+
+### Patch Changes
+
+- Updated dependencies [b4bccdf]
+- Updated dependencies [8e6e420]
+- Updated dependencies [c860528]
+  - @opfs-vfs/opfs-vfs@2.1.0
+
 ## 1.1.0
 
 ### Minor Changes

@@ -1,5 +1,18 @@
 # @opfs-vfs/react
 
+## 0.0.2
+
+### Patch Changes
+
+- b4bccdf: Add generation-bound asynchronous descriptor operations and prevent a late `OPEN` result from escaping after its owner changes. React command handles continue to expose only path-based operations.
+- c860528: Protected-volume initialization now reports `VFS_STORAGE_PLUGIN_REQUIRED` instead of `EINVAL`; React classifies that code as unsupported and recognizes `EVAULTFORMAT` and `EPLAINTEXTVOLUME` as encryption errors.
+- Updated dependencies [b4bccdf]
+- Updated dependencies [8e6e420]
+- Updated dependencies [c860528]
+- Updated dependencies [de5c621]
+  - @opfs-vfs/opfs-vfs@2.1.0
+  - @opfs-vfs/plugin-subscriptions@1.2.0
+
 ## 0.0.1
 
 ### Patch Changes

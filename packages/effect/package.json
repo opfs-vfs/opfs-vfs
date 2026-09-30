@@ -1,6 +1,6 @@
 {
   "name": "@opfs-vfs/effect",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Effect v4 adapter for OPFS VFS.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {

@@ -1,5 +1,19 @@
 # @opfs-vfs/devtools
 
+## 0.2.0
+
+### Minor Changes
+
+- ed1b7a2: Refresh the current folder automatically every 500 ms without scanning nested folders or discarding unsaved drafts. Add a translucent, blurred launcher that can be dragged to eight positions with animated snapping, keyboard positioning, and a configurable `initialPosition`.
+
+### Patch Changes
+
+- 513102b: Allow dragging the floating devtools panel from anywhere in its top bar except the controls, while preserving keyboard movement and control clicks.
+- Updated dependencies [b4bccdf]
+- Updated dependencies [8e6e420]
+- Updated dependencies [c860528]
+  - @opfs-vfs/opfs-vfs@2.1.0
+
 ## 0.1.0
 
 ### Minor Changes
