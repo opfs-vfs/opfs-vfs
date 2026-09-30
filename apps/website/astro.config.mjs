@@ -123,6 +123,7 @@ export default defineConfig({
             { label: 'EdgeJS (experimental)', slug: 'docs/integrations/edgejs' },
           ],
         },
+        { label: 'Effect adapter', items: [{ label: 'Effect adapter', slug: 'docs/effect' }] },
         {
           label: 'React SDK',
           items: [

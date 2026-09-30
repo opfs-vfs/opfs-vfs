@@ -49,6 +49,18 @@ type WorkerInput<E, R> = WorkerMountOptions | Effect.Effect<WorkerMountOptions, 
 
 export class Volume extends Context.Service<Volume, VolumeService>()('@opfs-vfs/effect/Volume') {}
 
+/**
+ * Runs an effect, then syncs the current volume on success, preserving its result.
+ * The effect's filesystem must use this same volume. Failure or interruption can
+ * leave writes applied without this sync completing. This provides no rollback
+ * or isolation; nested wrappers each sync, and concurrent writes may also flush.
+ */
+export const withSync = <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A, E | MountError, R | Volume> =>
+  Effect.gen(function* () {
+    const volume = yield* Volume;
+    return yield* Effect.tap(self, () => volume.sync);
+  });
+
 const closeFiles = (coordinator: ReturnType<typeof makeCoordinator> | undefined) =>
   Effect.forEach([...(coordinator?.files ?? [])], (close) => Effect.exit(close()), { concurrency: 1 }).pipe(
     Effect.flatMap((exits) => {
