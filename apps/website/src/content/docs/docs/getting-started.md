@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install OPFS VFS and create, write, synchronize, and reopen your first browser volume.
+description: Install OPFS VFS, create a volume in a worker, then write, sync and reopen files with TypeScript. Covers setup for the Origin Private File System.
 ---
 
 Install the package in your browser application:

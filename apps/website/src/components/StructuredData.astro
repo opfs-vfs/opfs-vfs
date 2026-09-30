@@ -1,0 +1,50 @@
+---
+// Section index pages that exist, so breadcrumb items never point at a 404.
+const sections: Record<string, string> = {
+  demos: 'Demos',
+  benchmarks: 'Benchmarks',
+  docs: 'Documentation',
+  'docs/plugins': 'Plugins',
+  'docs/react': 'React SDK preview',
+};
+interface Props { title: string; description: string; docs?: boolean }
+const { title, description, docs = false } = Astro.props;
+const site = Astro.site!.origin;
+const path = Astro.url.pathname.replace(/^\/|\/$/g, '');
+const url = `${site}/${path ? `${path}/` : ''}`;
+const segments = path.split('/').filter(Boolean);
+const crumbs = [['Home', `${site}/`]];
+segments.slice(0, -1).forEach((_, i) => {
+  const key = segments.slice(0, i + 1).join('/');
+  if (sections[key]) crumbs.push([sections[key], `${site}/${key}/`]);
+});
+crumbs.push([title.replace(/ · OPFS VFS$/, ''), url]);
+const breadcrumb = {
+  '@type': 'BreadcrumbList',
+  itemListElement: crumbs.map(([name, item], i) => ({ '@type': 'ListItem', position: i + 1, name, item })),
+};
+const webSite = { '@type': 'WebSite', '@id': `${site}/#website`, name: 'OPFS VFS', url: `${site}/` };
+const graph = !path
+  ? [
+      webSite,
+      {
+        '@type': 'SoftwareSourceCode',
+        name: 'OPFS VFS',
+        description,
+        url: `${site}/`,
+        codeRepository: 'https://github.com/opfs-vfs/opfs-vfs',
+        programmingLanguage: 'TypeScript',
+        runtimePlatform: 'Web browser',
+        license: 'https://polyformproject.org/licenses/noncommercial/1.0.0',
+        isPartOf: { '@id': `${site}/#website` },
+      },
+    ]
+  : [
+      breadcrumb,
+      ...(docs
+        ? [{ '@type': 'TechArticle', headline: title, description, url, inLanguage: 'en', isPartOf: { '@id': `${site}/#website` } }]
+        : []),
+    ];
+const json = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph }).replace(/</g, '\\u003c');
+---
+<script type="application/ld+json" set:html={json} />

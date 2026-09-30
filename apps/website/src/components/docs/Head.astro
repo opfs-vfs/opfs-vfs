@@ -1,8 +1,15 @@
 ---
 import DefaultHead from '@astrojs/starlight/components/Head.astro';
 import Analytics from '@vercel/analytics/astro';
+import SiteIcons from '../SiteIcons.astro';
+import StructuredData from '../StructuredData.astro';
 import SocialImage from '../SocialImage.astro';
+const { title, description = '' } = Astro.locals.starlightRoute.entry.data;
+const markdownPath = `${Astro.url.pathname.replace(/\/$/, '')}.md`;
 ---
 <DefaultHead />
+<link rel="alternate" type="text/markdown" href={markdownPath} />
+<SiteIcons />
 <SocialImage />
+<StructuredData title={title} description={description} docs />
 <Analytics />
