@@ -112,6 +112,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'docs/plugins' },
             { label: 'File subscriptions', slug: 'docs/plugins/subscriptions' },
+            { label: 'Encryption (Premium)', slug: 'docs/plugins/encryption' },
           ],
         },
         {
