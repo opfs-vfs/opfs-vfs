@@ -135,7 +135,7 @@ export default defineConfig({
         {
           label: 'Reference',
           items: [
-            { label: 'Public API', slug: 'docs/reference' },
+            { label: 'API overview', slug: 'docs/reference' },
             { label: 'Troubleshooting', slug: 'docs/troubleshooting' },
             { label: 'Licensing', link: '/licensing/' },
           ],

@@ -12,3 +12,9 @@ Downloaded 2026-09-20 from official project sites or vendor repositories. Origin
 just-bash remains a text wordmark. Its official site at https://justbash.dev/ uses ASCII title artwork and a Vercel triangle favicon; no dedicated just-bash logo was found. We do not present the Vercel triangle as a distinct just-bash mark.
 
 Browser model skill and file explorer are project concepts, so no third-party logos are used.
+
+## SDK marks
+
+- `react.svg` reuses the React symbol previously embedded in the homepage, in React blue.
+- `effect-black.svg` and `effect-white.svg` downloaded unmodified on 2026-09-30 from Effect's official website repository: https://github.com/Effect-TS/website/tree/main/apps/web/public/assets/effect-logo/logo-symbol. They identify the Effect adapter, not an endorsement.
+- `typescript.svg` is the unmodified blue `ts-logo-128.svg` from the official TypeScript asset pack, downloaded 2026-09-30: https://www.typescriptlang.org/branding/. The mark identifies the TypeScript API option.

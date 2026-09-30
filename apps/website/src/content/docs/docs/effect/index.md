@@ -5,7 +5,11 @@ description: Use scoped OPFS VFS volumes, Effect FileSystem layers, and change s
 
 `@opfs-vfs/effect` adapts OPFS VFS to Effect v4. It owns volume resources in an Effect scope, provides the standard `FileSystem` service, and exposes file changes as streams.
 
-Use `effect@4.0.0-rc.118` with this adapter.
+Use `effect@4.0.0-rc.118` with this adapter. Install it with the core filesystem and subscriptions packages:
+
+```sh
+npm install @opfs-vfs/effect @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions effect@4.0.0-rc.118
+```
 
 ## Start one managed session
 

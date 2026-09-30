@@ -6,7 +6,7 @@ The asynchronous worker client lets browser pages use the filesystem. Apps need 
 
 Disk buffering and balanced local durability are the defaults. Memory buffering also persists to OPFS; it is different from PGlite memory-only storage. Use explicit synchronization at important save points. Strict mode does not flush every disk-buffered write. A clean reopen benchmark does not establish crash or power-loss durability.
 
-PGlite and just-bash adapters are available. DuckDB and EdgeJS integrations are experimental and require matching custom runtime builds. Encryption with passkey-based access is a separate premium extension. The file-subscription plugin is available under the PolyForm Noncommercial License. It reports local logical changes and optional completed-file content. A premium cloud sync plugin is planned, but not yet available, to synchronize local volumes with backend cloud storage.
+The React SDK preview provides volume providers and subscribed reads through `@opfs-vfs/react`. The `@opfs-vfs/effect` adapter provides scoped volumes, the FileSystem service, and change streams for `effect@4.0.0-rc.118`. PGlite and just-bash adapters are available. DuckDB and EdgeJS integrations are experimental and require matching custom runtime builds. Encryption with passkey-based access is a separate premium extension. The file-subscription plugin is available under the PolyForm Noncommercial License. It reports local logical changes and optional completed-file content. A premium cloud sync plugin is planned, but not yet available, to synchronize local volumes with backend cloud storage.
 
 The repository uses the source-available PolyForm Noncommercial License 1.0.0. Commercial use requires separate permission.
 
@@ -25,13 +25,21 @@ The repository uses the source-available PolyForm Noncommercial License 1.0.0. C
 - [Persistence and recovery](https://opfs.dev/docs/guides/persistence/): Save points, recovery logs, and buffer-mode changes.
 - [Volume Explorer](https://opfs.dev/docs/guides/devtools/): Inspect, edit, and transfer volumes. Connections start read-only.
 - [File preview extensions](https://opfs.dev/docs/guides/file-previews/): Trusted custom renderers and shared React previews.
-- [Public API](https://opfs.dev/docs/reference/): Imports, options, inspection, and deletion.
+- [API overview](https://opfs.dev/docs/reference/): Imports, options, inspection, and deletion.
 - [Troubleshooting](https://opfs.dev/docs/troubleshooting/): Resolve errors without destructive recovery.
 
 ## Plugins
 
 - [Plugins](https://opfs.dev/docs/plugins/): community subscriptions, separate premium encryption, and planned premium cloud sync.
 - [File subscriptions](https://opfs.dev/docs/plugins/subscriptions/): npm installation, custom workers, filtering, content, and resubscribe/rescan recovery.
+
+## Choose an API
+
+- [TypeScript](https://opfs.dev/docs/getting-started/): Create a volume and read or write files.
+- [React SDK preview](https://opfs.dev/docs/react/): Connect components to a volume with providers and subscribed reads.
+- [React API reference](https://opfs.dev/docs/react/reference/): Providers, resource hooks, and lifecycle commands.
+- [React demo](https://opfs.dev/demos/react/): File inbox and todo lists using dedicated workers.
+- [Effect v4 adapter](https://opfs.dev/docs/effect/): Scoped volumes, the FileSystem service, and change streams. Requires `effect@4.0.0-rc.118`.
 
 ## Integrations
 

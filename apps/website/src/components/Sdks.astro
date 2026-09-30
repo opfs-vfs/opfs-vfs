@@ -1,0 +1,179 @@
+---
+import { Code } from 'astro:components';
+
+const sdks = [
+  { id: 'javascript', name: 'TypeScript', label: 'Core API', headline: 'Read and write files by path.', description: 'Read and write files through the asynchronous worker client, or use synchronous I/O inside a worker.', package: '@opfs-vfs/opfs-vfs', href: '/docs/getting-started/', action: 'Get started', file: 'main.ts', lang: 'ts', code: `import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
+
+const fs = new OpfsVfsWorker('notes.bin');
+try {
+  await fs.ready;
+  const bytes = await fs.readFileBuffer('/note.txt');
+  console.log(new TextDecoder().decode(bytes));
+} finally {
+  await fs.closeVfs();
+}` },
+  { id: 'react', name: 'React', label: 'SDK · Preview', headline: 'Keep your file UI in sync.', description: 'Providers and hooks connect components to a volume and refresh file and folder reads when their contents change.', package: '@opfs-vfs/react', href: '/docs/react/', action: 'Explore the React SDK', file: 'App.tsx', lang: 'tsx', code: `import { VolumeProvider, useFileContent } from '@opfs-vfs/react';
+
+function Note() {
+  const note = useFileContent('/note.txt', { format: 'text' });
+  if (note.status === 'pending') return <p>Loading…</p>;
+  if (note.status === 'error') return <p role="alert">{note.error.message}</p>;
+  return <pre>{note.data}</pre>;
+}
+
+export function App() {
+  return <VolumeProvider fileName="notes.bin"><Note /></VolumeProvider>;
+}` },
+  { id: 'effect', name: 'Effect', label: 'Adapter · Effect v4', headline: "Use Effect's FileSystem service.", description: "Read and write browser-local files with typed errors and scoped resources. Subscribe to file changes with streams.", package: '@opfs-vfs/effect', href: '/docs/effect/', action: 'Explore the Effect adapter', file: 'filesystem.ts', lang: 'ts', code: `import { Effect, FileSystem, Layer } from 'effect';
+import { OpfsFileSystem, Volume } from '@opfs-vfs/effect';
+
+const live = Layer.provide(
+  OpfsFileSystem.layer,
+  Volume.layer({ fileName: 'notes.bin' }),
+);
+
+const readNote = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  return yield* fs.readFileString('/note.txt');
+}).pipe(Effect.provide(live));
+
+console.log(await Effect.runPromise(readNote));` },
+] as const;
+---
+<section id="sdks" class="sdks" aria-labelledby="sdks-heading">
+  <span id="react-sdk" aria-hidden="true"></span>
+  <header>
+    <p class="kicker">TypeScript · React · Effect</p>
+    <h2 id="sdks-heading">One filesystem.<br />Use it your way.</h2>
+    <p class="intro">Work with persistent browser files in TypeScript, build reactive interfaces with React, or compose storage into Effect workflows.</p>
+  </header>
+  <div class="sdk-options">
+    {sdks.map(sdk => <article>
+      <div class="sdk-identity">
+        {sdk.id === 'javascript' ? <img src="/brand/typescript.svg" alt="" width="42" height="42" loading="lazy" /> : sdk.id === 'react' ? <img src="/brand/react.svg" alt="" width="42" height="42" loading="lazy" /> : <span class="effect-mark" aria-hidden="true"><img class="effect-on-light" src="/brand/effect-black.svg" alt="" width="42" height="42" loading="lazy" /><img class="effect-on-dark" src="/brand/effect-white.svg" alt="" width="42" height="42" loading="lazy" /></span>}
+        <div><h3>{sdk.name}</h3><span class="sdk-label">{sdk.label}</span></div>
+      </div>
+      <h4>{sdk.headline}</h4>
+      <p>{sdk.description}</p>
+      <code class="package">{sdk.package}</code>
+      <a href={sdk.href}>{sdk.action} <span aria-hidden="true">→</span></a>
+      {sdk.id === 'react' && <a class="secondary" href="/demos/react/">Try the React demo <span aria-hidden="true">↗</span></a>}
+      {sdk.id === 'effect' && <small>Requires <code>effect@4.0.0-rc.118</code>.</small>}
+    </article>)}
+  </div>
+  <div class="sdk-examples">
+    <div class="examples-copy">
+      <p class="kicker">Get started</p>
+      <h3>The same file.<br />Your preferred API.</h3>
+      <p>Read <code>/note.txt</code> from <code>notes.bin</code> with each API. These examples assume the file already exists in that volume.</p>
+      <a href="/docs/getting-started/">Create your first browser volume →</a>
+      <p class="requirements">Requires HTTPS or localhost and cross-origin isolation. <a href="/docs/guides/browser-setup/">Browser setup →</a></p>
+    </div>
+    <div class="example-code">
+      <div class="sdk-tabs" role="tablist" aria-label="Filesystem API examples" hidden>
+        {sdks.map((sdk, i) => <button type="button" role="tab" id={`tab-${sdk.id}`} aria-controls={`example-${sdk.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>{sdk.name}</button>)}
+      </div>
+      {sdks.map(sdk => <figure class="code-example" id={`example-${sdk.id}`} aria-label={`${sdk.name} file read example`}>
+        <figcaption><span>{sdk.file}</span><span>{sdk.label}</span></figcaption>
+        <Code code={sdk.code} lang={sdk.lang} theme="css-variables" tabindex="0" aria-label={`${sdk.name} code`} />
+        <a href={sdk.href}>Read the {sdk.id === 'javascript' ? 'getting started' : sdk.name} guide →</a>
+      </figure>)}
+    </div>
+  </div>
+</section>
+<script>
+  const tablist = document.querySelector<HTMLElement>('.sdk-tabs');
+  if (tablist) {
+    const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const select = (selected: HTMLButtonElement) => {
+      for (const tab of tabs) {
+        const active = tab === selected;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+        const panel = document.getElementById(tab.getAttribute('aria-controls')!);
+        if (panel) {
+          panel.hidden = !active;
+          panel.setAttribute('role', 'tabpanel');
+          panel.setAttribute('aria-labelledby', tab.id);
+          panel.removeAttribute('aria-label');
+        }
+      }
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab));
+      tab.addEventListener('keydown', event => {
+        const next = event.key === 'ArrowRight' ? (i + 1) % tabs.length : event.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+        if (next < 0) return;
+        event.preventDefault();
+        select(tabs[next]);
+        tabs[next].focus();
+      });
+    });
+    const selectLinkedExample = () => {
+      const linked = tabs.find(tab => `#${tab.getAttribute('aria-controls')}` === window.location.hash);
+      select(linked ?? tabs[0]);
+      if (linked) document.getElementById(linked.getAttribute('aria-controls')!)?.scrollIntoView();
+    };
+    document.querySelectorAll<HTMLAnchorElement>('.hero-sdks a').forEach(link => {
+      link.addEventListener('click', () => {
+        const linked = tabs.find(tab => `#${tab.getAttribute('aria-controls')}` === link.hash);
+        if (linked) select(linked);
+      });
+    });
+    tablist.hidden = false;
+    selectLinkedExample();
+    window.addEventListener('hashchange', selectLinkedExample);
+  }
+</script>
+<style>
+  .sdks { position: relative; padding: 64px 0; border-top: 1px solid var(--line); scroll-margin-top: 32px; }
+  #react-sdk { position: absolute; top: 0; scroll-margin-top: 32px; }
+  .kicker { margin: 0 0 16px; }
+  h2 { margin: 0 0 22px; font-size: clamp(36px, 4.5vw, 58px); line-height: 1.05; }
+  .intro { max-width: 680px; color: var(--muted); line-height: 1.65; margin: 0; }
+  .sdk-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 36px; border-block: 1px solid var(--line); }
+  article { min-width: 0; padding: 30px 24px; }
+  article:first-child { padding-left: 0; }
+  article:last-child { padding-right: 0; }
+  article + article { border-left: 1px solid var(--line); }
+  .sdk-identity { display: flex; align-items: center; gap: 14px; min-height: 52px; }
+  .sdk-identity img { object-fit: contain; }
+  .effect-mark { display: inline-flex; }
+  .effect-on-dark { display: none; }
+  :global([data-theme='dark']) .effect-on-light { display: none; }
+  :global([data-theme='dark']) .effect-on-dark { display: block; }
+  h3 { margin: 0; font-size: 22px; line-height: 1.2; }
+  .sdk-label { display: block; margin-top: 6px; color: var(--muted); font: 11px/1.5 ui-monospace, monospace; }
+  h4 { margin: 28px 0 12px; font-size: 18px; line-height: 1.4; }
+  article p { color: var(--muted); font-size: 14px; line-height: 1.65; margin: 0 0 22px; }
+  .package { display: block; font-size: 12px; overflow-wrap: anywhere; margin-bottom: 16px; }
+  a { color: var(--accent); font-size: 14px; font-weight: 600; text-underline-offset: 4px; }
+  article a { display: block; padding: 8px 0; }
+  article .secondary { color: var(--muted); }
+  small { display: block; margin-top: 12px; color: var(--muted); font-size: 11px; }
+  .sdk-examples { display: grid; grid-template-columns: 1fr 1.4fr; gap: 64px; margin-top: 56px; }
+  .examples-copy h3 { font-size: clamp(28px, 3.5vw, 42px); line-height: 1.1; }
+  .examples-copy p:not(.kicker) { color: var(--muted); line-height: 1.65; }
+  .requirements { margin-top: 28px; font-size: 12px; }
+  .requirements a { font-size: inherit; }
+  .example-code { min-width: 0; }
+  .sdk-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  [hidden] { display: none !important; }
+  .sdk-tabs button { padding: 10px 14px; min-height: 44px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; font: inherit; font-size: 13px; cursor: pointer; }
+  .sdk-tabs button[aria-selected='true'] { background: var(--primary-bg); color: var(--primary-fg); border-color: var(--accent); }
+  a:focus-visible, button:focus-visible, .code-example :global(pre:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
+  .code-example { scroll-margin-top: 100px; margin: 0; --astro-code-color-text: var(--ink); --astro-code-color-background: transparent; --astro-code-token-constant: var(--accent); --astro-code-token-string: var(--accent); --astro-code-token-keyword: var(--accent); --astro-code-token-function: var(--ink); --astro-code-token-parameter: var(--ink); --astro-code-token-punctuation: var(--muted); --astro-code-token-comment: var(--muted); --astro-code-token-string-expression: var(--accent); }
+  .code-example + .code-example { margin-top: 32px; }
+  .sdk-tabs:not([hidden]) ~ .code-example { margin-top: 0; }
+  figcaption { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding-bottom: 18px; border-bottom: 1px solid var(--line); color: var(--muted); font: 11px/1.5 ui-monospace, monospace; }
+  figcaption > span:first-child { color: var(--ink); }
+  .code-example :global(pre) { margin: 0; padding: 24px 0; overflow-x: auto; background: transparent !important; font: 12px/1.85 ui-monospace, monospace; }
+  .code-example :global(code) { font: inherit; }
+  @media (max-width: 700px) {
+    .sdks { padding: 48px 0; }
+    .sdk-options, .sdk-examples { grid-template-columns: minmax(0, 1fr); }
+    article, article:first-child, article:last-child { padding: 28px 0; }
+    article + article { border-left: 0; border-top: 1px solid var(--line); }
+    .sdk-examples { gap: 28px; margin-top: 40px; }
+  }
+</style>

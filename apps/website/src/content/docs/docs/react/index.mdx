@@ -3,21 +3,24 @@ title: React SDK preview
 description: Manage browser-local OPFS VFS volumes with React providers, live reads, and generation-safe commands.
 ---
 
-The React SDK is available as the preview `@opfs-vfs/react` package. Install it with `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions`. It works only in a browser page that can create workers and use OPFS.
+The React SDK is available as the preview `@opfs-vfs/react` package. Install it with `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions`. It works only in a browser page that can create workers and use OPFS. It requires React 19.
+
+```sh
+npm install @opfs-vfs/react @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions
+```
 
 ## Start one managed volume
 
 The page and its worker must use the same OPFS VFS and subscriptions package versions. Serve the page with the [cross-origin isolation headers](/docs/guides/browser-setup/) required for `SharedArrayBuffer`.
 
 ```tsx
-import { VolumeProvider, useFileContent, useVolume, useVolumeClient } from '@opfs-vfs/react';
+import { VolumeProvider, useFileContent } from '@opfs-vfs/react';
 
 function Note() {
-  const volume = useVolume();
-  const fs = useVolumeClient();
   const note = useFileContent('/note.txt', { format: 'text' });
-  if (volume.status !== 'ready' || !fs) return <p>{volume.status}</p>;
-  return <pre>{note.data ?? ''}</pre>;
+  if (note.status === 'pending') return <p>Loading…</p>;
+  if (note.status === 'error') return <p role="alert">{note.error.message}</p>;
+  return <pre>{note.data}</pre>;
 }
 
 export function App() {
@@ -129,15 +132,7 @@ Useful React `error.details?.code` values are `VFS_UNSUPPORTED`, `EBUSY`, `VFS_P
 
 `usePersistentStorage()` checks browser persistence after commit. Its status is independent of VFS synchronization: `granted` means the browser accepted a retention request, not that any write has been flushed. Call `request()` from a user gesture for a manual retry. `persistentStorage="request-on-mount"` offers one automatic request opportunity for the page, even when React mounts multiple providers in Strict Mode.
 
-The [React SDK demo](/demos/react/) uses separate auto volumes by default and displays the selected transport and fallback reason. Its [forced dedicated](/demos/react/?transport=dedicated) and [SharedWorker preview](/demos/react/?transport=shared-worker) routes use separate names; open the exact same-origin SharedWorker URL in another page to attach to the same preview volumes.
-
-## Collecting an iPhone Safari ownership trace
-
-For a support investigation, open the [SharedWorker preview with diagnostics](/demos/react/?transport=shared-worker&opfsDebug=1) in both Safari tabs. Connect the iPhone to Safari Web Inspector, select each tab, filter the console for `[opfs-vfs:diag]`, and copy the JSON lines from both tabs after the second tab either opens or reports its error. The first line from each tab includes its browser user agent. Keep the first tab open until after the second result, then record whether closing the first tab and reloading the second changes that result, and whether Low Power Mode was enabled.
-
-In September 2026, a manual iPhone Safari check of the SharedWorker React demo passed editing, saving, and opening another tab after the first closed. Chromium 147 and Firefox 148 probes lacked the required shared-scope sync access. Those observations are not a browser-support guarantee—test the complete capability gate on the target browser and device.
-
-This opt-in trace records timestamps, client IDs, opaque owner generations, lifecycle state, visibility, browser user agent, safe feature availability, owner/client lock requests, acquisition, and callback completion, plus `LEADER_PING`/`LEADER_READY` handshakes. Callback completion means the client has returned control to the browser; it does not confirm when the browser releases a Web Lock. It does not record filenames, note contents, command payloads, plugin options, or error messages. Remove `opfsDebug` to disable the trace.
+The [React SDK demo](/demos/react/) uses dedicated workers and displays its selected transport.
 
 ## Plugins and deferred APIs
 
