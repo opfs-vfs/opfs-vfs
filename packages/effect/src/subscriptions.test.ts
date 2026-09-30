@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, FileSystem, Layer, PlatformError, Queue, Scope, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import type { ChangeFrame, ChangeReply, FileChangeChannel, FileChangeSource } from '@opfs-vfs/opfs-vfs/changes';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,11 +8,36 @@ import { makeCoordinator, registerCoordinator } from './coordinator.js';
 import type { VolumeService } from './volume.js';
 import { Volume } from './volume.js';
 import { SubscriptionError } from './errors.js';
+import { OpfsFileSystem } from './filesystem.js';
+import { keepViewCurrent } from '../examples/reconciled-view.js';
 
 class FakeSource implements FileChangeSource {
-  readonly commands: Array<{ readonly type: string; readonly subscriptionId?: string }> = [];
+  readonly commands: Array<{
+    readonly type: string;
+    readonly subscriptionId?: string;
+    readonly options?: {
+      readonly path?: string;
+      readonly scope?: 'file' | 'directory';
+      readonly recursive?: boolean;
+    };
+  }> = [];
   acknowledgements = 0;
   generation = 'generation-1';
+  targetStat = {
+    mode: 0o100644,
+    size: 0,
+    ino: 1,
+    nlink: 1,
+    blksize: 4096,
+    blocks: 0,
+    is_dir: false,
+    is_file: true,
+  };
+  lstatError: unknown;
+  onRegister: (() => void) | undefined;
+  afterLstat: (() => void) | undefined;
+  readError: unknown;
+  onReadDirectory: (() => void) | undefined;
   receive!: (frame: ChangeFrame) => void;
   next: ChangeReply | undefined;
   onOpen: (() => void) | undefined;
@@ -38,6 +63,7 @@ class FakeSource implements FileChangeSource {
         this.commands.push(command);
         if (command.type === 'ack') this.acknowledgements++;
         if (command.type === 'register') {
+          queueMicrotask(() => this.onRegister?.());
           if (this.holdRegister) return new Promise<ChangeReply>(() => {});
           return (
             this.next ?? {
@@ -54,7 +80,19 @@ class FakeSource implements FileChangeSource {
     };
   }
 
-  emit(type: 'create' | 'update' | 'delete' = 'update', sequence = 1) {
+  lstatSync(_path: string) {
+    this.afterLstat?.();
+    if (this.lstatError) throw this.lstatError;
+    return this.targetStat;
+  }
+
+  readdirEntriesSync(_path: string) {
+    this.onReadDirectory?.();
+    if (this.readError) throw this.readError;
+    return [];
+  }
+
+  emit(type: 'create' | 'update' | 'delete' = 'update', sequence = 1, path = '/note.txt') {
     const registration = this.commands.find((command) => command.type === 'register');
     if (!registration?.subscriptionId) throw new Error('subscription is not registered');
     this.receive({
@@ -63,7 +101,7 @@ class FakeSource implements FileChangeSource {
       deliveryId: sequence,
       change: {
         type,
-        path: '/note.txt',
+        path,
         kind: 'file',
         cursor: { generation: this.generation, sequence },
         content: { status: 'omitted', reason: 'disabled' },
@@ -107,7 +145,11 @@ const state = makeCoordinator({
 });
 registerCoordinator(volume, state);
 const liveLayer = Layer.provide(subscriptionsLayer, Layer.succeed(Volume, volume));
+const fileSystemLayer = Layer.provide(OpfsFileSystem.layer, Layer.succeed(Volume, volume));
+const viewLayer = Layer.merge(liveLayer, fileSystemLayer);
 const options = { path: '/', scope: 'directory' as const };
+const failureOf = (exit: Exit.Exit<unknown, unknown>) =>
+  Exit.isFailure(exit) ? exit.cause.reasons.find((reason) => reason._tag === 'Fail')?.error : undefined;
 
 beforeEach(() => {
   source.commands.length = 0;
@@ -119,6 +161,21 @@ beforeEach(() => {
   source.holdRegister = false;
   source.acknowledgeCancel = true;
   source.openDelay = 0;
+  source.targetStat = {
+    mode: 0o100644,
+    size: 0,
+    ino: 1,
+    nlink: 1,
+    blksize: 4096,
+    blocks: 0,
+    is_dir: false,
+    is_file: true,
+  };
+  source.lstatError = undefined;
+  source.onRegister = undefined;
+  source.afterLstat = undefined;
+  source.readError = undefined;
+  source.onReadDirectory = undefined;
   state.subscriptionSetups.clear();
   state.subscriptionUnknown.clear();
   registerCoordinator(volume, state);
@@ -764,5 +821,523 @@ describe('Effect subscriptions', () => {
       ).pipe(Effect.provide(liveLayer)),
     );
     expect(result).toEqual({ status: 'released' });
+  });
+
+  it('preflights standard watch paths and never registers after a pinned takeover', async () => {
+    const fs = OpfsFileSystem.make(volume);
+    const relative = await Effect.runPromise(Effect.exit(Stream.runHead(fs.watch('relative'))));
+    expect(failureOf(relative)).toMatchObject({ reason: { _tag: 'BadArgument' } });
+    expect(source.commands).toEqual([]);
+
+    source.lstatError = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const missing = await Effect.runPromise(Effect.exit(Stream.runHead(fs.watch('/missing'))));
+    expect(failureOf(missing)).toMatchObject({ reason: { _tag: 'NotFound' } });
+    expect(source.commands).toEqual([]);
+
+    source.lstatError = undefined;
+    source.targetStat = { ...source.targetStat, mode: 0o120777, is_dir: false, is_file: false };
+    const symlink = await Effect.runPromise(Effect.exit(Stream.runHead(fs.watch('/link'))));
+    expect(failureOf(symlink)).toMatchObject({ reason: { _tag: 'BadResource' } });
+    expect(source.commands).toEqual([]);
+
+    source.targetStat = { ...source.targetStat, mode: 0o040755, is_dir: true, is_file: false };
+    source.afterLstat = () => {
+      currentGeneration = source.generation = 'generation-2';
+    };
+    const takeover = await Effect.runPromise(Effect.exit(Stream.runHead(fs.watch('/tree'))));
+    const takeoverError = failureOf(takeover);
+    if (!PlatformError.isPlatformError(takeoverError)) throw new Error('watch takeover was not a PlatformError');
+    expect(takeoverError.reason._tag).toBe('Unknown');
+    if (!(takeoverError.reason.cause instanceof SubscriptionError))
+      throw new Error('watch takeover did not retain its SubscriptionError');
+    expect(takeoverError.reason.cause).toMatchObject({
+      code: 'SUBSCRIPTION_INTERRUPTED',
+      sourceCode: 'VFS_ATTACHMENT_LOST',
+    });
+    expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(0);
+  });
+
+  it('projects rich changes to standard events and releases on early completion', async () => {
+    source.targetStat = { ...source.targetStat, mode: 0o040755, is_dir: true, is_file: false };
+    const fs = OpfsFileSystem.make(volume);
+    let registered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      registered = resolve;
+    });
+    source.onRegister = registered;
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const watching = yield* Stream.take(fs.watch('/tree', { recursive: true }), 3).pipe(
+            Stream.runCollect,
+            Effect.forkChild,
+          );
+          yield* Effect.promise(() => ready);
+          yield* Effect.yieldNow;
+          source.emit('create', 1, '/tree/new.txt');
+          source.emit('update', 2, '/tree/current.txt');
+          source.emit('delete', 3, '/tree/old.txt');
+          return yield* Fiber.join(watching);
+        }),
+      ),
+    );
+    expect(result).toEqual([
+      { _tag: 'Create', path: '/tree/new.txt' },
+      { _tag: 'Update', path: '/tree/current.txt' },
+      { _tag: 'Remove', path: '/tree/old.txt' },
+    ]);
+    expect(source.commands.find((command) => command.type === 'register')).toMatchObject({
+      options: { path: '/tree', scope: 'directory', recursive: true },
+    });
+    expect(source.commands.filter((command) => command.type === 'cancel')).toHaveLength(1);
+    expect(state.files.size).toBe(0);
+  });
+
+  it('keeps file watches nonrecursive when the standard option is true', async () => {
+    const fs = OpfsFileSystem.make(volume);
+    let registered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      registered = resolve;
+    });
+    source.onRegister = registered;
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const watching = yield* Stream.runHead(fs.watch('/note.txt', { recursive: true })).pipe(Effect.forkChild);
+          yield* Effect.promise(() => ready);
+          yield* Effect.yieldNow;
+          source.emit('update', 1, '/note.txt');
+          return yield* Fiber.join(watching);
+        }),
+      ),
+    );
+    expect(result).toMatchObject({ _tag: 'Some', value: { _tag: 'Update', path: '/note.txt' } });
+    expect(source.commands.find((command) => command.type === 'register')).toMatchObject({
+      options: { path: '/note.txt', scope: 'file', recursive: false },
+    });
+  });
+
+  it('preserves native interruption as Unknown with its original SubscriptionError', async () => {
+    const fs = OpfsFileSystem.make(volume);
+    let registered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      registered = resolve;
+    });
+    source.onRegister = registered;
+    const exit = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const watching = yield* Effect.exit(Stream.runHead(fs.watch('/note.txt'))).pipe(Effect.forkChild);
+          yield* Effect.promise(() => ready);
+          yield* Effect.yieldNow;
+          source.onInterrupted('SUBSCRIPTION_INTERRUPTED');
+          return yield* Fiber.join(watching);
+        }),
+      ),
+    );
+    const error = failureOf(exit);
+    if (!PlatformError.isPlatformError(error)) throw new Error('watch interruption was not a PlatformError');
+    expect(error.reason._tag).toBe('Unknown');
+    if (!(error.reason.cause instanceof SubscriptionError))
+      throw new Error('watch interruption did not retain its SubscriptionError');
+    expect(error.reason.cause.code).toBe('SUBSCRIPTION_INTERRUPTED');
+    expect(error.reason.cause.sourceCode).not.toBe('VFS_ATTACHMENT_LOST');
+  });
+
+  it('subscribes before the initial scan and marks a failed scan stale once without retry', async () => {
+    source.readError = Object.assign(new Error('scan denied'), { code: 'EACCES' });
+    source.onReadDirectory = () => {
+      expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
+    };
+    let stale = 0;
+    const exit = await Effect.runPromise(
+      Effect.exit(
+        keepViewCurrent({ path: '/', publish: () => Effect.void, markStale: () => Effect.sync(() => stale++) }),
+      ).pipe(Effect.provide(viewLayer)),
+    );
+    const scanFailure = failureOf(exit);
+    if (!PlatformError.isPlatformError(scanFailure)) throw new Error('failed scan was not a PlatformError');
+    expect(scanFailure.reason._tag).toBe('PermissionDenied');
+    expect(stale).toBe(1);
+    expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
+    expect(source.commands.filter((command) => command.type === 'cancel')).toHaveLength(1);
+    expect(state.files.size).toBe(0);
+  });
+
+  it('rescans after a mutation queued during the initial scan', async () => {
+    const started = Deferred.makeUnsafe<void>();
+    const release = Deferred.makeUnsafe<void>();
+    const current = Deferred.makeUnsafe<void>();
+    let scans = 0;
+    let paths = ['before.txt'];
+    const views: Array<ReadonlyArray<string>> = [];
+    const fs = {
+      ...OpfsFileSystem.make(volume),
+      readDirectory: () =>
+        Effect.gen(function* () {
+          const snapshot = [...paths];
+          expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(1);
+          if (++scans === 1) {
+            yield* Deferred.succeed(started, undefined);
+            yield* Deferred.await(release);
+          }
+          return snapshot;
+        }),
+    };
+    const layers = Layer.merge(liveLayer, Layer.succeed(FileSystem.FileSystem, fs));
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const watcher = yield* Effect.forkChild(
+            keepViewCurrent({
+              path: '/',
+              publish: (view) =>
+                Effect.gen(function* () {
+                  views.push(view);
+                  if (view.includes('during.txt')) yield* Deferred.succeed(current, undefined);
+                }),
+              markStale: () => Effect.void,
+            }),
+          );
+          yield* Deferred.await(started);
+          paths = ['before.txt', 'during.txt'];
+          source.emit();
+          yield* Effect.yieldNow;
+          yield* Deferred.succeed(release, undefined);
+          yield* Deferred.await(current);
+          yield* Fiber.interrupt(watcher);
+        }),
+      ).pipe(Effect.provide(layers)),
+    );
+
+    expect(views[0]).toEqual(['before.txt']);
+    expect(views.at(-1)).toEqual(['before.txt', 'during.txt']);
+    expect(scans).toBe(2);
+    expect(state.files.size).toBe(0);
+  });
+
+  it('does not let a canceled old scan publish into a new workflow', async () => {
+    let resolveOld: ((paths: Array<string>) => void) | undefined;
+    const oldRead = new Promise<Array<string>>((resolve) => {
+      resolveOld = resolve;
+    });
+    const started = Deferred.makeUnsafe<void>();
+    const publishedNew = Deferred.makeUnsafe<void>();
+    let scans = 0;
+    const views: Array<string> = [];
+    const fs = {
+      ...OpfsFileSystem.make(volume),
+      readDirectory: () =>
+        Effect.gen(function* () {
+          if (++scans === 1) {
+            yield* Deferred.succeed(started, undefined);
+            return yield* Effect.promise(() => oldRead);
+          }
+          return ['new.txt'];
+        }),
+    };
+    const layers = Layer.merge(liveLayer, Layer.succeed(FileSystem.FileSystem, fs));
+
+    try {
+      await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const old = yield* Effect.forkChild(
+              keepViewCurrent({
+                path: '/',
+                publish: () => Effect.sync(() => views.push('old')),
+                markStale: () => Effect.void,
+              }),
+            );
+            yield* Deferred.await(started);
+            yield* Fiber.interrupt(old);
+            const next = yield* Effect.forkChild(
+              keepViewCurrent({
+                path: '/',
+                publish: () =>
+                  Effect.gen(function* () {
+                    views.push('new');
+                    yield* Deferred.succeed(publishedNew, undefined);
+                  }),
+                markStale: () => Effect.void,
+              }),
+            );
+            yield* Deferred.await(publishedNew);
+            resolveOld?.(['old.txt']);
+            yield* Effect.yieldNow;
+            expect(views).toEqual(['new']);
+            expect(scans).toBe(2);
+            yield* Fiber.interrupt(next);
+          }),
+        ).pipe(Effect.provide(layers)),
+      );
+    } finally {
+      resolveOld?.(['old.txt']);
+    }
+
+    expect(state.files.size).toBe(0);
+  });
+
+  it('preserves a notification failure together with a cleanup defect without retrying', async () => {
+    const notification = new SubscriptionError({
+      code: 'SUBSCRIPTION_INTERRUPTED',
+      fileName: volume.fileName,
+      path: '/',
+      details: null,
+    });
+    const cleanup = new Error('subscription cleanup defect');
+    let registrations = 0;
+    let stale = 0;
+    const fakeSubscriptions = Layer.succeed(Subscriptions, {
+      subscribe: () =>
+        Effect.gen(function* () {
+          registrations++;
+          yield* Effect.addFinalizer(() => Effect.die(cleanup));
+          return { changes: Stream.fail(notification), retired: Effect.succeed({ status: 'released' as const }) };
+        }),
+    });
+    const layers = Layer.merge(fakeSubscriptions, fileSystemLayer);
+    const exit = await Effect.runPromise(
+      Effect.exit(
+        keepViewCurrent({ path: '/', publish: () => Effect.void, markStale: () => Effect.sync(() => stale++) }),
+      ).pipe(Effect.provide(layers)),
+    );
+    expect(registrations).toBe(1);
+    expect(stale).toBe(1);
+    expect(exit).toMatchObject({
+      _tag: 'Failure',
+      cause: {
+        reasons: expect.arrayContaining([
+          expect.objectContaining({ _tag: 'Fail', error: notification }),
+          expect.objectContaining({ _tag: 'Die', defect: cleanup }),
+        ]),
+      },
+    });
+  });
+
+  it('stops after a recoverable notification is followed by cleanup failure', async () => {
+    const interrupted = new SubscriptionError({
+      code: 'SUBSCRIPTION_INTERRUPTED',
+      fileName: volume.fileName,
+      path: '/',
+      details: null,
+    });
+    const cleanup = new Error('retry cleanup defect');
+    const starts = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const attempts = yield* Queue.unbounded<number>();
+          let registrations = 0;
+          let stale = 0;
+          const fakeSubscriptions = Layer.succeed(Subscriptions, {
+            subscribe: () =>
+              Effect.gen(function* () {
+                const current = ++registrations;
+                yield* Queue.offer(attempts, current);
+                if (current === 2) yield* Effect.addFinalizer(() => Effect.die(cleanup));
+                return {
+                  changes: Stream.fail(interrupted),
+                  retired: Effect.succeed({ status: 'released' as const }),
+                };
+              }),
+          });
+          const fiber = yield* Effect.forkChild(
+            Effect.exit(
+              keepViewCurrent({ path: '/', publish: () => Effect.void, markStale: () => Effect.sync(() => stale++) }),
+            ).pipe(Effect.provide(Layer.merge(fakeSubscriptions, fileSystemLayer))),
+          );
+          expect(yield* Queue.take(attempts)).toBe(1);
+          yield* Effect.yieldNow;
+          yield* TestClock.adjust(250);
+          expect(yield* Queue.take(attempts)).toBe(2);
+          const exit = yield* Fiber.join(fiber);
+          return { registrations, stale, exit };
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
+    expect(starts.registrations).toBe(2);
+    expect(starts.stale).toBe(2);
+    expect(starts.exit).toMatchObject({
+      _tag: 'Failure',
+      cause: {
+        reasons: expect.arrayContaining([
+          expect.objectContaining({ _tag: 'Fail', error: interrupted }),
+          expect.objectContaining({ _tag: 'Die', defect: cleanup }),
+        ]),
+      },
+    });
+  });
+
+  it('makes at most three retries before a scan is published and leaves the last failure visible', async () => {
+    const interrupted = new SubscriptionError({
+      code: 'SUBSCRIPTION_INTERRUPTED',
+      fileName: volume.fileName,
+      path: '/',
+      details: null,
+    });
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const attempts = yield* Queue.unbounded<number>();
+          let registrations = 0;
+          let stale = 0;
+          const fakeSubscriptions = Layer.succeed(Subscriptions, {
+            subscribe: () =>
+              Effect.gen(function* () {
+                yield* Queue.offer(attempts, ++registrations);
+                return yield* Effect.fail(interrupted);
+              }),
+          });
+          const fiber = yield* Effect.forkChild(
+            Effect.exit(
+              keepViewCurrent({ path: '/', publish: () => Effect.void, markStale: () => Effect.sync(() => stale++) }),
+            ).pipe(Effect.provide(Layer.merge(fakeSubscriptions, fileSystemLayer))),
+          );
+          for (let expected = 1; expected <= 4; expected++) {
+            expect(yield* Queue.take(attempts)).toBe(expected);
+            if (expected < 4) {
+              yield* Effect.yieldNow;
+              yield* TestClock.adjust(250);
+            }
+          }
+          return { registrations, stale, exit: yield* Fiber.join(fiber) };
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
+    expect(result.registrations).toBe(4);
+    expect(result.stale).toBe(4);
+    expect(result.exit).toMatchObject({
+      _tag: 'Failure',
+      cause: { reasons: [expect.objectContaining({ _tag: 'Fail', error: interrupted })] },
+    });
+  });
+
+  it('renews the retry budget after each successfully published scan', async () => {
+    const interrupted = new SubscriptionError({
+      code: 'SUBSCRIPTION_INTERRUPTED',
+      fileName: volume.fileName,
+      path: '/',
+      details: null,
+    });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const published = yield* Queue.unbounded<number>();
+          const interruptions = yield* Queue.unbounded<void>();
+          const stale = yield* Queue.unbounded<void>();
+          let registrations = 0;
+          const fakeSubscriptions = Layer.succeed(Subscriptions, {
+            subscribe: () =>
+              Effect.sync(() => {
+                registrations++;
+                return {
+                  changes: Stream.fromEffect(Queue.take(interruptions).pipe(Effect.andThen(Effect.fail(interrupted)))),
+                  retired: Effect.succeed({ status: 'released' as const }),
+                };
+              }),
+          });
+          const watcher = yield* Effect.forkChild(
+            keepViewCurrent({
+              path: '/',
+              publish: () => Queue.offer(published, registrations),
+              markStale: () => Queue.offer(stale, undefined),
+            }).pipe(Effect.provide(Layer.merge(fakeSubscriptions, fileSystemLayer))),
+          );
+          expect(yield* Queue.take(published)).toBe(1);
+          for (let expected = 2; expected <= 5; expected++) {
+            yield* Queue.offer(interruptions, undefined);
+            yield* Queue.take(stale);
+            yield* Effect.yieldNow;
+            yield* TestClock.adjust(250);
+            expect(registrations).toBe(expected);
+            expect(yield* Queue.take(published)).toBe(expected);
+          }
+          yield* Fiber.interrupt(watcher);
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
+  });
+
+  it('does not retry nonrecoverable subscription failures', async () => {
+    const failed = new SubscriptionError({
+      code: 'SUBSCRIPTION_CALLBACK_FAILED',
+      fileName: volume.fileName,
+      path: '/',
+      details: null,
+    });
+    let registrations = 0;
+    let stale = 0;
+    const fakeSubscriptions = Layer.succeed(Subscriptions, {
+      subscribe: () => {
+        registrations++;
+        return Effect.succeed({
+          changes: Stream.fail(failed),
+          retired: Effect.succeed({ status: 'released' as const }),
+        });
+      },
+    });
+    const exit = await Effect.runPromise(
+      Effect.exit(
+        keepViewCurrent({ path: '/', publish: () => Effect.void, markStale: () => Effect.sync(() => stale++) }),
+      ).pipe(Effect.provide(Layer.merge(fakeSubscriptions, fileSystemLayer))),
+    );
+    expect(registrations).toBe(1);
+    expect(stale).toBe(1);
+    expect(exit).toMatchObject({
+      _tag: 'Failure',
+      cause: { reasons: [expect.objectContaining({ _tag: 'Fail', error: failed })] },
+    });
+  });
+
+  it('maps retirement timeout to TimedOut using the budget already spent on admission', async () => {
+    let admissions = 0;
+    let lstatFinished!: () => void;
+    const lstatReady = new Promise<void>((resolve) => {
+      lstatFinished = resolve;
+    });
+    const timeoutState = makeCoordinator({
+      backend: source as never,
+      fileName: volume.fileName,
+      isClosed: () => false,
+      currentGeneration: () => currentGeneration,
+      canRecapture: () => true,
+      readinessTimeout: 1000,
+      subscriptionsAvailable: true,
+      terminal: () => undefined,
+      awaitReady: (budget) =>
+        Effect.sync(() => {
+          if (admissions++ === 0) budget.remaining -= 400;
+          return currentGeneration;
+        }),
+    });
+    registerCoordinator(volume, timeoutState);
+    source.afterLstat = lstatFinished;
+    const retiring = new Promise<{ status: 'released' }>(() => {});
+    timeoutState.subscriptionSetups.set(retiring, {
+      generation: currentGeneration,
+      closed: retiring,
+      state: 'retiring',
+    });
+    const exit = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const watching = yield* Effect.exit(Stream.runHead(OpfsFileSystem.make(volume).watch('/note.txt'))).pipe(
+            Effect.forkChild,
+          );
+          yield* Effect.promise(() => lstatReady);
+          yield* Effect.yieldNow;
+          yield* TestClock.adjust(601);
+          return yield* Fiber.join(watching);
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
+    const timeoutFailure = failureOf(exit);
+    if (!PlatformError.isPlatformError(timeoutFailure)) throw new Error('retirement timeout was not a PlatformError');
+    expect(timeoutFailure.reason._tag).toBe('TimedOut');
+    if (!(timeoutFailure.reason.cause instanceof SubscriptionError))
+      throw new Error('retirement timeout did not retain its SubscriptionError');
+    expect(timeoutFailure.reason.cause.sourceCode).toBe('VFS_SUBSCRIPTION_RETIREMENT_TIMEOUT');
+    expect(source.commands.filter((command) => command.type === 'register')).toHaveLength(0);
   });
 });
