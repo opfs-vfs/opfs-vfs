@@ -40,6 +40,24 @@ export default function Hero() {
           Store files in the browser with OPFS. Use synchronous I/O inside a worker, and inspect your files through
           familiar paths.
         </p>
+        <div className="hero-sdks" aria-label="Use OPFS VFS with">
+          <a href="#example-javascript">
+            <img src="/brand/typescript.svg" alt="" width="24" height="24" /> TypeScript
+          </a>
+          <a href="#example-react">
+            <img src="/brand/react.svg" alt="" width="24" height="24" /> React
+          </a>
+          <a href="#example-effect">
+            <span className="effect-mark" aria-hidden="true">
+              <img className="effect-on-light" src="/brand/effect-black.svg" alt="" width="24" height="24" />
+              <img className="effect-on-dark" src="/brand/effect-white.svg" alt="" width="24" height="24" />
+            </span>{' '}
+            Effect
+          </a>
+        </div>
+        <a className="hero-release" href="/docs/effect/">
+          Effect v4 adapter <span className="release-badge">New</span> <span aria-hidden="true">→</span>
+        </a>
         <div className="hero-actions">
           <a className="button solid" href="/demos/filesystem/">
             Explore files

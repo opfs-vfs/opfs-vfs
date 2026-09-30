@@ -52,7 +52,7 @@ Create the caller-owned client asynchronously outside render, after browser comm
 
 ```ts
 const volume = useVolume(name?);       // VolumeResult
-const fs = useVolumeClient(name?);     // GenerationClient | null
+const fs = useVolumeClient(name?);     // VolumeClient | null
 ```
 
 `VolumeResult` exposes `status`, `error`, `missingCapabilities`, `role`, `generation`, `persistence`, `transport`, `fallbackReason`, and `isClosing`. Status is `pending`, `ready`, `recovering`, `unsupported`, `error`, or `closed`. `fs` is generation-pinned and exists only while that generation is ready. Its path commands are asynchronous: `readFileBuffer`, `writeFileBuffer`, directory/stat/link operations, and `sync`; a SharedWorker host has no synchronous SAB API. It deliberately excludes volume lifecycle commands. Managed `close()` closes compatible aliases in this page, not other pages. Use a caller-owned raw `createSharedWorkerFollower`, await `ready`, then await `shutdownSharedVfs()` for intentional global shutdown; optionally delete only after success. Coordinate all pages because shutdown plus deletion is not atomic.
@@ -73,7 +73,7 @@ useFileContent(path, { volume?, enabled?, format?: 'bytes' | 'text', limit?: num
 <FileContent path="/note.txt" format="text">{(result) => /* render */}</FileContent>
 ```
 
-Every result has `status`, `data`, `error`, `isRefreshing`, `isStale`, and `refresh()`. `useFileContent` returns `Uint8Array | null` by default or `string | null` with `format: 'text'`; `limit` is 0 through 16 MiB. Shared byte results are read-only snapshots for all consumers: copy bytes before mutation. Resource cache sharing is per installed SDK copy and client, so resolve exactly one copy of `@opfs-vfs/react` and React in an application bundle.
+Every result has `status`, `data`, `error`, `isRefreshing`, `isStale`, and `refresh()`. `useFileContent` returns a resource result. Its successful `data` is `Uint8Array | null` by default or `string | null` with `format: 'text'`. Idle and pending results have `data: undefined`; an error result may retain data from a previous successful read. `limit` is 0 through 16 MiB. Shared byte results are read-only snapshots for all consumers: copy bytes before mutation. Resource cache sharing is per installed SDK copy and client, so resolve exactly one copy of `@opfs-vfs/react` and React in an application bundle.
 
 ## Browser persistence
 
