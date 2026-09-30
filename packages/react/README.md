@@ -61,12 +61,7 @@ const sharedWorker = (fileName: string) =>
     name: `my-vfs-${fileName}`,
   });
 
-<VolumeProvider
-  fileName="notes.bin"
-  worker={worker}
-  transport="shared-worker"
-  sharedWorker={sharedWorker}
->
+<VolumeProvider fileName="notes.bin" worker={worker} transport="shared-worker" sharedWorker={sharedWorker}>
   <Note />
 </VolumeProvider>;
 ```
