@@ -65,6 +65,14 @@ it('refuses every stale generation method before either transport posts', async 
     const stale = follower.forGeneration('stale-generation');
     const args: Record<(typeof GENERATION_METHODS)[number], unknown[]> = {
       readFileBuffer: ['/missing'],
+      open: ['/opened', true],
+      read: [-1, 1],
+      write: [-1, new Uint8Array([1])],
+      seek: [-1, 0, 0],
+      close: [-1],
+      fstat: [-1],
+      fsync: [-1],
+      ftruncate: [-1, 0],
       writeFileBuffer: ['/write', new Uint8Array()],
       stat: ['/missing'],
       lstat: ['/missing'],
@@ -137,10 +145,117 @@ it('keeps ordinary errors plain but marks validated owner errors as replied', as
         .stat('/missing')
         .catch((reason: unknown) => reason);
       expect(error).toMatchObject({ dispatch: 'replied', details: { code: 'ENOENT', errno: 2 } });
+      await expect(client.forGeneration(client.getStatus().ownerGeneration!).fstat(123456789)).rejects.toMatchObject({
+        dispatch: 'replied',
+        details: { code: 'EBADF' },
+      });
     }
   } finally {
     follower.dispose();
     await owner.closeVfs();
+  }
+});
+
+it('pins descriptor methods to the captured generation on leaders and followers', async () => {
+  const fileName = name();
+  const owner = new OpfsVfsWorker(fileName);
+  const follower = new OpfsVfsWorker(fileName);
+  try {
+    await Promise.all([owner.ready, follower.ready]);
+    for (const client of [owner, follower]) {
+      const facade = client.forGeneration(client.getStatus().ownerGeneration!);
+      const fd = await facade.open(`/descriptor-${client === owner ? 'leader' : 'follower'}`, true);
+      expect(await facade.write(fd, new Uint8Array([1, 2, 3]))).toBe(3);
+      expect(await facade.seek(fd, 0, 0)).toBe(0);
+      const read = await facade.read(fd, 3);
+      expect(read.read).toBe(3);
+      expect(read.buffer).toEqual(new Uint8Array([1, 2, 3]));
+      await facade.fsync(fd);
+      await facade.ftruncate(fd, 2);
+      expect(await facade.fstat(fd)).toMatchObject({ size: 2, is_file: true });
+      await facade.close(fd);
+    }
+  } finally {
+    follower.dispose();
+    await owner.closeVfs();
+  }
+});
+
+it('rejects a leader OPEN that settles just before its generation changes', async () => {
+  const leader = new OpfsVfsWorker(name());
+  const privateLeader = leader as any;
+  let restore: (() => void) | undefined;
+  try {
+    await leader.ready;
+    const generation = leader.getStatus().ownerGeneration!;
+    const send = privateLeader.sendToWorker.bind(leader);
+    const delayOpen = vi.spyOn(privateLeader, 'sendToWorker').mockImplementation(async (...args: unknown[]) => {
+      const result = await send(...args);
+      if (args[0] === 'OPEN') privateLeader.generation = 'successor';
+      return result;
+    });
+    restore = () => delayOpen.mockRestore();
+    await expect(leader.forGeneration(generation).open('/late-leader', true)).rejects.toMatchObject({
+      dispatch: 'sent',
+      details: { code: 'VFS_ATTACHMENT_LOST' },
+    });
+  } finally {
+    restore?.();
+    await leader.closeVfs();
+  }
+});
+
+it('rejects a successful OPEN settled before takeover and scopes its cleanup to the old owner', async () => {
+  class FixedFdWorker extends Worker {
+    constructor() {
+      super(new URL('./fixed-fd-worker.ts', import.meta.url), { type: 'module' });
+    }
+  }
+  const fileName = name();
+  const owner = new OpfsVfsWorker(fileName, { worker: () => new FixedFdWorker() });
+  const successor = new OpfsVfsWorker(fileName, { worker: () => new FixedFdWorker() });
+  const follower = new OpfsVfsWorker(fileName, { worker: () => new FixedFdWorker() });
+  const privateFollower = follower as any;
+  try {
+    await Promise.all([owner.ready, successor.ready, follower.ready]);
+    const oldGeneration = follower.getStatus().ownerGeneration!;
+    const send = privateFollower.sendToWorker.bind(follower);
+    let oldFd!: number;
+    let successorFd!: number;
+    const holdDelivery = vi.spyOn(privateFollower, 'sendToWorker').mockImplementation(async (...args: unknown[]) => {
+      const result = await send(...args);
+      if (args[0] === 'OPEN') {
+        oldFd = result as number;
+        await owner.closeVfs();
+        await until(
+          () => successor.getStatus().state === 'ready' && follower.getStatus().ownerGeneration !== oldGeneration,
+        );
+        successorFd = await successor.open('/successor', true);
+      }
+      return result;
+    });
+    const post = vi.spyOn(state(follower).channel, 'postMessage');
+    const error = await follower
+      .forGeneration(oldGeneration)
+      .open('/late', true)
+      .catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ dispatch: 'sent', details: { code: 'VFS_ATTACHMENT_LOST' } });
+    expect(successorFd).toBe(oldFd);
+    expect(post).toHaveBeenCalledWith({
+      type: 'CANCEL',
+      id: expect.any(Number),
+      clientId: privateFollower.attachmentId,
+    });
+    expect(await successor.fstat(successorFd)).toMatchObject({ is_file: true, size: 0 });
+    await successor.write(successorFd, new Uint8Array([7]));
+    expect((await successor.fstat(successorFd)).size).toBe(1);
+    holdDelivery.mockRestore();
+    post.mockRestore();
+  } finally {
+    privateFollower.sendToWorker?.mockRestore?.();
+    follower.dispose();
+    successor.dispose();
+    owner.dispose();
   }
 });
 
@@ -172,39 +287,34 @@ it('wraps synchronous transport failures as refused facade errors', async () => 
   }
 });
 
-it('does not replay a sent facade write after routing is invalidated', async () => {
+it('does not replay a sent descriptor write after routing is invalidated', async () => {
   const fileName = name();
   const owner = new OpfsVfsWorker(fileName);
   const follower = new OpfsVfsWorker(fileName);
   try {
     await Promise.all([owner.ready, follower.ready]);
-    const channel = state(owner).channel;
-    const post = channel.postMessage.bind(channel);
-    let held!: () => void;
-    const responseHeld = new Promise<void>((resolve) => {
-      held = resolve;
-    });
-    const hold = vi.spyOn(channel, 'postMessage').mockImplementation((message) => {
-      if ((message as { type?: string }).type === 'RESPONSE') held();
-      else post(message);
-    });
-    const workerPost = vi.spyOn(state(owner).worker!, 'postMessage');
+    const worker = state(owner).worker!;
+    const onmessage = worker.onmessage!;
+    worker.onmessage = (event) => {
+      if ((event.data as { type?: string }).type !== 'WRITE') onmessage.call(worker, event);
+    };
+    const workerPost = vi.spyOn(worker, 'postMessage');
     const old = follower.getStatus().ownerGeneration!;
-    const write = follower
-      .forGeneration(old)
-      .writeFileBuffer('/once', new Uint8Array([1]))
-      .catch((reason: unknown) => reason);
-    await responseHeld;
+    const facade = follower.forGeneration(old);
+    const fd = await facade.open('/once', true);
+    const write = facade.write(fd, new Uint8Array([1])).catch((reason: unknown) => reason);
+    await until(() => workerPost.mock.calls.some(([message]) => (message as { type?: string }).type === 'WRITE'));
     // Guards invalidateRouting rejection and the response-generation check.
     state(follower).channel.dispatchEvent(
       new MessageEvent('message', { data: { type: 'LEADER_READY', generation: 'replacement', profile } }),
     );
     expect(await write).toMatchObject({ dispatch: 'sent', details: { code: 'VFS_ATTACHMENT_LOST' } });
-    expect(
-      workerPost.mock.calls.filter(([message]) => (message as { type?: string }).type === 'WRITE_FILE_BUFFER'),
-    ).toHaveLength(1);
-    await expect(follower.forGeneration(old).sync()).rejects.toMatchObject({ dispatch: 'refused' });
-    hold.mockRestore();
+    expect(workerPost.mock.calls.filter(([message]) => (message as { type?: string }).type === 'WRITE')).toHaveLength(
+      1,
+    );
+    await expect(facade.sync()).rejects.toMatchObject({ dispatch: 'refused' });
+    worker.onmessage = onmessage;
+    (owner as any).failWorker('test failure', new Error('lost descriptor reply'));
     workerPost.mockRestore();
   } finally {
     follower.dispose();

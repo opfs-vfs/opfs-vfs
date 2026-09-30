@@ -75,8 +75,16 @@ export class VfsCommandError extends Error {
   }
 }
 
-/** The async path methods available on a generation-bound client. */
+/** The async path and descriptor methods available on a generation-bound client. */
 export const GENERATION_METHODS = [
+  'open',
+  'read',
+  'write',
+  'seek',
+  'close',
+  'fstat',
+  'fsync',
+  'ftruncate',
   'readFileBuffer',
   'writeFileBuffer',
   'stat',
@@ -132,7 +140,7 @@ type PendingRequest = {
   dispatch?: DispatchRecord;
 };
 
-type DispatchRecord = { sent: boolean; replied: boolean };
+type DispatchRecord = { sent: boolean; replied: boolean; requestId?: number };
 
 type WorkerCommandPayload = Record<string, unknown>;
 
@@ -2324,19 +2332,28 @@ export class OpfsVfsWorkerClient {
           reject(error);
         },
       };
+      if (type === 'OPEN' && generation !== undefined && dispatch) dispatch.requestId = id;
       this.pendingRequests.set(id, pending);
 
       const listener = (event: MessageEvent<LeaderResponseMessage>) => {
-        const { id: respId, type: respType, result, tabId: respTabId, data: respData, generation } = event.data;
+        const {
+          id: respId,
+          type: respType,
+          result,
+          tabId: respTabId,
+          data: respData,
+          generation: responseGeneration,
+        } = event.data;
         if (respId === id && respTabId === tabId) {
           const observer = this.attachTo !== undefined;
           if (
             observer &&
-            (generation !== this.attachTo || !['OBSERVER_RESPONSE', 'OBSERVER_RESPONSE_ERROR'].includes(respType))
+            (responseGeneration !== this.attachTo ||
+              !['OBSERVER_RESPONSE', 'OBSERVER_RESPONSE_ERROR'].includes(respType))
           )
             return;
           if (!observer && !['RESPONSE', 'RESPONSE_ERROR'].includes(respType)) return;
-          if (!observer && (typeof generation !== 'string' || generation !== expectedGeneration)) {
+          if (!observer && (typeof responseGeneration !== 'string' || responseGeneration !== expectedGeneration)) {
             this.channel.postMessage({ type: 'CANCEL', id, clientId: this.attachmentId });
             pending.reject(
               makeCodedError(
@@ -3117,8 +3134,8 @@ export class OpfsVfsWorkerClient {
   }
 
   /**
-   * Path commands pinned to one owner generation (from `getStatus().ownerGeneration`). Every call is refused
-   * before dispatch once the owner changed, rejects with {@link VfsCommandError}, and is never retried.
+   * Path and descriptor commands pinned to one owner generation (from `getStatus().ownerGeneration`). Every call
+   * is refused before dispatch once the owner changed, rejects with {@link VfsCommandError}, and is never retried.
    */
   forGeneration(ownerGeneration: string): GenerationClient {
     if (typeof ownerGeneration !== 'string' || ownerGeneration.length === 0 || ownerGeneration.length > 128) {
@@ -3136,10 +3153,23 @@ export class OpfsVfsWorkerClient {
           },
         });
         try {
-          return await (OpfsVfsWorkerClient.prototype[name] as (...methodArgs: unknown[]) => Promise<unknown>).apply(
-            context,
-            args,
-          );
+          const result = await (
+            OpfsVfsWorkerClient.prototype[name] as (...methodArgs: unknown[]) => Promise<unknown>
+          ).apply(context, args);
+          if (
+            name === 'open' &&
+            (this.isLeader ? this.generation : (this.attachTo ?? this.leaderGeneration)) !== ownerGeneration
+          ) {
+            if (!this.isLeader && record.requestId !== undefined) {
+              this.channel.postMessage({
+                type: 'CANCEL',
+                id: record.requestId,
+                clientId: this.attachmentId,
+              });
+            }
+            throw makeCodedError('The leader changed. Reconnect to use this volume.', ATTACHMENT_LOST_CODE);
+          }
+          return result;
         } catch (error) {
           throw new VfsCommandError(error, !record.sent ? 'refused' : record.replied ? 'replied' : 'sent');
         }

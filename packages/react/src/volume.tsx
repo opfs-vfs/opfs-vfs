@@ -56,7 +56,21 @@ interface VolumeState {
 export type ManagedVolumeResult = VolumeState & { readonly ownership: 'managed'; readonly close: () => Promise<void> };
 export type BorrowedVolumeResult = VolumeState & { readonly ownership: 'borrowed' };
 export type VolumeResult = ManagedVolumeResult | BorrowedVolumeResult;
-export type VolumeClient = GenerationClient;
+const DESCRIPTOR_METHODS = [
+  'open',
+  'read',
+  'write',
+  'seek',
+  'close',
+  'fstat',
+  'fsync',
+  'ftruncate',
+] as const satisfies readonly GenerationMethod[];
+type DescriptorMethod = (typeof DESCRIPTOR_METHODS)[number];
+type VolumeMethod = Exclude<GenerationMethod, DescriptorMethod>;
+export type VolumeClient = Omit<GenerationClient, DescriptorMethod>;
+const DESCRIPTOR_METHOD_SET = new Set<GenerationMethod>(DESCRIPTOR_METHODS);
+const isVolumeMethod = (method: GenerationMethod): method is VolumeMethod => !DESCRIPTOR_METHOD_SET.has(method);
 
 type SharedProviderProps = {
   name?: VolumeName;
@@ -544,8 +558,8 @@ export class VolumeBinding {
       return null;
     if (this.#client && this.#clientGeneration === snapshot.generation) return this.#client;
     const facade = source.store.facade(this.#ownerGeneration);
-    const client = {} as Record<GenerationMethod, (...args: unknown[]) => Promise<unknown>>;
-    for (const method of GENERATION_METHODS) {
+    const client = {} as Record<VolumeMethod, (...args: unknown[]) => Promise<unknown>>;
+    for (const method of GENERATION_METHODS.filter(isVolumeMethod)) {
       client[method] = async (...args) => {
         try {
           return await (facade[method] as (...methodArgs: unknown[]) => Promise<unknown>)(...args);
