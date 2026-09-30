@@ -26,8 +26,10 @@ export interface FileSystemContractResult {
     readonly directoryExistsInScope: boolean;
     readonly directoryRemoved: boolean;
     readonly directoryPrefix: boolean;
+    readonly directoryParentIsRoot: boolean;
     readonly fileExistsInScope: boolean;
     readonly fileRemoved: boolean;
+    readonly fileParentIsRoot: boolean;
     readonly fileParentPrefix: boolean;
     readonly fileBasenameExcludesPrefix: boolean;
     readonly fileSuffix: boolean;
@@ -118,7 +120,9 @@ export const runFilesystemContract = (
         return { path: temporary, exists: yield* fs.exists(temporary) };
       }),
     );
+    const directoryTempParent = directoryTemp.path.replace(/[/\\][^/\\]+$/, '');
     const fileTempParent = fileTemp.path.replace(/[/\\][^/\\]+$/, '');
+    const fileTempPrivateDirectoryParent = fileTempParent.replace(/[/\\][^/\\]+$/, '');
     const fileTempBasename = fileTemp.path.slice(fileTempParent.length + 1);
     const fileTempParentBasename = fileTempParent.slice(
       Math.max(fileTempParent.lastIndexOf('/'), fileTempParent.lastIndexOf('\\')) + 1,
@@ -195,8 +199,10 @@ export const runFilesystemContract = (
         directoryExistsInScope: directoryTemp.exists,
         directoryRemoved: !(yield* fs.exists(directoryTemp.path)),
         directoryPrefix: directoryTemp.path.includes('contract-dir-'),
+        directoryParentIsRoot: directoryTempParent === root,
         fileExistsInScope: fileTemp.exists,
         fileRemoved: !(yield* fs.exists(fileTemp.path)),
+        fileParentIsRoot: fileTempPrivateDirectoryParent === root,
         fileParentPrefix: fileTempParentBasename.startsWith('contract-file-'),
         fileBasenameExcludesPrefix: !fileTempBasename.startsWith('contract-file-'),
         fileSuffix: fileTempBasename.endsWith('.tmp'),
