@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "types": ["node"] },
-  "include": ["src/**/*.ts", "examples/**/*.ts", "*.config.ts"],
+  "include": ["src/**/*.ts", "examples/**/*.ts", "tests/filesystem-contract.node.test.ts", "*.config.ts"],
   "exclude": ["examples/encrypted-session.ts", "examples/encrypted-session.worker.ts"]
 }
