@@ -6,6 +6,8 @@ Use the core API from TypeScript or JavaScript, connect file-backed interfaces w
 
 New mounts default to disk buffering and balanced background synchronization. See [storage defaults](docs/API.md#storage-defaults) for save boundaries and switching buffer modes.
 
+![OPFS VFS wordmark with green segmented storage rings on a dark background](apps/website/public/images/opfs-social.png)
+
 ## Published packages
 
 | Package                                                                                        | Purpose                                                                 | Documentation                                                  |
