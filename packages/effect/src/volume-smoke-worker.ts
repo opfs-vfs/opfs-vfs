@@ -20,6 +20,97 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           backend.closeSync(fd);
           const fs = OpfsFileSystem.make(volume);
           yield* fs.writeFileString('/effect-fs.txt', 'scoped Effect FileSystem');
+          const copyBytes = new Uint8Array(96_000);
+          for (let i = 0; i < copyBytes.length; i++) copyBytes[i] = i % 239;
+          yield* fs.makeDirectory('/copy-source/nested', { recursive: true });
+          yield* fs.writeFile('/copy-source/nested/data.bin', copyBytes);
+          yield* fs.copyFile('/copy-source/nested/data.bin', '/copy-file.bin');
+          yield* fs.copy('/copy-source', '/copy-parent/missing/destination', { overwrite: true });
+          const directCopy =
+            sameBytes(yield* fs.readFile('/copy-file.bin'), copyBytes) &&
+            sameBytes(yield* fs.readFile('/copy-parent/missing/destination/nested/data.bin'), copyBytes);
+          yield* fs.writeFileString('/copy-regular-source', 'source');
+          yield* fs.writeFileString('/copy-regular-destination', 'old');
+          yield* fs.link('/copy-regular-destination', '/copy-regular-old-alias');
+          yield* fs.chmod('/copy-regular-destination', 0o400);
+          const regularCopy = yield* Effect.result(
+            fs.copy('/copy-regular-source', '/copy-regular-destination', { overwrite: true }),
+          );
+          yield* fs.link('/copy-regular-source', '/copy-regular-same');
+          const sameInodeCopy = yield* Effect.result(
+            fs.copy('/copy-regular-source', '/copy-regular-same', { overwrite: true }),
+          );
+          yield* fs.makeDirectory('/tmp/copy-temp', { recursive: true });
+          yield* fs.writeFileString('/tmp/copy-temp/sibling', 'owned by caller');
+          const scopedTempDirectory = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempDirectoryScoped({ directory: '/tmp/copy-temp', prefix: 'direct-' });
+              yield* fs.writeFileString(`${path}/inside`, 'temporary');
+              return path;
+            }),
+          );
+          const scopedTempFile = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempFileScoped({
+                directory: '/tmp/copy-temp',
+                prefix: 'direct-',
+                suffix: '.tmp',
+              });
+              yield* fs.writeFileString(path, 'temporary');
+              return path;
+            }),
+          );
+          yield* fs.makeDirectory('/copy-temp-a');
+          yield* fs.makeDirectory('/copy-temp-b');
+          yield* fs.symlink('/copy-temp-a', '/copy-temp-parent');
+          const retargetedDirectory = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempDirectoryScoped({ directory: '/copy-temp-parent', prefix: 'directory-' });
+              const name = path.slice(path.lastIndexOf('/') + 1);
+              yield* fs.remove('/copy-temp-parent');
+              yield* fs.symlink('/copy-temp-b', '/copy-temp-parent');
+              yield* fs.makeDirectory(`/copy-temp-b/${name}`);
+              yield* fs.writeFileString(`/copy-temp-b/${name}/victim`, 'keep');
+              return { path, name };
+            }),
+          );
+          yield* fs.remove('/copy-temp-parent');
+          yield* fs.symlink('/copy-temp-a', '/copy-temp-parent');
+          const retargetedFile = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const path = yield* fs.makeTempFileScoped({
+                directory: '/copy-temp-parent',
+                prefix: 'file-',
+                suffix: '.tmp',
+              });
+              const fileName = path.slice(path.lastIndexOf('/') + 1);
+              const root = path.slice(0, path.lastIndexOf('/')).split('/').at(-1)!;
+              yield* fs.remove('/copy-temp-parent');
+              yield* fs.symlink('/copy-temp-b', '/copy-temp-parent');
+              yield* fs.makeDirectory(`/copy-temp-b/${root}`);
+              yield* fs.writeFileString(`/copy-temp-b/${root}/${fileName}`, 'keep');
+              return { path, root, fileName };
+            }),
+          );
+          const copyTemp = {
+            directCopy,
+            regularReplacement:
+              regularCopy._tag === 'Success' &&
+              (yield* fs.readFileString('/copy-regular-destination')) === 'source' &&
+              (yield* fs.readFileString('/copy-regular-old-alias')) === 'old' &&
+              sameInodeCopy._tag === 'Failure' &&
+              (yield* fs.readFileString('/copy-regular-same')) === 'source',
+            scopedTempDirectoryRemoved: !(yield* fs.exists(scopedTempDirectory)),
+            scopedTempFileRemoved: !(yield* fs.exists(scopedTempFile)),
+            siblingSurvived: (yield* fs.readFileString('/tmp/copy-temp/sibling')) === 'owned by caller',
+            physicalTempParents:
+              retargetedDirectory.path.startsWith('/copy-temp-a/') &&
+              !(yield* fs.exists(`/copy-temp-a/${retargetedDirectory.name}`)) &&
+              (yield* fs.readFileString(`/copy-temp-b/${retargetedDirectory.name}/victim`)) === 'keep' &&
+              retargetedFile.path.startsWith('/copy-temp-a/') &&
+              !(yield* fs.exists(`/copy-temp-a/${retargetedFile.root}`)) &&
+              (yield* fs.readFileString(`/copy-temp-b/${retargetedFile.root}/${retargetedFile.fileName}`)) === 'keep',
+          };
           yield* fs.makeDirectory('/namespace/tree/sub', { recursive: true, mode: 0o750 });
           yield* fs.writeFileString('/namespace/tree/sub/note', 'linked');
           yield* fs.symlink('sub/note', '/namespace/tree/link');
@@ -61,6 +152,7 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           yield* volume.sync;
           return {
             persistence: yield* volume.persistence,
+            copyTemp,
             namespace: {
               relativeLink,
               danglingLink,
@@ -136,3 +228,6 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
     self.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 };
+
+const sameBytes = (left: Uint8Array, right: Uint8Array) =>
+  left.byteLength === right.byteLength && left.every((value, index) => value === right[index]);
