@@ -1,6 +1,6 @@
 ---
-title: PGlite
-description: Store a PGlite database in OPFS VFS and configure its synchronization and worker lifecycle.
+title: PGlite on OPFS · Persistent browser Postgres
+description: Store a PGlite Postgres database in OPFS VFS. Configure synchronization and worker lifecycle for a persistent in-browser database.
 ---
 
 ```sh

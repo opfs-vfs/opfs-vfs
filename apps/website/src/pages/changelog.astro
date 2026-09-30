@@ -7,7 +7,7 @@ const releases = source.split(/^## /m).slice(1).map((entry) => {
   return { version, body: body.join('\n') };
 });
 ---
-<SiteLayout title="Changelog · OPFS VFS" description="Read versioned changes, fixes, and improvements to OPFS VFS.">
+<SiteLayout title="Changelog · OPFS VFS" description="Release notes for OPFS VFS: versioned changes, fixes, and improvements to the browser filesystem, its adapters, and its plugins.">
   <section class="page-head"><div><p class="kicker">Changelog / project history</p><h1>What changed</h1><p>Changes and fixes by package version. Check GitHub Releases for published releases.</p></div><a class="button" href="https://github.com/opfs-vfs/opfs-vfs/releases">View GitHub releases ↗</a></section>
   <div class="releases">{releases.map(({ version, body }) => <article id={version}><div><h2>{version}</h2><span>Release notes</span></div><div class="release-notes"><Markdown>{body}</Markdown></div></article>)}</div>
 </SiteLayout>

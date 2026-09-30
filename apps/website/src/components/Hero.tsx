@@ -37,8 +37,8 @@ export default function Hero() {
           <span>Synchronous I/O.</span>
         </h1>
         <p className="hero-summary">
-          Store files in the browser with OPFS. Use synchronous I/O inside a worker, and inspect your files through
-          familiar paths.
+          A virtual filesystem for the Origin Private File System (OPFS). Use synchronous I/O inside a worker, and
+          inspect your files through familiar paths.
         </p>
         <div className="hero-sdks" aria-label="Use OPFS VFS with">
           <a href="#example-javascript">
