@@ -6,6 +6,7 @@ import ThemeControl from '../components/ThemeControl.astro';
 import Brand from '../components/Brand.astro';
 import SocialImage from '../components/SocialImage.astro';
 import SiteIcons from '../components/SiteIcons.astro';
+import StructuredData from '../components/StructuredData.astro';
 import ContactDialog from '../components/ContactDialog';
 interface Props { title?: string; description: string; noindex?: boolean }
 const { title = 'OPFS VFS', description, noindex = false } = Astro.props;
@@ -28,6 +29,7 @@ const activeLink = links.find(([href]) => href !== '/#plugins' && Astro.url.path
     <link rel="sitemap" href="/sitemap-index.xml" />
     <link rel="describedby" href="/llms.txt" type="text/markdown" />
     <Analytics />
+    {!noindex && <StructuredData title={title} description={description} />}
     {noindex && <meta name="robots" content="noindex, follow" />}
     <script is:inline>
       (() => {
