@@ -204,8 +204,12 @@ class FakeWorkerClient {
         const path = this.fdPaths.get(fd) ?? '';
         const previous = this.pathBytes.get(path) ?? this.bytes;
         const part = data.subarray(0, Math.min(data.byteLength, this.maxWrite));
-        if ((this.openFlags.get(fd) ?? 0) & 1024) this.bytes = Uint8Array.from([...previous, ...part]);
-        else {
+        if ((this.openFlags.get(fd) ?? 0) & 1024) {
+          const appended = new Uint8Array(previous.length + part.length);
+          appended.set(previous);
+          appended.set(part, previous.length);
+          this.bytes = appended;
+        } else {
           const at = offset ?? 0;
           const result = new Uint8Array(Math.max(previous.length, at + part.length));
           result.set(previous);
@@ -401,6 +405,38 @@ describe('Volume worker acquisition and sessions', () => {
     ]);
   });
 
+  it('does not fall back to descriptors when a whole-file read fails for a non-EFBIG reason', async () => {
+    const client = new FakeWorkerClient();
+    const expected = Object.assign(new Error('storage read failed'), { code: 'EIO' });
+    client.onReadFileBuffer = async () => {
+      throw expected;
+    };
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          return yield* Effect.result(OpfsFileSystem.make(volume).readFile('/note'));
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      _tag: 'Failure',
+      failure: {
+        reason: {
+          _tag: 'Unknown',
+          cause: {
+            _tag: 'VolumeError',
+            operation: 'readFile',
+            details: { code: 'EIO', message: expected.message },
+          },
+        },
+      },
+    });
+    expect(client.reads).toEqual([{ generation: 'generation-1', path: '/note', limit: 16 * 1024 * 1024 }]);
+    expect(client.descriptorCalls).toEqual([]);
+  });
+
   it('reads large whole files through bounded descriptor requests', async () => {
     const client = new FakeWorkerClient();
     client.bytes = new Uint8Array(16 * 1024 * 1024 + 1);
@@ -422,6 +458,31 @@ describe('Volume worker acquisition and sessions', () => {
     expect(result.at(-1)).toBe(23);
     expect(client.descriptorCalls.filter(({ method }) => method === 'read')).toHaveLength(257);
     expect(client.descriptorCalls.at(-1)?.method).toBe('close');
+  });
+
+  it('uses native append when a small append crosses the whole-file helper limit', async () => {
+    const client = new FakeWorkerClient();
+    const existing = new Uint8Array(16 * 1024 * 1024).fill(23);
+    const appended = Uint8Array.from([71, 72]);
+    client.bytes = existing;
+    client.pathBytes.set('/large', existing);
+    workerMocks.open.mockResolvedValue(clientAsCore(client));
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.make(mount());
+          yield* OpfsFileSystem.make(volume).writeFile('/large', appended, { flag: 'a' });
+        }),
+      ),
+    );
+    expect(client.reads).toEqual([]);
+    expect(client.writes).toEqual([]);
+    expect(client.descriptorCalls.map(({ method }) => method)).toEqual(['open', 'write', 'close']);
+    const final = client.pathBytes.get('/large');
+    expect(final?.byteLength).toBe(16 * 1024 * 1024 + 2);
+    expect(final?.subarray(0, 16 * 1024 * 1024).every((value) => value === 23)).toBe(true);
+    expect(Array.from(final?.slice(-2) ?? [])).toEqual([71, 72]);
+    expect(Array.from(appended)).toEqual([71, 72]);
   });
 
   it('rejects descriptor aliases before truncating and pins both copy opens to one owner generation', async () => {

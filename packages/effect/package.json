@@ -36,11 +36,13 @@
   "scripts": {
     "build": "vite build --config vite.lib.config.ts && tsc -p tsconfig.lib.json",
     "test": "vitest run",
+    "test:conformance": "vitest run --config vitest.config.ts src/filesystem-contract.test.ts && vitest run --config vitest.node.config.ts",
     "test:packed": "node scripts/test-packed.mjs",
     "test:encrypted-packed": "node scripts/test-packed.mjs --encrypted",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@effect/platform-node": "4.0.0-rc.118",
     "@opfs-vfs/opfs-vfs": "workspace:*",
     "@opfs-vfs/plugin-subscriptions": "workspace:*",
     "@types/node": "22.20.3",

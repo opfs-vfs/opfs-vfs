@@ -23,10 +23,12 @@ write does not mean the data is durable; await `volume.sync` at save boundaries.
 
 The adapter also supports path metadata, permissions, links, directory creation,
 listing, removal, rename, recursive copy and volume-local temporary paths.
-Filesystem operands must be absolute paths; relative symlink targets are
-preserved. Recursive copy does not follow symlinks, is not atomic, and does not
-preserve hard-link topology. `chown` and `glob` return typed unsupported errors
-in this slice. Scoped temporary paths remove only their private directory
+Unlike Node's filesystem, operands must be absolute volume paths; relative
+symlink targets are preserved. Recursive copy does not follow symlinks, keeps
+copied relative link targets as written (Node's default copy resolves them to
+the source), is not atomic, and does not preserve hard-link topology. `chown`
+and `glob` remain intentionally unsupported in v1 and return typed `ENOTSUP`
+errors. Scoped temporary paths remove only their private directory
 when the scope closes; the default parent is `/tmp` inside the volume. A temporary
 path uses its resolved physical parent, so retargeting the caller-supplied parent
 symlink does not redirect cleanup. Ownership covers the created root pathname and
@@ -156,3 +158,18 @@ The encrypted packed check is explicit and requires a reviewed local candidate:
 OPFS_VFS_ENCRYPTION_TARBALL=/absolute/path/plugin-encryption.tgz \
 OPFS_VFS_ENCRYPTION_SHA256=<sha256> pnpm --filter @opfs-vfs/effect test:encrypted-packed
 ```
+
+### Conformance and release preparation
+
+Run the shared Node, direct-worker, and worker-backed filesystem contract from
+the repository root with
+`OPFS_VFS_TEST_BROWSER=chromium pnpm --filter @opfs-vfs/effect test:conformance`;
+set the browser variable to `webkit` for the second browser engine. Node's
+`@effect/platform-node` adapter is a development-only test dependency and is
+loaded only by the separate Node test configuration.
+
+These checks validate the exact local workspace candidates. A Changesets
+preview or local tarball is not a published release. Final registry peer ranges
+and the private encryption package's core pin must be checked against the
+versioned core release before claiming released-package compatibility; this
+test command does not version or publish packages.
