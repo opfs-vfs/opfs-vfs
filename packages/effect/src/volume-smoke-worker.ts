@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { ByteSize, Effect } from 'effect';
 import { deleteVolume, OpenFlags } from '@opfs-vfs/opfs-vfs';
 import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
 import { Volume } from './index.js';
@@ -20,8 +20,70 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
           backend.closeSync(fd);
           const fs = OpfsFileSystem.make(volume);
           yield* fs.writeFileString('/effect-fs.txt', 'scoped Effect FileSystem');
+          yield* fs.makeDirectory('/namespace/tree/sub', { recursive: true, mode: 0o750 });
+          yield* fs.writeFileString('/namespace/tree/sub/note', 'linked');
+          yield* fs.symlink('sub/note', '/namespace/tree/link');
+          yield* fs.symlink('/namespace', '/namespace/tree/jump');
+          yield* fs.symlink('missing', '/namespace/dangling');
+          const relativeLink = yield* fs.readLink('/namespace/tree/link');
+          const danglingLink = yield* fs.readLink('/namespace/dangling');
+          const realLink = yield* fs.realPath('/namespace/tree/link');
+          const listing = yield* fs.readDirectory('/namespace/tree/', { recursive: true });
+          yield* fs.utimes('/namespace/tree/sub/note', 1.25, new Date(2500));
+          const times = yield* fs.stat('/namespace/tree/sub/note');
+          yield* fs.link('/namespace/tree/sub/note', '/namespace/hard');
+          yield* fs.rename('/namespace/hard', '/namespace/moved');
+          yield* fs.truncate('/namespace/moved', 3);
+          const metadata = yield* fs.stat('/namespace/moved');
+          yield* fs.chmod('/namespace/moved', 0o400);
+          const denied = yield* Effect.result(fs.access('/namespace/moved', { writable: true }));
+          yield* fs.chmod('/namespace/moved', 0o200);
+          const readDenied = yield* Effect.result(fs.access('/namespace/moved', { readable: true }));
+          yield* fs.chmod('/namespace/moved', 0o600);
+          yield* fs.access('/namespace/moved', { writable: true });
+          const nonEmpty = yield* Effect.result(fs.remove('/namespace/tree'));
+          const busy = yield* Effect.scoped(
+            Effect.gen(function* () {
+              yield* fs.open('/namespace/tree/sub/note');
+              return yield* Effect.result(fs.remove('/namespace/tree', { recursive: true }));
+            }),
+          );
+          yield* fs.remove('/namespace/tree', { recursive: true });
+          yield* fs.remove('/namespace/missing', { force: true });
+          const dangling = yield* Effect.result(fs.readFileString('/namespace/dangling'));
+          yield* fs.symlink('cycle-b', '/namespace/cycle-a');
+          yield* fs.symlink('cycle-a', '/namespace/cycle-b');
+          const cycle = yield* Effect.result(fs.readFileString('/namespace/cycle-a'));
+          const trailingSlash = yield* Effect.result(fs.stat('/namespace/moved/'));
+          yield* fs.makeDirectory('/namespace/denied-tree/sub', { recursive: true });
+          yield* fs.chmod('/namespace/denied-tree/sub', 0);
+          const nestedDenied = yield* Effect.result(fs.readDirectory('/namespace/denied-tree', { recursive: true }));
           yield* volume.sync;
-          return yield* volume.persistence;
+          return {
+            persistence: yield* volume.persistence,
+            namespace: {
+              relativeLink,
+              danglingLink,
+              realLink,
+              listing,
+              metadata: {
+                size: ByteSize.toBigInt(metadata.size).toString(),
+                nlink: metadata.nlink._tag === 'Some' ? metadata.nlink.value : null,
+              },
+              times: {
+                atimeMs: times.atime._tag === 'Some' ? times.atime.value.getTime() : null,
+                mtimeMs: times.mtime._tag === 'Some' ? times.mtime.value.getTime() : null,
+              },
+              denied: denied._tag === 'Failure',
+              readDenied: readDenied._tag === 'Failure',
+              nestedDenied: nestedDenied._tag === 'Failure',
+              nonEmpty: nonEmpty._tag === 'Failure',
+              busy: busy._tag === 'Failure',
+              dangling: dangling._tag === 'Failure',
+              cycle: cycle._tag === 'Failure',
+              trailingSlash: trailingSlash._tag === 'Failure',
+            },
+          };
         }),
       ),
     );

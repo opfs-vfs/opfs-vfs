@@ -1,7 +1,8 @@
-import { ByteSize, Deferred, Effect, Exit, Fiber, Layer, Schema, Scope } from 'effect';
+import { ByteSize, Deferred, Effect, Exit, Fiber, Layer, Option as EffectOption, Schema, Scope } from 'effect';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Volume } from './index.js';
 import { OpfsFileSystem } from './filesystem.js';
+import type { VfsDirEntry, VfsStat } from '@opfs-vfs/opfs-vfs';
 import type { DirectMountOptions, VolumeService } from './volume.js';
 import {
   EncryptionError,
@@ -31,6 +32,10 @@ const state = vi.hoisted(() => ({
   appendFd: false,
   cleanupOrder: [] as string[],
   maxWrite: Number.POSITIVE_INFINITY,
+  namespaceCalls: [] as Array<{ method: string; args: ReadonlyArray<unknown> }>,
+  pathStats: new Map<string, VfsStat>(),
+  directoryEntries: new Map<string, Array<VfsDirEntry>>(),
+  namespaceFailure: undefined as { method: string; error: unknown } | undefined,
 }));
 
 vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
@@ -45,6 +50,82 @@ vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
       syncSync() {}
       getLocalPersistenceStatusSync() {
         return { localPersistenceState: 'clean' as const };
+      }
+      namespace(method: string, ...args: ReadonlyArray<unknown>) {
+        state.namespaceCalls.push({ method, args });
+        if (state.namespaceFailure?.method === method) throw state.namespaceFailure.error;
+      }
+      statSync(path: string) {
+        this.namespace('stat', path);
+        return (
+          state.pathStats.get(path) ?? {
+            mode: 0o100644,
+            size: state.bytes.length,
+            ino: 1,
+            nlink: 1,
+            blksize: 4096,
+            blocks: 1,
+            is_dir: false,
+            is_file: true,
+          }
+        );
+      }
+      lstatSync(path: string) {
+        this.namespace('lstat', path);
+        return (
+          state.pathStats.get(path) ?? {
+            mode: 0o100644,
+            size: state.bytes.length,
+            ino: 1,
+            nlink: 1,
+            blksize: 4096,
+            blocks: 1,
+            is_dir: false,
+            is_file: true,
+          }
+        );
+      }
+      readdirEntriesSync(path: string) {
+        this.namespace('readdirEntries', path);
+        return state.directoryEntries.get(path) ?? [];
+      }
+      mkdirSync(path: string, options?: unknown) {
+        this.namespace('mkdir', path, options);
+      }
+      chmodSync(path: string, mode: number) {
+        this.namespace('chmod', path, mode);
+      }
+      utimesSync(path: string, atimeMs: number, mtimeMs: number) {
+        this.namespace('utimes', path, atimeMs, mtimeMs);
+      }
+      linkSync(existingPath: string, newPath: string) {
+        this.namespace('link', existingPath, newPath);
+      }
+      symlinkSync(target: string, path: string) {
+        this.namespace('symlink', target, path);
+      }
+      readlinkSync(path: string) {
+        this.namespace('readlink', path);
+        return '../target';
+      }
+      realpathSync(path: string) {
+        this.namespace('realpath', path);
+        return path.replace(/\/$/, '') || '/';
+      }
+      unlinkSync(path: string) {
+        this.namespace('unlink', path);
+      }
+      rmdirSync(path: string) {
+        this.namespace('rmdir', path);
+      }
+      removeSync(path: string) {
+        this.namespace('remove', path);
+      }
+      renameSync(oldPath: string, newPath: string) {
+        this.namespace('rename', oldPath, newPath);
+      }
+      truncateSync(path: string, size: number) {
+        this.namespace('truncate', path, size);
       }
       openSync(_path: string, flags = 0) {
         state.appendFd = (flags & 1024) !== 0;
@@ -83,18 +164,6 @@ vi.mock('@opfs-vfs/opfs-vfs', async (importOriginal) => {
         state.writes.push({ path, options });
         state.bytes = options.append ? Uint8Array.from([...state.bytes, ...bytes]) : Uint8Array.from(bytes);
       }
-      statSync() {
-        return {
-          mode: 0o100666,
-          size: state.bytes.length,
-          ino: 1,
-          nlink: 1,
-          blksize: 4096,
-          blocks: 1,
-          is_dir: false,
-          is_file: true,
-        };
-      }
       closeSync() {
         state.cleanupOrder.push('file');
         state.onCloseFd();
@@ -126,6 +195,10 @@ describe('Volume direct acquisition', () => {
     state.appendFd = false;
     state.cleanupOrder = [];
     state.maxWrite = Number.POSITIVE_INFINITY;
+    state.namespaceCalls = [];
+    state.pathStats.clear();
+    state.directoryEntries.clear();
+    state.namespaceFailure = undefined;
   });
 
   it('infers direct mount types for options, effects, and union inputs', () => {
@@ -362,6 +435,126 @@ describe('Volume direct acquisition', () => {
         }),
       ),
     );
+  });
+
+  it('routes direct namespace methods, preserves relative link targets and projects checked metadata', async () => {
+    state.pathStats.set('/meta', {
+      mode: 0o100640,
+      size: 12,
+      ino: 7,
+      nlink: 2,
+      blksize: 4096,
+      blocks: 1,
+      is_file: true,
+      is_dir: false,
+      mtimeMs: 1000,
+      atimeMs: 2000,
+    });
+    state.pathStats.set('/malformed', {
+      mode: -1,
+      size: 12,
+      ino: 7,
+      nlink: 2,
+      blksize: 4096,
+      blocks: 1,
+      is_file: true,
+      is_dir: false,
+    });
+    state.directoryEntries.set('/tree', [
+      { name: 'z', mode: 0o100644, is_dir: false, is_file: true },
+      { name: 'dir', mode: 0o040755, is_dir: true, is_file: false },
+      { name: 'link', mode: 0o120777, is_dir: false, is_file: false },
+      { name: 'a', mode: 0o100644, is_dir: false, is_file: true },
+    ]);
+    state.directoryEntries.set('/tree/dir', [{ name: 'nested', mode: 0o100644, is_dir: false, is_file: true }]);
+    const result = await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'namespace-direct.bin' });
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.makeDirectory('/tree/new/deep', { recursive: true, mode: 0o750 });
+          yield* fs.chmod('/meta', 0o600);
+          yield* fs.link('/meta', '/meta-hard');
+          yield* fs.symlink('../dangling', '/tree/link-new');
+          const link = yield* fs.readLink('/tree/link-new');
+          const real = yield* fs.realPath('/tree/');
+          yield* fs.rename('/meta-hard', '/meta-moved');
+          yield* fs.truncate('/meta-moved', 4);
+          yield* fs.utimes('/meta', new Date(1500), 2.5);
+          yield* fs.access('/meta', { readable: true, writable: true });
+          const info = yield* fs.stat('/meta');
+          const malformed = yield* Effect.result(fs.stat('/malformed'));
+          const tree = yield* fs.readDirectory('/tree', { recursive: true });
+          return { info, malformed, tree, link, real };
+        }),
+      ),
+    );
+    expect(result).toMatchObject({
+      info: {
+        type: 'File',
+        dev: 0,
+        mode: 0o100640,
+        size: ByteSize.bytes(12n),
+        ino: EffectOption.some(7),
+        nlink: EffectOption.some(2),
+        blksize: EffectOption.some(ByteSize.bytes(4096n)),
+        blocks: EffectOption.some(1),
+        atime: EffectOption.some(new Date(2000)),
+        mtime: EffectOption.some(new Date(1000)),
+        uid: EffectOption.none(),
+        gid: EffectOption.none(),
+        rdev: EffectOption.none(),
+        birthtime: EffectOption.none(),
+      },
+      tree: ['a', 'dir', 'dir/nested', 'link', 'z'],
+      link: '../target',
+      real: '/tree',
+    });
+    expect(state.namespaceCalls.map(({ method, args }) => [method, ...args])).toEqual([
+      ['mkdir', '/tree/new/deep', { mode: 0o750, recursive: true }],
+      ['chmod', '/meta', 0o600],
+      ['link', '/meta', '/meta-hard'],
+      ['symlink', '../dangling', '/tree/link-new'],
+      ['readlink', '/tree/link-new'],
+      ['realpath', '/tree/'],
+      ['rename', '/meta-hard', '/meta-moved'],
+      ['truncate', '/meta-moved', 4],
+      ['utimes', '/meta', 1500, 2500],
+      ['stat', '/meta'],
+      ['stat', '/meta'],
+      ['stat', '/malformed'],
+      ['readdirEntries', '/tree'],
+      ['readdirEntries', '/tree/dir'],
+    ]);
+    expect(result.malformed).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
+    expect(Object.hasOwn(result.info, 'ctime')).toBe(false);
+  });
+
+  it('uses native recursive removal and suppresses force only for ENOENT', async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const volume = yield* Volume.makeDirect({ fileName: 'remove-direct.bin' });
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.remove('/tree', { recursive: true });
+          state.namespaceFailure = { method: 'lstat', error: Object.assign(new Error('missing'), { code: 'ENOENT' }) };
+          yield* fs.remove('/missing', { force: true });
+          state.namespaceFailure = { method: 'unlink', error: Object.assign(new Error('missing'), { code: 'ENOENT' }) };
+          yield* fs.remove('/gone', { force: true });
+          state.namespaceFailure = { method: 'unlink', error: Object.assign(new Error('denied'), { code: 'EACCES' }) };
+          const denied = yield* Effect.result(fs.remove('/denied', { force: true }));
+          expect(denied).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'PermissionDenied' } } });
+        }),
+      ),
+    );
+    expect(state.namespaceCalls.map(({ method, args }) => [method, ...args])).toEqual([
+      ['remove', '/tree'],
+      ['lstat', '/missing'],
+      ['lstat', '/gone'],
+      ['unlink', '/gone'],
+      ['lstat', '/denied'],
+      ['unlink', '/denied'],
+    ]);
   });
 
   it('fails File.stat when backend metadata is outside the supported range', async () => {

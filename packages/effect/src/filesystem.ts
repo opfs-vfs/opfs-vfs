@@ -140,11 +140,13 @@ const execute = <A>(
   run: (backend: Backend, generation: string) => A | Promise<A> | Effect.Effect<A, unknown>,
   mutate = false,
   recapture = true,
+  expectedGeneration?: string,
+  readinessBudget?: { remaining: number },
 ): Effect.Effect<A, PlatformError.PlatformError> => {
   const pathFailure = invalidPath(method, path);
   if (pathFailure) return Effect.fail(pathFailure);
   return Effect.gen(function* () {
-    const budget = { remaining: state.readinessTimeout };
+    const budget = readinessBudget ?? { remaining: state.readinessTimeout };
     let recaptures = 0;
     let refusal: VfsCommandError | undefined;
     let differentGeneration: string | undefined;
@@ -165,6 +167,8 @@ const execute = <A>(
           ),
         );
       const generation = admitted.success;
+      if (expectedGeneration !== undefined && generation !== expectedGeneration)
+        return yield* Effect.fail(platform(ownerChanged(), method, path, state.fileName, mutate));
       if (differentGeneration === generation)
         return yield* Effect.fail(platform(refusal!, method, path, state.fileName, mutate));
       const makeAttempt = () =>
@@ -267,11 +271,14 @@ const execute = <A>(
       }
       const result = exit.value;
       if (result.retry) {
-        const localRefusal = new VfsCommandError(
-          Object.assign(new Error('Owner changed before dispatch'), { code: 'VFS_ATTACHMENT_LOST' }),
-          'refused',
-        );
-        if (!recapture || recaptures++ >= 1 || !state.canRecapture() || state.terminal())
+        const localRefusal = ownerChanged();
+        if (
+          expectedGeneration !== undefined ||
+          !recapture ||
+          recaptures++ >= 1 ||
+          !state.canRecapture() ||
+          state.terminal()
+        )
           return yield* Effect.fail(platform(localRefusal, method, path, state.fileName, mutate));
         refusal = localRefusal;
         differentGeneration = undefined;
@@ -281,6 +288,12 @@ const execute = <A>(
     }
   });
 };
+
+const ownerChanged = () =>
+  new VfsCommandError(
+    Object.assign(new Error('Owner changed before dispatch'), { code: 'VFS_ATTACHMENT_LOST' }),
+    'refused',
+  );
 
 const staleHandle = (state: Coordinator, method: string) =>
   PlatformError.systemError({
@@ -825,6 +838,23 @@ const openFlags: Record<FileSystem.OpenFlag, number> = {
 const validMode = (mode: unknown): mode is number =>
   typeof mode === 'number' && Number.isFinite(mode) && Number.isInteger(mode) && mode >= 0 && mode <= 0xffffffff;
 
+const validTime = (value: Date | number): number | PlatformError.PlatformError => {
+  if (!(value instanceof Date) && typeof value !== 'number')
+    return badArgument('utimes', 'time must be a Date or number');
+  let milliseconds: number;
+  try {
+    milliseconds = value instanceof Date ? Date.prototype.getTime.call(value) : value * 1000;
+  } catch {
+    return badArgument('utimes', 'time must be a valid Date or number');
+  }
+  return Number.isFinite(milliseconds) && Math.abs(milliseconds) <= 8.64e15
+    ? milliseconds
+    : badArgument('utimes', 'time must be a finite value within the supported date range');
+};
+
+const isMissing = (error: unknown) =>
+  remoteDetails(error instanceof VfsCommandError ? error.cause : error).code === 'ENOENT';
+
 interface FileHandle {
   readonly state: Coordinator;
   fd?: number;
@@ -844,7 +874,7 @@ const badArgument = (method: string, description: string) =>
   PlatformError.badArgument({ module: moduleName, method, description });
 
 const fileInfo = (value: VfsStat): FileSystem.File.Info => {
-  if (!Number.isSafeInteger(value.mode) || !Number.isSafeInteger(value.size) || value.size < 0)
+  if (!validMode(value.mode) || !Number.isSafeInteger(value.size) || value.size < 0)
     throw badArgument('stat', 'file metadata is outside the supported range');
   const optionalNumber = (number: number | undefined) =>
     number !== undefined && Number.isSafeInteger(number) && number >= 0 ? Option.some(number) : Option.none();
@@ -901,13 +931,72 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
   if (!state) throw new TypeError('Volume service was not created by this adapter');
   const fs = FileSystem.make({
     access: (path, options) =>
-      execute(state, 'access', path, async (backend, generation) => {
-        const info = await stat(backend, generation, path);
-        const read = (info.mode & 0o444) !== 0;
-        const write = (info.mode & 0o222) !== 0;
-        if ((options?.readable && !read) || (options?.writable && !write))
-          throw Object.assign(new Error('Permission denied'), { code: 'EACCES' });
-      }),
+      (options?.ok !== undefined && typeof options.ok !== 'boolean') ||
+      (options?.readable !== undefined && typeof options.readable !== 'boolean') ||
+      (options?.writable !== undefined && typeof options.writable !== 'boolean')
+        ? Effect.fail(badArgument('access', 'ok, readable, and writable must be booleans'))
+        : execute(state, 'access', path, async (backend, generation) => {
+            const info = await stat(backend, generation, path);
+            const read = (info.mode & 0o444) !== 0;
+            const write = (info.mode & 0o222) !== 0;
+            if ((options?.readable && !read) || (options?.writable && !write))
+              throw Object.assign(new Error('Permission denied'), { code: 'EACCES' });
+          }),
+    chmod: (path, mode) =>
+      !validMode(mode)
+        ? Effect.fail(badArgument('chmod', 'mode must be an unsigned 32-bit integer'))
+        : execute(
+            state,
+            'chmod',
+            path,
+            (backend, generation) =>
+              'forGeneration' in backend
+                ? backend.forGeneration(generation).chmod(path, mode)
+                : backend.chmodSync(path, mode),
+            true,
+          ),
+    chown: (path) => Effect.fail(invalidPath('chown', path) ?? unsupported('chown', path, state.fileName)),
+    glob: (pattern, options) => {
+      const rootFailure = options?.root === undefined ? undefined : invalidPath('glob', options.root);
+      return Effect.fail(rootFailure ?? unsupported('glob', pattern, state.fileName));
+    },
+    link: (existingPath, newPath) => {
+      const existingFailure = invalidPath('link', existingPath);
+      const newFailure = invalidPath('link', newPath);
+      if (existingFailure || newFailure) return Effect.fail(existingFailure ?? newFailure!);
+      return execute(
+        state,
+        'link',
+        existingPath,
+        (backend, generation) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).link(existingPath, newPath)
+            : backend.linkSync(existingPath, newPath),
+        true,
+      );
+    },
+    makeDirectory: (path, options) => {
+      if (options?.recursive !== undefined && typeof options.recursive !== 'boolean')
+        return Effect.fail(badArgument('makeDirectory', 'recursive must be a boolean'));
+      if (options?.mode !== undefined && !validMode(options.mode))
+        return Effect.fail(badArgument('makeDirectory', 'mode must be an unsigned 32-bit integer'));
+      const mode = options?.mode;
+      const recursive = options?.recursive ?? false;
+      return execute(
+        state,
+        'makeDirectory',
+        path,
+        (backend, generation) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).mkdir(path, { mode, recursive })
+            : backend.mkdirSync(path, { mode, recursive }),
+        true,
+      );
+    },
+    makeTempDirectory: unsupportedMethod('makeTempDirectory', state.fileName),
+    makeTempDirectoryScoped: unsupportedMethod('makeTempDirectoryScoped', state.fileName),
+    makeTempFile: unsupportedMethod('makeTempFile', state.fileName),
+    makeTempFileScoped: unsupportedMethod('makeTempFileScoped', state.fileName),
     readFile: (path) =>
       execute(
         state,
@@ -974,25 +1063,188 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
     },
     copy: unsupportedMethod('copy', state.fileName),
     copyFile: unsupportedMethod('copyFile', state.fileName),
-    chmod: unsupportedMethod('chmod', state.fileName),
-    chown: unsupportedMethod('chown', state.fileName),
-    glob: () => Effect.fail(unsupported('glob', undefined, state.fileName)),
-    link: unsupportedMethod('link', state.fileName),
-    makeDirectory: unsupportedMethod('makeDirectory', state.fileName),
-    makeTempDirectory: unsupportedMethod('makeTempDirectory', state.fileName),
-    makeTempDirectoryScoped: unsupportedMethod('makeTempDirectoryScoped', state.fileName),
-    makeTempFile: unsupportedMethod('makeTempFile', state.fileName),
-    makeTempFileScoped: unsupportedMethod('makeTempFileScoped', state.fileName),
     open: (path, options) => file(state, path, options?.flag ?? 'r', options?.mode),
-    readDirectory: unsupportedMethod('readDirectory', state.fileName),
-    readLink: unsupportedMethod('readLink', state.fileName),
-    realPath: unsupportedMethod('realPath', state.fileName),
-    remove: unsupportedMethod('remove', state.fileName),
-    rename: unsupportedMethod('rename', state.fileName),
-    stat: unsupportedMethod('stat', state.fileName),
-    symlink: unsupportedMethod('symlink', state.fileName),
-    truncate: unsupportedMethod('truncate', state.fileName),
-    utimes: unsupportedMethod('utimes', state.fileName),
+    readDirectory: (path, options) => {
+      if (options?.recursive !== undefined && typeof options.recursive !== 'boolean')
+        return Effect.fail(badArgument('readDirectory', 'recursive must be a boolean'));
+      const recursive = options?.recursive ?? false;
+      return Effect.suspend(() => {
+        const budget = { remaining: state.readinessTimeout };
+        return execute(
+          state,
+          'readDirectory',
+          path,
+          (_backend, generation) => {
+            const readEntries = (directory: string) =>
+              execute(
+                state,
+                'readDirectory',
+                directory,
+                (backend, current) =>
+                  'forGeneration' in backend
+                    ? backend.forGeneration(current).readdirEntries(directory)
+                    : backend.readdirEntriesSync(directory),
+                false,
+                false,
+                generation,
+                budget,
+              );
+            const result: Array<string> = [];
+            const visit = (directory: string, prefix: string): Effect.Effect<void, PlatformError.PlatformError> =>
+              Effect.gen(function* () {
+                const entries = [...(yield* readEntries(directory))].sort((left, right) =>
+                  left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+                );
+                for (const entry of entries) {
+                  const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+                  result.push(relative);
+                  if (recursive && entry.is_dir)
+                    yield* visit(
+                      directory === '/' ? `/${entry.name}` : `${directory.replace(/\/$/, '')}/${entry.name}`,
+                      relative,
+                    );
+                }
+              });
+            return Effect.gen(function* () {
+              yield* visit(path, '');
+              return result;
+            });
+          },
+          false,
+          false,
+          undefined,
+          budget,
+        );
+      });
+    },
+    readLink: (path) =>
+      execute(state, 'readLink', path, (backend, generation) =>
+        'forGeneration' in backend ? backend.forGeneration(generation).readlink(path) : backend.readlinkSync(path),
+      ),
+    realPath: (path) =>
+      execute(state, 'realPath', path, (backend, generation) =>
+        'forGeneration' in backend ? backend.forGeneration(generation).realpath(path) : backend.realpathSync(path),
+      ),
+    remove: (path, options) => {
+      if (options?.recursive !== undefined && typeof options.recursive !== 'boolean')
+        return Effect.fail(badArgument('remove', 'recursive must be a boolean'));
+      if (options?.force !== undefined && typeof options.force !== 'boolean')
+        return Effect.fail(badArgument('remove', 'force must be a boolean'));
+      const recursive = options?.recursive ?? false;
+      const force = options?.force ?? false;
+      if (recursive)
+        return execute(
+          state,
+          'remove',
+          path,
+          (backend, generation) =>
+            'forGeneration' in backend ? backend.forGeneration(generation).remove(path) : backend.removeSync(path),
+          true,
+        ).pipe(
+          Effect.catchTag('PlatformError', (error) =>
+            force && error.reason._tag === 'NotFound' ? Effect.void : Effect.fail(error),
+          ),
+        );
+      return execute(
+        state,
+        'remove',
+        path,
+        (backend, generation) => {
+          const lstat = () =>
+            'forGeneration' in backend ? backend.forGeneration(generation).lstat(path) : backend.lstatSync(path);
+          return Effect.gen(function* () {
+            const found = yield* Effect.tryPromise({
+              try: () => Promise.resolve(lstat()),
+              catch: (error) => error,
+            }).pipe(
+              Effect.catch((error) => (force && isMissing(error) ? Effect.succeed(undefined) : Effect.fail(error))),
+            );
+            if (!found) return;
+            const removeEntry = () => {
+              if (found.is_dir)
+                return 'forGeneration' in backend
+                  ? backend.forGeneration(generation).rmdir(path)
+                  : backend.rmdirSync(path);
+              return 'forGeneration' in backend
+                ? backend.forGeneration(generation).unlink(path)
+                : backend.unlinkSync(path);
+            };
+            yield* execute(state, 'remove', path, removeEntry, true, false, generation).pipe(
+              Effect.catchTag('PlatformError', (error) =>
+                force && error.reason._tag === 'NotFound' ? Effect.void : Effect.fail(error),
+              ),
+            );
+          });
+        },
+        false,
+        false,
+      );
+    },
+    rename: (oldPath, newPath) => {
+      const oldFailure = invalidPath('rename', oldPath);
+      const newFailure = invalidPath('rename', newPath);
+      if (oldFailure || newFailure) return Effect.fail(oldFailure ?? newFailure!);
+      return execute(
+        state,
+        'rename',
+        oldPath,
+        (backend, generation) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).rename(oldPath, newPath)
+            : backend.renameSync(oldPath, newPath),
+        true,
+      );
+    },
+    stat: (path) =>
+      execute(state, 'stat', path, (backend, generation) =>
+        'forGeneration' in backend
+          ? backend.forGeneration(generation).stat(path).then(fileInfo)
+          : fileInfo(backend.statSync(path)),
+      ),
+    symlink: (fromPath, toPath) => {
+      const pathFailure = invalidPath('symlink', toPath);
+      if (pathFailure) return Effect.fail(pathFailure);
+      if (typeof fromPath !== 'string') return Effect.fail(badArgument('symlink', 'target must be a string'));
+      return execute(
+        state,
+        'symlink',
+        toPath,
+        (backend, generation) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).symlink(fromPath, toPath)
+            : backend.symlinkSync(fromPath, toPath),
+        true,
+      );
+    },
+    truncate: (path, length = 0) =>
+      !Number.isSafeInteger(length) || length < 0
+        ? Effect.fail(badArgument('truncate', 'length must be a non-negative safe integer'))
+        : execute(
+            state,
+            'truncate',
+            path,
+            (backend, generation) =>
+              'forGeneration' in backend
+                ? backend.forGeneration(generation).truncate(path, length)
+                : backend.truncateSync(path, length),
+            true,
+          ),
+    utimes: (path, atime, mtime) => {
+      const atimeMs = validTime(atime);
+      const mtimeMs = validTime(mtime);
+      if (typeof atimeMs !== 'number') return Effect.fail(atimeMs);
+      if (typeof mtimeMs !== 'number') return Effect.fail(mtimeMs);
+      return execute(
+        state,
+        'utimes',
+        path,
+        (backend, generation) =>
+          'forGeneration' in backend
+            ? backend.forGeneration(generation).utimes(path, atimeMs, mtimeMs)
+            : backend.utimesSync(path, atimeMs, mtimeMs),
+        true,
+      );
+    },
     watch: () => Stream.fail(unsupported('watch', undefined, state.fileName)),
   });
   return fs;

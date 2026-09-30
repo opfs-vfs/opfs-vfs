@@ -21,6 +21,11 @@ descriptor I/O. Use `stream` and `sink` for bounded-memory transfers. See
 `examples/filesystem-save.ts` for handling persistence errors. A successful
 write does not mean the data is durable; await `volume.sync` at save boundaries.
 
+The adapter also supports path metadata, permissions, links, directory creation,
+listing, removal and rename. Filesystem operands must be absolute paths; relative
+symlink targets are preserved. `chown` and `glob` return typed unsupported
+errors, as do copy, temporary-path and watch operations in this slice.
+
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';
 import { OpfsFileSystem, Volume } from '@opfs-vfs/effect';
