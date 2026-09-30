@@ -1,5 +1,5 @@
 ---
-'@opfs-vfs/opfs-vfs': major
+'@opfs-vfs/opfs-vfs': minor
 '@opfs-vfs/react': patch
 ---
 
