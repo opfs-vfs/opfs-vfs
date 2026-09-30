@@ -206,6 +206,9 @@ export type SessionSaveResult =
   | { readonly _tag: 'Failed'; readonly useExit: SessionExit<'saved'> }
   | { readonly _tag: 'Unavailable' };
 
+/**
+ * `config` must match `initial`'s fileName, profile, and plugin request order. A replacement supplies a new secret only.
+ */
 export const makeSessionController = (
   initial: SessionRuntime,
   config: SessionConfigBase & { readonly profile: 'encrypted' | 'combined' },
