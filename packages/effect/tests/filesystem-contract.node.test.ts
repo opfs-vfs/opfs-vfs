@@ -25,6 +25,8 @@ it('runs the shared filesystem contract against pinned NodeFileSystem', async ()
     expect(result.realPathMatches).toBe(true);
     expect(result.copiedFileMatches).toBe(true);
     expect(result.copiedTreeMatches).toBe(true);
+    expect(result.copyFilePreservedLink).toBe(true);
+    expect(result.copyFileCopiedTarget).toBe(true);
     expect(result.writeInputRetained).toBe(true);
     expect(result.fileWriteInputRetained).toBe(true);
     expect(result.copiedLinkTarget).toBe(join(temporaryRoot, 'tree', 'nested', 'payload.bin'));
@@ -39,7 +41,8 @@ it('runs the shared filesystem contract against pinned NodeFileSystem', async ()
       directoryPrefix: true,
       fileExistsInScope: true,
       fileRemoved: true,
-      filePrefix: true,
+      fileParentPrefix: true,
+      fileBasenameExcludesPrefix: true,
       fileSuffix: true,
     });
     expect(result.file).toEqual({

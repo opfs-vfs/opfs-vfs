@@ -13,6 +13,8 @@ export interface FileSystemContractResult {
   readonly realPathMatches: boolean;
   readonly copiedFileMatches: boolean;
   readonly copiedTreeMatches: boolean;
+  readonly copyFilePreservedLink: boolean;
+  readonly copyFileCopiedTarget: boolean;
   readonly writeInputRetained: boolean;
   readonly fileWriteInputRetained: boolean;
   readonly overwriteReplacedLink: boolean;
@@ -26,12 +28,14 @@ export interface FileSystemContractResult {
     readonly directoryPrefix: boolean;
     readonly fileExistsInScope: boolean;
     readonly fileRemoved: boolean;
-    readonly filePrefix: boolean;
+    readonly fileParentPrefix: boolean;
+    readonly fileBasenameExcludesPrefix: boolean;
     readonly fileSuffix: boolean;
   };
   readonly file: {
     readonly bytesRead: number;
     readonly initial: ReadonlyArray<number>;
+    readonly positionAfterRead: bigint;
     readonly bytesWritten: number;
     readonly contents: ReadonlyArray<number>;
     readonly size: bigint;
@@ -74,6 +78,14 @@ export const runFilesystemContract = (
     const copiedLinkTarget = yield* fs.readLink(path('tree-copy', 'relative-link'));
     const copiedPayload = yield* fs.readFile(path('tree-copy', 'nested', 'payload.bin'));
 
+    const copyFileTarget = path('copy-file-target.bin');
+    const copyFileLink = path('copy-file-link.bin');
+    yield* fs.writeFile(copyFileTarget, Uint8Array.from([9]));
+    yield* fs.symlink('copy-file-target.bin', copyFileLink);
+    yield* fs.copyFile(source, copyFileLink);
+    const copyFileLinkTarget = yield* fs.readLink(copyFileLink);
+    const copyFileTargetBytes = yield* fs.readFile(copyFileTarget);
+
     const replacementTarget = path('replacement-target.bin');
     const replacementLink = path('replacement-link.bin');
     yield* fs.writeFile(replacementTarget, Uint8Array.from([9]));
@@ -105,6 +117,11 @@ export const runFilesystemContract = (
         yield* fs.writeFile(temporary, payload);
         return { path: temporary, exists: yield* fs.exists(temporary) };
       }),
+    );
+    const fileTempParent = fileTemp.path.replace(/[/\\][^/\\]+$/, '');
+    const fileTempBasename = fileTemp.path.slice(fileTempParent.length + 1);
+    const fileTempParentBasename = fileTempParent.slice(
+      Math.max(fileTempParent.lastIndexOf('/'), fileTempParent.lastIndexOf('\\')) + 1,
     );
 
     const filePath = path('cursor.bin');
@@ -159,6 +176,8 @@ export const runFilesystemContract = (
       realPathMatches: realPayload === expectedRealTarget && realLink === expectedRealTarget,
       copiedFileMatches: sameBytes(copiedFile, payload),
       copiedTreeMatches: sameBytes(copiedPayload, payload),
+      copyFilePreservedLink: copyFileLinkTarget === 'copy-file-target.bin',
+      copyFileCopiedTarget: sameBytes(copyFileTargetBytes, payload),
       writeInputRetained,
       fileWriteInputRetained,
       overwriteReplacedLink: replacementLinkResult._tag === 'Failure',
@@ -178,8 +197,9 @@ export const runFilesystemContract = (
         directoryPrefix: directoryTemp.path.includes('contract-dir-'),
         fileExistsInScope: fileTemp.exists,
         fileRemoved: !(yield* fs.exists(fileTemp.path)),
-        filePrefix: fileTemp.path.includes('contract-file-'),
-        fileSuffix: fileTemp.path.endsWith('.tmp'),
+        fileParentPrefix: fileTempParentBasename.startsWith('contract-file-'),
+        fileBasenameExcludesPrefix: !fileTempBasename.startsWith('contract-file-'),
+        fileSuffix: fileTempBasename.endsWith('.tmp'),
       },
       file: {
         bytesRead,

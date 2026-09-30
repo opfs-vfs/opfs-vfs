@@ -23,6 +23,8 @@ const assertContract = (result: Record<string, unknown>) => {
   expect(result.realPathMatches).toBe(true);
   expect(result.copiedFileMatches).toBe(true);
   expect(result.copiedTreeMatches).toBe(true);
+  expect(result.copyFilePreservedLink).toBe(true);
+  expect(result.copyFileCopiedTarget).toBe(true);
   expect(result.writeInputRetained).toBe(true);
   expect(result.fileWriteInputRetained).toBe(true);
   expect(result.copiedLinkTarget).toBe('nested/payload.bin');
@@ -37,7 +39,8 @@ const assertContract = (result: Record<string, unknown>) => {
     directoryPrefix: true,
     fileExistsInScope: true,
     fileRemoved: true,
-    filePrefix: true,
+    fileParentPrefix: true,
+    fileBasenameExcludesPrefix: true,
     fileSuffix: true,
   });
   expect(result.file).toEqual({
