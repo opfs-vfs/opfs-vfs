@@ -370,12 +370,17 @@ it.skipIf(!examplePath)(
         if (decoded) {
           terminalExit = exit;
           expect(example.Volume.errorOf(decoded.platform)).toBe(decoded.encryption);
-          expect(decoded.wrapper.outcome).toBe('unknown');
           break;
         }
         await wait(50);
       }
       expect(terminalExit).toBeDefined();
+      const afterTerminal = await follower.runPromiseExit(
+        example.Effect.gen(function* () {
+          return yield* (yield* example.FileSystem.FileSystem).readFileString('/session-save.txt');
+        }),
+      );
+      expect(credentialCause(example, afterTerminal)?.wrapper.outcome).toBe('not-applied');
 
       const replacement = controller.save('must-not-replay-this-save');
       const queuedBeforeReplacement = controller.save('queued-before-credential-prompt');
@@ -807,6 +812,128 @@ it.skipIf(!examplePath)(
       expect((await controller.save('after-failed-build'))._tag).toBe('Unavailable');
     } finally {
       releaseClose();
+      if (controller) await controller.close();
+      else if (follower) await dispose(example, follower);
+      await dispose(example, owner);
+      await deleteVolume(name);
+    }
+  },
+  60_000,
+);
+
+it.skipIf(!examplePath).each(['disposal', 'prompt', 'startup'] as const)(
+  'closes during %s without reopening admission or waiting for credentials',
+  async (phase) => {
+    const example = await load();
+    const name = fileName(`close-${phase}`);
+    const good = secret(example, 'correct-secret');
+    const owner = example.makeSessionRuntime({
+      fileName: name,
+      profile: 'combined',
+      openMode: 'create-new',
+      secret: good,
+    });
+    let follower: Runtime | undefined;
+    let controller: ReturnType<Example['makeSessionController']> | undefined;
+    const disposalEntered = Promise.withResolvers<void>();
+    const disposalReleased = Promise.withResolvers<void>();
+    const promptEntered = Promise.withResolvers<void>();
+    const credentials = Promise.withResolvers<Parameters<Example['createEncryptedLayer']>[1]>();
+    const startupEntered = Promise.withResolvers<void>();
+    let closing: ReturnType<ReturnType<Example['makeSessionController']>['close']> | undefined;
+    let disposed = false;
+    let prompts = 0;
+    const OriginalWorker = globalThis.Worker;
+    try {
+      await start(example, owner);
+      follower = example.makeSessionRuntime({
+        fileName: name,
+        profile: 'combined',
+        openMode: 'open-existing',
+        secret: secret(example, 'wrong-secret'),
+      });
+      await start(example, follower);
+      const backend = await follower.runPromise(
+        example.Effect.gen(function* () {
+          return example.Volume.unsafeBackend(yield* example.Volume.Volume);
+        }),
+      );
+      await dispose(example, owner);
+      await vi.waitFor(
+        async () => {
+          const exit = await follower!.runPromiseExit(
+            example.Effect.gen(function* () {
+              return yield* (yield* example.FileSystem.FileSystem).readFileString('/missing.txt');
+            }),
+          );
+          expect(credentialCause(example, exit)).toBeDefined();
+        },
+        { timeout: 20_000, interval: 20 },
+      );
+      const originalClose = backend.closeVfs.bind(backend);
+      Object.assign(backend, {
+        closeVfs: async () => {
+          disposalEntered.resolve();
+          await disposalReleased.promise;
+          await originalClose();
+          disposed = true;
+        },
+      });
+      controller = example.makeSessionController(follower, { fileName: name, profile: 'combined' }, async () => {
+        prompts++;
+        expect(disposed).toBe(true);
+        promptEntered.resolve();
+        return credentials.promise;
+      });
+      const saving = controller.save('must-not-be-replayed');
+      await disposalEntered.promise;
+      if (phase === 'disposal') {
+        closing = controller.close();
+        let closeSettled = false;
+        void closing.then(() => {
+          closeSettled = true;
+          expect(disposed).toBe(true);
+        });
+        await Promise.resolve();
+        expect(closeSettled).toBe(false);
+        disposalReleased.resolve();
+      } else {
+        disposalReleased.resolve();
+        await promptEntered.promise;
+        if (phase === 'prompt') {
+          closing = controller.close();
+        } else {
+          vi.stubGlobal(
+            'Worker',
+            class extends OriginalWorker {
+              constructor(url: string | URL, options?: WorkerOptions) {
+                super(url, options);
+                closing = controller!.close();
+                startupEntered.resolve();
+              }
+            },
+          );
+          credentials.resolve(good);
+          await startupEntered.promise;
+        }
+      }
+      expect(closing).toBeDefined();
+      // Bound the regression: an unanswered prompt must not keep close pending.
+      expect(await Promise.race([closing!.then(() => true), wait(1_000).then(() => false)])).toBe(true);
+      expect((await closing!)._tag).toBe('Success');
+      expect(disposed).toBe(true);
+      const result = await saving;
+      expect(result._tag).toBe(phase === 'startup' ? 'Replaced' : 'ReplacementCancelled');
+      expect(prompts).toBe(phase === 'disposal' ? 0 : 1);
+      expect(controller.runtime()).toBeUndefined();
+      credentials.resolve(good);
+      await credentials.promise;
+      expect((await controller.save('late-answer-must-not-reopen'))._tag).toBe('Unavailable');
+      expect(controller.runtime()).toBeUndefined();
+    } finally {
+      globalThis.Worker = OriginalWorker;
+      disposalReleased.resolve();
+      credentials.resolve(good);
       if (controller) await controller.close();
       else if (follower) await dispose(example, follower);
       await dispose(example, owner);

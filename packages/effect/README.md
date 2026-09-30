@@ -134,7 +134,9 @@ it after the owning scope closes.
 encryption and subscriptions, inspects before opening an existing encrypted
 volume, and keeps one `ManagedRuntime` for the session. Its save controller
 serializes work and credential replacement, preserves use and disposal exits,
-and never replays the failed save. The creation helper is the only path that
+and never replays the failed save. Closing stops admission immediately, abandons
+a pending credential prompt, ignores late answers, and waits for runtime disposal.
+The creation helper is the only path that
 accepts an initial passkey. Its controller config must match the initial
 runtime's file name, profile, and plugin order; a replacement supplies a new
 secret only. The paired

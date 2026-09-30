@@ -216,6 +216,8 @@ export const makeSessionController = (
 ) => {
   let current: SessionRuntime | undefined = initial;
   let accepting = true;
+  let closed = false;
+  const closeRequested = Promise.withResolvers<undefined>();
   let serial = Promise.resolve();
   const ordered = <A>(work: () => Promise<A>): Promise<A> => {
     const result = serial.then(work, work);
@@ -243,13 +245,15 @@ export const makeSessionController = (
       const disposeExit = await Effect.runPromiseExit(previous.disposeEffect);
       if (Exit.isFailure(disposeExit)) return { _tag: 'ReplacementBlocked', useExit, disposeExit };
 
+      if (closed) return { _tag: 'ReplacementCancelled', useExit, disposeExit };
+
       let secret: Secret | undefined;
       try {
-        secret = await requestCredentials(credentials);
+        secret = await Promise.race([requestCredentials(credentials), closeRequested.promise]);
       } catch {
         return { _tag: 'ReplacementCancelled', useExit, disposeExit };
       }
-      if (!secret) return { _tag: 'ReplacementCancelled', useExit, disposeExit };
+      if (closed || !secret) return { _tag: 'ReplacementCancelled', useExit, disposeExit };
 
       const replacement = makeSessionRuntime({ ...config, openMode: 'open-existing', secret });
       const startExit: SessionExit<void> = await replacement.runPromiseExit(Effect.void);
@@ -258,20 +262,23 @@ export const makeSessionController = (
         return { _tag: 'ReplacementFailed', useExit, disposeExit, startExit, replacementDisposeExit };
       }
       current = replacement;
-      accepting = true;
+      accepting = !closed;
       return { _tag: 'Replaced', useExit, disposeExit, startExit };
     });
   };
 
   const runtime = () => current;
-  const close = () =>
-    ordered(async () => {
-      accepting = false;
+  const close = () => {
+    closed = true;
+    accepting = false;
+    closeRequested.resolve(undefined);
+    return ordered(async () => {
       if (!current) return Exit.succeed(undefined);
       const closing = current;
       current = undefined;
       return Effect.runPromiseExit(closing.disposeEffect);
     });
+  };
 
   return { save, runtime, close };
 };
