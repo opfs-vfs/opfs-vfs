@@ -54,7 +54,8 @@ when the application also invalidates and reconciles its current view. The
 standard watch API has no registration-ready signal, so use rich subscriptions
 when a view must subscribe before its initial scan. See
 `examples/reconciled-view.ts` for subscribe-before-scan recovery with bounded
-retries and retirement waiting.
+retries and retirement waiting. Its three-retry budget resets after a fresh scan
+is successfully published.
 
 `Subscriptions.layer` provides the Effect subscriptions service when the mounted
 volume has the compatible logical-change capability. Worker mounts request it

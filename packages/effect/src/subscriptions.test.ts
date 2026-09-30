@@ -1169,7 +1169,7 @@ describe('Effect subscriptions', () => {
     });
   });
 
-  it('makes at most three retries for pure notification failures and leaves the last failure visible', async () => {
+  it('makes at most three retries before a scan is published and leaves the last failure visible', async () => {
     const interrupted = new SubscriptionError({
       code: 'SUBSCRIPTION_INTERRUPTED',
       fileName: volume.fileName,
@@ -1186,10 +1186,7 @@ describe('Effect subscriptions', () => {
             subscribe: () =>
               Effect.gen(function* () {
                 yield* Queue.offer(attempts, ++registrations);
-                return {
-                  changes: Stream.fail(interrupted),
-                  retired: Effect.succeed({ status: 'released' as const }),
-                };
+                return yield* Effect.fail(interrupted);
               }),
           });
           const fiber = yield* Effect.forkChild(
@@ -1214,6 +1211,52 @@ describe('Effect subscriptions', () => {
       _tag: 'Failure',
       cause: { reasons: [expect.objectContaining({ _tag: 'Fail', error: interrupted })] },
     });
+  });
+
+  it('renews the retry budget after each successfully published scan', async () => {
+    const interrupted = new SubscriptionError({
+      code: 'SUBSCRIPTION_INTERRUPTED',
+      fileName: volume.fileName,
+      path: '/',
+      details: null,
+    });
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const published = yield* Queue.unbounded<number>();
+          const interruptions = yield* Queue.unbounded<void>();
+          const stale = yield* Queue.unbounded<void>();
+          let registrations = 0;
+          const fakeSubscriptions = Layer.succeed(Subscriptions, {
+            subscribe: () =>
+              Effect.sync(() => {
+                registrations++;
+                return {
+                  changes: Stream.fromEffect(Queue.take(interruptions).pipe(Effect.andThen(Effect.fail(interrupted)))),
+                  retired: Effect.succeed({ status: 'released' as const }),
+                };
+              }),
+          });
+          const watcher = yield* Effect.forkChild(
+            keepViewCurrent({
+              path: '/',
+              publish: () => Queue.offer(published, registrations),
+              markStale: () => Queue.offer(stale, undefined),
+            }).pipe(Effect.provide(Layer.merge(fakeSubscriptions, fileSystemLayer))),
+          );
+          expect(yield* Queue.take(published)).toBe(1);
+          for (let expected = 2; expected <= 5; expected++) {
+            yield* Queue.offer(interruptions, undefined);
+            yield* Queue.take(stale);
+            yield* Effect.yieldNow;
+            yield* TestClock.adjust(250);
+            expect(registrations).toBe(expected);
+            expect(yield* Queue.take(published)).toBe(expected);
+          }
+          yield* Fiber.interrupt(watcher);
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    );
   });
 
   it('does not retry nonrecoverable subscription failures', async () => {

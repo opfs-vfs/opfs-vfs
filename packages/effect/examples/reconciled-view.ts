@@ -35,6 +35,7 @@ export const keepViewCurrent = (options: ReconciledViewOptions) =>
     const fs = yield* FileSystem.FileSystem;
     const subscriptions = yield* Subscriptions.Subscriptions;
 
+    let retries = 0;
     const attempt = Effect.gen(function* () {
       let retired: Effect.Effect<Subscriptions.SubscriptionRetirement> | undefined;
       const exit = yield* Effect.exit(
@@ -48,6 +49,7 @@ export const keepViewCurrent = (options: ReconciledViewOptions) =>
             });
             retired = sub.retired;
             yield* options.publish(yield* fs.readDirectory(options.path, { recursive: true }));
+            retries = 0;
             yield* sub.changes.pipe(
               Stream.runForEach(() =>
                 fs.readDirectory(options.path, { recursive: true }).pipe(Effect.flatMap(options.publish)),
@@ -64,7 +66,7 @@ export const keepViewCurrent = (options: ReconciledViewOptions) =>
       Effect.catchCause((cause) => Effect.fail(cause)),
       Effect.retry(($) =>
         $(Schedule.spaced('250 millis')).pipe(
-          Schedule.while(({ input, attempt }) => attempt <= 3 && isRecoverableCause(input)),
+          Schedule.while(({ input }) => isRecoverableCause(input) && ++retries <= 3),
         ),
       ),
       Effect.catch((cause) => Effect.failCause(cause)),
