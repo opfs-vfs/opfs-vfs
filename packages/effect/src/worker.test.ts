@@ -1521,7 +1521,7 @@ describe('Volume worker acquisition and sessions', () => {
     );
   });
 
-  it('wakes a queued writer on terminal worker status without dispatching it', async () => {
+  it.each(['worker failure', 'scope close'])('wakes a queued writer on %s without dispatching it', async (ending) => {
     const client = new FakeWorkerClient();
     workerMocks.open.mockResolvedValue(clientAsCore(client));
     const entered = await Effect.runPromise(Deferred.make<void>());
@@ -1535,23 +1535,34 @@ describe('Volume worker acquisition and sessions', () => {
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const service = yield* Volume.make(mount());
+          const owner = yield* Scope.make();
+          const service = yield* Volume.make(mount()).pipe(Effect.provideService(Scope.Scope, owner));
           const fs = OpfsFileSystem.make(service);
           const writer = yield* Effect.forkChild(fs.writeFile('/note.txt', new Uint8Array([1])));
           yield* Deferred.await(entered);
           const queued = yield* Effect.forkChild(Effect.result(fs.writeFile('/note.txt', new Uint8Array([2]))));
           yield* Effect.sleep(0);
-          client.publish({
-            state: 'failed',
-            role: null,
-            ownerGeneration: null,
-            error: { message: 'crash', code: 'VFS_WORKER_FAILED' },
-          });
+          if (ending === 'scope close') yield* Scope.close(owner, Exit.void);
+          else
+            client.publish({
+              state: 'failed',
+              role: null,
+              ownerGeneration: null,
+              error: { message: 'crash', code: 'VFS_WORKER_FAILED' },
+            });
           yield* Deferred.succeed(resume, undefined);
           const result = yield* Fiber.join(queued);
-          expect(result._tag).toBe('Failure');
+          expect(result).toMatchObject({
+            _tag: 'Failure',
+            failure: {
+              reason: {
+                cause: { _tag: 'VolumeError', fileName: 'worker.bin', operation: 'writeFile', outcome: 'not-applied' },
+              },
+            },
+          });
           yield* Fiber.join(writer);
           expect(client.writes).toHaveLength(1);
+          yield* Scope.close(owner, Exit.void);
         }),
       ),
     );

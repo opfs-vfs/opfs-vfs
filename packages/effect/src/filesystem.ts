@@ -128,7 +128,11 @@ const execute = <A>(
       if (admitted._tag === 'Failure')
         return yield* Effect.fail(
           platform(
-            refusal && remoteDetails(admitted.failure).code === 'VFS_OWNER_READY_TIMEOUT' ? refusal : admitted.failure,
+            refusal && remoteDetails(admitted.failure).code === 'VFS_OWNER_READY_TIMEOUT'
+              ? refusal
+              : state.terminal()
+                ? terminalCommandError(admitted.failure, state.fileName, method, 'not-applied')
+                : admitted.failure,
             method,
             path,
             state.fileName,
@@ -148,7 +152,11 @@ const execute = <A>(
                     Effect.acquireRelease(Semaphore.take(state.gate, 1), () => Semaphore.release(state.gate, 1), {
                       interruptible: true,
                     }),
-                    Deferred.await(state.terminalSignal).pipe(Effect.flatMap(Effect.fail)),
+                    Deferred.await(state.terminalSignal).pipe(
+                      Effect.flatMap((terminal) =>
+                        Effect.fail(terminalCommandError(terminal, state.fileName, method, 'not-applied')),
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -156,14 +164,15 @@ const execute = <A>(
             const current = state.currentGeneration();
             if (state.isClosed() || terminal)
               return yield* Effect.fail(
-                terminal ??
-                  new VolumeError({
-                    kind: 'lifecycle',
-                    fileName: state.fileName,
-                    operation: method,
-                    outcome: 'not-applied',
-                    details: null,
-                  }),
+                terminal
+                  ? terminalCommandError(terminal, state.fileName, method, 'not-applied')
+                  : new VolumeError({
+                      kind: 'lifecycle',
+                      fileName: state.fileName,
+                      operation: method,
+                      outcome: 'not-applied',
+                      details: null,
+                    }),
               );
             if (current !== generation) return yield* Effect.succeed({ retry: true as const });
             const old = state.continuity;
