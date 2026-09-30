@@ -22,6 +22,8 @@
     "apps/website/src/workers/gemma-runtime.worker.ts",
     "apps/website/src/styles/docs.css",
     "packages/effect/examples/direct.ts",
+    "packages/effect/examples/worker-session.ts",
+    "packages/effect/tests/packed-worker-session.test.ts",
     "packages/effect/vitest.packed.config.ts",
     "examples/duckdb/main.ts",
     "packages/devtools/.storybook/middleware.mjs",

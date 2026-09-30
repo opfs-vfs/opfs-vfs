@@ -167,6 +167,7 @@ const encryptionReasons: Partial<Record<string, EncryptionError['reason']>> = {
 
 export const classify = (details: RemoteErrorDetails): VolumeErrorKind => {
   const { code, category, name } = details;
+  if (code === 'VFS_WORKER_FACTORY_FAILED') return 'configuration';
   if (category || ['VfsCorruptionError', 'MetaSnapshotCorruptionError', 'DataWalCorruptionError'].includes(name ?? ''))
     return 'corruption';
   if (code && encryptionReasons[code]) return 'encryption';

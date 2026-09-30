@@ -50,19 +50,54 @@ const defaultSharedWorker: SharedWorkerFactory = (fileName) =>
 
 const abortError = (signal: AbortSignal) => signal.reason ?? new DOMException('Aborted', 'AbortError');
 
+function abortableProbe<T>(signal: AbortSignal | undefined, timeout: number, start: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (value?: T, error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      if (error === undefined) resolve(value!);
+      else reject(error);
+    };
+    const abort = () => {
+      const error = abortError(signal!);
+      finish(undefined, error);
+    };
+    const timer = setTimeout(() => {
+      const error = Object.assign(new Error('Existing volume owner probe timed out'), {
+        code: 'VFS_INITIALIZATION_TIMEOUT',
+      });
+      finish(undefined, error);
+    }, timeout);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) return abort();
+    Promise.resolve()
+      .then(() => (settled ? undefined : start()))
+      .then(
+        (value) => {
+          if (!settled) finish(value);
+        },
+        (error) => finish(undefined, error),
+      );
+  });
+}
+
 async function hasCompatibleDedicatedOwner(
   fileName: string,
   options: OpfsVfsWorkerOptions,
   signal?: AbortSignal,
 ): Promise<'compatible' | 'none'> {
   if (signal?.aborted) throw abortError(signal);
-  const held =
+  const held = await abortableProbe(signal, options.initTimeout || 15_000, () =>
     typeof navigator.locks.query === 'function'
       ? navigator.locks
           .query()
           .then((locks) => (locks.held ?? []).some((lock) => lock.name === `opfs-vfs-lock-${fileName}`))
-      : navigator.locks.request(`opfs-vfs-lock-${fileName}`, { ifAvailable: true }, (lock) => lock === null);
-  if (!(await held)) return 'none';
+      : navigator.locks.request(`opfs-vfs-lock-${fileName}`, { ifAvailable: true }, (lock) => lock === null),
+  );
+  if (!held) return 'none';
   const expected = preparePluginRequests(options.plugins, options.openMode, fileName).profile;
   return new Promise((resolve, reject) => {
     const channel = new BroadcastChannel(`opfs-vfs-${fileName}`);
