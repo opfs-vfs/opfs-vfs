@@ -19,7 +19,45 @@ bounded whole-file helpers up to 16 MiB. Larger files and other open flags use
 descriptor I/O. Use `stream` and `sink` for bounded-memory transfers. See
 `examples/filesystem-stream.ts` for a chunked copy and
 `examples/filesystem-save.ts` for handling persistence errors. A successful
-write does not mean the data is durable; await `volume.sync` at save boundaries.
+write does not mean the data is durable; use `Volume.withSync` or await
+`volume.sync` at save boundaries.
+
+### Save boundaries
+
+`effect.pipe(Volume.withSync)` runs the effect, then syncs the `Volume` service
+on success and preserves its value. Its filesystem must use that same volume
+instance. If the wrapped operation fails, defects, or is interrupted, the helper does
+not start its success sync and preserves the original failure. Existing
+cancellation behavior still applies; cancellation can occur after sync dispatch
+and does not guarantee that sync completes.
+A sync failure fails the wrapped effect. Each wrapper syncs once after success,
+including nested wrappers. Wrap a batch once to share its sync cost. There is
+no isolation or rollback, and concurrent writes can also be flushed.
+
+The default balanced mode schedules background synchronization about 150 ms
+after the first dirty change, without restarting the timer for later changes.
+This is not a durability deadline: scheduling, worker suspension, and I/O or
+quota failures can delay or prevent completion. Background failures record a
+persistence error rather than retroactively failing a completed write.
+
+| Approach                                  | Benefit                                             | Cost or limit                                                        |
+| ----------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------- |
+| Background balanced mode                  | Groups nearby writes without awaiting each flush.   | Write success does not acknowledge durability.                       |
+| `Volume.withSync` or manual `volume.sync` | Returns an explicit sync result at a save boundary. | The caller waits for sync and its I/O cost.                          |
+| One wrapper around a batch                | Syncs once after all writes succeed.                | Failure can leave earlier writes applied without the wrapper's sync. |
+
+Disk mode avoids a full RAM copy of file contents, but its OPFS writes and
+metadata still need flushing for confirmation. Balanced background sync applies
+in disk mode too. A confirmed save needs `Volume.withSync` or manual sync in
+either buffer mode; eventual balanced persistence does not require sync after
+each individual write.
+
+Background flushing and explicit boundaries are complementary. Relaxed mode
+defers flushing to explicit sync or orderly close. Strict mode additionally
+flushes memory-mode recovery records, not every disk-mode write. A clean
+`volume.persistence` snapshot does not prove an earlier save survived an owner
+change. See the [Effect guide](https://opfs.dev/docs/effect/) for session lifetime
+and uncertain-save handling.
 
 The adapter also supports path metadata, permissions, links, directory creation,
 listing, removal, rename, recursive copy and volume-local temporary paths.
@@ -110,10 +148,8 @@ const FileSystemLive = Layer.provideMerge(OpfsFileSystem.layer, Volume.layer({ f
 
 const app = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
-  const volume = yield* Volume.Volume;
   yield* fs.writeFileString('/note.txt', 'Hello');
-  yield* volume.sync;
-}).pipe(Effect.provide(FileSystemLive));
+}).pipe(Volume.withSync, Effect.provide(FileSystemLive));
 ```
 
 `make` and `layer` own a worker client in the current `Scope`. The bundled
