@@ -14,12 +14,12 @@ const program = Effect.gen(function* () {
 ```
 
 `OpfsFileSystem.layer` builds the standard `FileSystem` service on a mounted
-`Volume`. Current support includes absolute-path `access` and whole-file reads
-up to 16 MiB. Writes are limited to 16 MiB, with flags `w`, `wx`, or `ax` and
-no explicit `mode`. The remaining required methods fail with a typed
-unsupported error. See `examples/filesystem-save.ts` for handling errors from
-`volume.sync`. A successful write does not mean the data is durable; await
-`volume.sync` at save boundaries.
+`Volume`. It supports scoped file handles, descriptor reads and writes, and
+bounded whole-file helpers up to 16 MiB. Larger files and other open flags use
+descriptor I/O. Use `stream` and `sink` for bounded-memory transfers. See
+`examples/filesystem-stream.ts` for a chunked copy and
+`examples/filesystem-save.ts` for handling persistence errors. A successful
+write does not mean the data is durable; await `volume.sync` at save boundaries.
 
 ```ts
 import { Effect, FileSystem, Layer } from 'effect';

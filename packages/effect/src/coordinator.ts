@@ -1,4 +1,5 @@
 import { Deferred, Effect, Semaphore } from 'effect';
+import type { Scope } from 'effect';
 import type { OpfsVfs } from '@opfs-vfs/opfs-vfs';
 import type { OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
 import type { VolumeService } from './volume.js';
@@ -12,6 +13,7 @@ export type Continuity =
 
 export interface Coordinator {
   readonly backend: Backend;
+  readonly scope?: Scope.Scope;
   readonly fileName: string;
   readonly isClosed: () => boolean;
   readonly currentGeneration: () => string | undefined;
@@ -21,15 +23,19 @@ export interface Coordinator {
   readonly awaitReady: (budget: { remaining: number }, operation: string) => Effect.Effect<string, VolumeError>;
   readonly gate: Semaphore.Semaphore;
   readonly terminalSignal: Deferred.Deferred<VolumeError>;
+  readonly files: Set<() => Effect.Effect<void>>;
   continuity: Continuity;
 }
 
 const coordinators = new WeakMap<VolumeService, Coordinator>();
 
-export const makeCoordinator = (options: Omit<Coordinator, 'gate' | 'terminalSignal' | 'continuity'>): Coordinator => ({
+export const makeCoordinator = (
+  options: Omit<Coordinator, 'gate' | 'terminalSignal' | 'continuity' | 'files'>,
+): Coordinator => ({
   ...options,
   gate: Semaphore.makeUnsafe(1),
   terminalSignal: Deferred.makeUnsafe<VolumeError>(),
+  files: new Set(),
   continuity: { _tag: 'clean' },
 });
 

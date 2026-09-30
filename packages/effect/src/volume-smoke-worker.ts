@@ -7,6 +7,7 @@ import { OpfsFileSystem } from './filesystem.js';
 self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
   const fileName = `effect-${crypto.randomUUID()}.bin`;
   let pluginFile: string | undefined;
+  let exampleFile: string | undefined;
   try {
     const before = await Effect.runPromise(Volume.inspect(fileName));
     const first = await Effect.runPromise(
@@ -56,14 +57,20 @@ self.onmessage = async ({ data }: MessageEvent<{ example?: string }>) => {
     const exampleResult = example
       ? 'save' in example
         ? await Effect.runPromise((example as typeof import('../examples/direct.js')).save)
-        : await (example as typeof import('../examples/filesystem-save.js')).saveNote()
+        : 'streamFile' in example
+          ? await (example as typeof import('../examples/filesystem-stream.js')).streamFile(
+              (exampleFile = `effect-stream-${crypto.randomUUID()}.bin`),
+            )
+          : await (example as typeof import('../examples/filesystem-save.js')).saveNote()
       : undefined;
     await deleteVolume(fileName);
     await deleteVolume(pluginFile);
+    if (exampleFile) await deleteVolume(exampleFile);
     self.postMessage({ ok: true, before, after, first, reopened, example: { state: 'clean', result: exampleResult } });
   } catch (error) {
     await deleteVolume(fileName).catch(() => {});
     if (pluginFile) await deleteVolume(pluginFile).catch(() => {});
+    if (exampleFile) await deleteVolume(exampleFile).catch(() => {});
     self.postMessage({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 };
