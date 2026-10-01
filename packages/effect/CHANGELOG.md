@@ -1,5 +1,11 @@
 # @opfs-vfs/effect
 
+## 0.3.0
+
+### Minor Changes
+
+- 4678e0c: Upgrade the Effect adapter to stable Effect 4.0.0. Consumers must upgrade their Effect runtime from the exact `4.0.0-rc.118` peer dependency to `4.0.0`.
+
 ## 0.2.0
 
 ### Minor Changes
