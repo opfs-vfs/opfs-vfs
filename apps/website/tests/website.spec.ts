@@ -128,7 +128,7 @@ test('docs share the website brand and mobile header links stay centered', async
 });
 
 test('mobile menu keeps the header compact and supports keyboard and dismissal', async ({ page }) => {
-  for (const width of [320, 390, 700, 900]) {
+  for (const width of [320, 390, 700, 767]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/demos/');
     const toggle = page.getByRole('button', { name: 'Menu', exact: true });
@@ -146,7 +146,7 @@ test('mobile menu keeps the header compact and supports keyboard and dismissal',
     await expect(nav).toBeVisible();
     await expect(nav.getByRole('link')).toHaveCount(8);
     await expect(nav.getByRole('link', { name: 'Plugins', exact: true })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'React SDK', exact: true })).toHaveAttribute('href', '/#react-sdk');
+    await expect(nav.getByRole('link', { name: 'SDKs & adapters', exact: true })).toHaveAttribute('href', '/#sdks');
     await expect(nav.getByRole('link', { name: 'GitHub' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.keyboard.press('Escape');
@@ -218,7 +218,7 @@ test('plugins expose their availability and animations can be paused or reduced'
 });
 
 test('floating navigation stays reachable and clears anchors on desktop and mobile', async ({ page }) => {
-  for (const width of [320, 390, 901, 1440]) {
+  for (const width of [320, 390, 768, 900, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/');
     const header = page.locator('.site-header');
@@ -229,8 +229,8 @@ test('floating navigation stays reachable and clears anchors on desktop and mobi
     expect(initial!.y).toBeGreaterThan(0);
     await expect(header).not.toHaveCSS('box-shadow', 'none');
     const menu = page.getByRole('button', { name: 'Menu', exact: true });
-    const anchor = (id: string) => page.locator(`${width <= 900 ? '.mobile-nav' : '.site-nav'} a[href="/#${id}"]`);
-    if (width <= 900) await menu.click();
+    const anchor = (id: string) => page.locator(`${width <= 767 ? '.mobile-nav' : '.site-nav'} a[href="/#${id}"]`);
+    if (width <= 767) await menu.click();
     const nav = page.getByRole('navigation', { name: 'Primary', exact: true });
     const plugins = nav.getByRole('link', { name: 'Plugins', exact: true });
     await plugins.click();
@@ -239,10 +239,10 @@ test('floating navigation stays reachable and clears anchors on desktop and mobi
       .toBeGreaterThan(initial!.y + initial!.height);
     await expect(anchor('plugins')).toHaveAttribute('aria-current', 'location');
     await expect(page.locator('.mobile-navigation')).not.toHaveAttribute('open');
-    if (width <= 900) await menu.click();
-    const reactSdk = nav.getByRole('link', { name: 'React SDK', exact: true });
-    await reactSdk.click();
-    await expect(anchor('react-sdk')).toHaveAttribute('aria-current', 'location');
+    if (width <= 767) await menu.click();
+    const sdks = nav.getByRole('link', { name: 'SDKs & adapters', exact: true });
+    await sdks.click();
+    await expect(anchor('sdks')).toHaveAttribute('aria-current', 'location');
     await expect(page.locator('.mobile-navigation')).not.toHaveAttribute('open');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole('combobox', { name: 'Color theme', exact: true }).click();
@@ -255,7 +255,7 @@ test('floating navigation stays reachable and clears anchors on desktop and mobi
   const toggle = page.getByRole('button', { name: 'Menu', exact: true });
   await toggle.focus();
   await toggle.press('Enter');
-  for (let i = 0; i < 8; i++) await page.keyboard.press('Tab');
+  for (let i = 0; i < 9; i++) await page.keyboard.press('Tab');
   const lastLink = page.locator('.mobile-nav').getByRole('link', { name: 'GitHub' });
   await expect(lastLink).toBeFocused();
   const link = await lastLink.boundingBox();

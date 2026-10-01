@@ -141,6 +141,7 @@ Second line`);
 });
 
 test('keeps an autosave-blocked draft when another tab saves first', async ({ page, context }) => {
+  await page.clock.install({ time: new Date('2026-10-01T12:00:00') });
   await openTodos(page);
   await page.getByRole('button', { name: 'New list' }).click();
   await expect(page.getByLabel('Title')).toBeVisible();
@@ -148,12 +149,19 @@ test('keeps an autosave-blocked draft when another tab saves first', async ({ pa
   try {
     await openTodos(second);
     await expect(second.getByLabel('Title')).toBeVisible({ timeout: 30_000 });
-    await page.getByLabel('Title').fill('Local draft');
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     await second.getByLabel('Title').fill('Saved elsewhere');
-    await second.getByLabel('Add task').fill('Commit remote title');
-    await second.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.clock.runFor(200);
+    await page.getByLabel('Title').fill('Local draft');
+    await page.clock.runFor(200);
     await expect(second.getByLabel('Saved Markdown')).toContainText('Saved elsewhere');
-    await expect(page.getByRole('status')).toContainText('newer saved version');
+    // Flush the deferred subscription notification without advancing the local autosave deadline.
+    await page.clock.runFor(0);
+    await expect(page.locator('.react-todos').getByRole('status')).toContainText('newer saved version');
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Local draft');
+    await page.clock.runFor(400);
+    await expect(page.locator('.react-todos').getByRole('status')).toContainText('newer saved version');
+    await expect(second.getByLabel('Saved Markdown')).toContainText('Saved elsewhere');
     await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Local draft');
     await page.getByRole('button', { name: 'Reload saved' }).click();
     await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Saved elsewhere');
