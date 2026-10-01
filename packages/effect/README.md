@@ -1,6 +1,6 @@
 # @opfs-vfs/effect
 
-Effect v4 adapter for worker-backed OPFS volumes and direct mounts. Requires `effect@4.0.0-rc.118`.
+Effect v4 adapter for worker-backed OPFS volumes and direct mounts. Requires stable `effect@4.0.0`; consumers must upgrade their Effect runtime to 4.0.0.
 
 ```ts
 import { Effect } from 'effect';
