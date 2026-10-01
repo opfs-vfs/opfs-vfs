@@ -19,7 +19,7 @@ New mounts default to disk buffering and balanced background synchronization. Se
 | [@opfs-vfs/devtools](https://www.npmjs.com/package/@opfs-vfs/devtools)                         | Volume Explorer with file actions, a shell, previews, and app debugging | [Volume Explorer guide](packages/devtools/README.md)           |
 | [@opfs-vfs/file-preview](https://www.npmjs.com/package/@opfs-vfs/file-preview)                 | Reusable React file previews and a virtualized text editor              | [File preview guide](packages/file-preview/README.md)          |
 
-The React SDK preview requires React 19. The Effect adapter requires `effect@4.0.0-rc.118`. See each package guide for installation and peer dependencies.
+The React SDK preview requires React 19. The Effect adapter requires stable `effect@4.0.0`; consumers must upgrade their Effect runtime to 4.0.0. See each package guide for installation and peer dependencies.
 
 The private [website workspace](apps/website/README.md) contains marketing, docs, demos, and live benchmarks. It consumes the public packages through `workspace:*`; it is not published to npm. The [experimental DuckDB adapter](docs/DUCKDB.md) persists analytics databases through OPFS VFS using separately built, compatible DuckDB-Wasm assets.
 

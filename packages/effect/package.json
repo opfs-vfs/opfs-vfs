@@ -42,13 +42,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@effect/platform-node": "4.0.0-rc.118",
+    "@effect/platform-node": "4.0.0",
     "@opfs-vfs/opfs-vfs": "workspace:*",
     "@opfs-vfs/plugin-subscriptions": "workspace:*",
     "@types/node": "22.20.3",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
-    "effect": "4.0.0-rc.118",
+    "effect": "4.0.0",
     "playwright": "1.59.1",
     "vite": "8.2.2",
     "vitest": "4.1.11"
@@ -56,7 +56,7 @@
   "peerDependencies": {
     "@opfs-vfs/opfs-vfs": "workspace:^",
     "@opfs-vfs/plugin-subscriptions": "workspace:^",
-    "effect": "4.0.0-rc.118"
+    "effect": "4.0.0"
   },
   "engines": {
     "node": ">=22.12"
