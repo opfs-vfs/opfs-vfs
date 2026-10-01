@@ -12,6 +12,9 @@ minimumReleaseAgeExclude:
   - '@fallow-cli/win32-x64-msvc@3.27.0'
   - fallow-type-aware@3.27.0
   - fallow@3.27.0
+  - effect@4.0.0
+  - '@effect/platform-node@4.0.0'
+  - '@effect/platform-node-shared@4.0.0'
 allowBuilds:
   esbuild: true
   '@mongodb-js/zstd': false
