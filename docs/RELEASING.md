@@ -1,41 +1,65 @@
 # Releasing
 
-The public package is `@opfs-vfs/opfs-vfs`. The next release is version 2.0.0 under PolyForm Noncommercial License 1.0.0. The workspace root and future demos and benchmarks remain private.
+Changesets manages every public package in the workspace:
 
-## Changesets
+| Package                          | Directory                       |
+| -------------------------------- | ------------------------------- |
+| `@opfs-vfs/opfs-vfs`             | `packages/opfs-vfs`             |
+| `@opfs-vfs/plugin-subscriptions` | `packages/plugin-subscriptions` |
+| `@opfs-vfs/react`                | `packages/react`                |
+| `@opfs-vfs/effect`               | `packages/effect`               |
+| `@opfs-vfs/devtools`             | `packages/devtools`             |
+| `@opfs-vfs/file-preview`         | `packages/file-preview`         |
 
-Run `pnpm changeset` for a user-facing change, select the library and its version bump, and commit the generated Markdown file. Documentation-only and tooling-only changes do not require a package release.
+The workspace root and website are private and are not published. All public packages use PolyForm Noncommercial License 1.0.0.
 
-After a merge to `main`, `release.yml` runs all checks, including the full browser test suite. With pending changesets it opens or updates a version PR, including the changelog and lockfile. Without pending changesets it can publish unpublished versions, but only when the repository variable `NPM_PUBLISH_ENABLED` is exactly `true`. Leaving the variable unset disables the entire publish job. Manual release runs also require `main`.
+## Changesets and release notes
+
+Run `pnpm changeset` for a user-facing package change. Select each affected package and its version bump, then commit the generated Markdown file with the change. Documentation-only and tooling-only changes do not require a package release.
+
+Describe the behavior consumers receive, the problem it solves, and any required migration. Use separate Changesets when packages need different explanations. Avoid generic notes such as "update dependencies" when a compatibility requirement or behavior change can be named.
+
+After a merge to `main`, `release.yml` runs all checks, including the full browser test suite. With pending Changesets it opens or updates a version PR containing version bumps, package changelogs, and the lockfile. Merging a feature PR does not publish immediately: merge the generated version PR to release its packages.
+
+When `main` has no pending Changesets, the publish job runs `pnpm release`, which builds the workspace and calls `changeset publish` without a package filter. It publishes every public package whose version is not yet on npm. Unchanged, already-published versions are skipped. Adding a public workspace package does not require editing a publishing allowlist.
+
+For each published package, the Changesets action pushes a `<package-name>@<version>` tag and creates a GitHub release using that version's entry in the package's `CHANGELOG.md`. Review the generated changelog in the version PR: its content becomes the GitHub release notes. Versions are independent; a release need not bump all six packages.
 
 The version job uses GitHub's built-in token. Enable **Settings → Actions → General → Allow GitHub Actions to create and approve pull requests**. Bot-created version PRs do not automatically trigger PR workflows with this token. Run the **CI** workflow manually on the `changeset-release/main` branch before merging a version PR. Publication always waits for another successful verification of the merged commit on `main`.
 
-CI on this repository's `changeset-release/main` PRs and manual runs on that branch skips browser installation and tests. It still installs with a frozen lockfile, builds, checks types, lint, formatting and unused code, and validates package contents and any pending changesets. Keep this branch for generated release changes; any source changes added there receive their browser tests only after merging to `main`. All other PRs and every release run on `main` run the full suite.
+CI on this repository's `changeset-release/main` PRs and manual runs on that branch skips browser installation and tests. It still installs with a frozen lockfile, builds, checks types, lint, formatting and unused code, and validates package contents and any pending Changesets. Keep this branch for generated release changes; source changes added there receive their browser tests only after merging to `main`. All other PRs and every release run on `main` run the full suite.
 
-## Package verification
+## npm setup
 
-The version PR has assigned 2.0.0. Publish only after the release candidate is verified. Do not overwrite published artifacts.
+Enable GitHub Actions for the repository. Publishing is automatic after successful verification on `main`; no `NPM_PUBLISH_ENABLED` variable is needed. Manual release runs also require `main`.
 
-Before publishing, confirm rights in included contributions and review the noncommercial terms and any planned commercial agreement with software-licensing counsel.
+Configure an npm trusted publisher for **each public package**, including newly added packages:
 
-After the version PR merges, build and inspect the release candidate:
+- Organization: `opfs-vfs`
+- Repository: `opfs-vfs`
+- Workflow filename: `release.yml`
+- Environment: leave empty, since this workflow does not declare one
+- Allow direct publication with `npm publish`
+
+The package's `repository.url` must point to `git+https://github.com/opfs-vfs/opfs-vfs.git`. Initial publication of a new package must happen through an authorized maintainer before configuring its trusted publisher. Existing packages do not need another manual publication.
+
+The publish job uses a GitHub-hosted Ubuntu runner, the workspace-pinned pnpm 12.4.2, and `id-token: write` for npm OIDC authentication. Changesets selects pnpm for this workspace, and pnpm handles OIDC directly. It needs no stored npm publishing token. Verification and versioning continue to use Blacksmith. Only the publish job receives OIDC permission; write access to repository contents allows the action to create tags and releases through the GitHub API.
+
+## Package verification and recovery
+
+Before a release, inspect each affected package:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
-cd packages/opfs-vfs
-npm pack --dry-run
-npm pack
+pnpm --filter @opfs-vfs/effect pack --pack-destination /tmp/opfs-release-check
 ```
 
-Inspect the tarball's package version, `license` metadata, README, and `LICENSE.md`. The root and packaged copies of the PolyForm license must match. The metadata is `PolyForm-Noncommercial-1.0.0`.
+Substitute the affected package name. Inspect the tarball's version, exports, runtime files, README where included, repository metadata, and `LICENSE.md`. The root and packaged copies of the PolyForm license must match.
 
-Publication remains gated by `NPM_PUBLISH_ENABLED=true`, successful verification on `main`, npm publishing rights and a configured trusted publisher. Do not enable publication as part of a license-only edit. GitHub Actions trusted publishing uses organization `opfs-vfs`, repository `opfs-vfs`, workflow `release.yml`, and direct-publication permission.
-
-Both workflows use GitHub-hosted runners. The release workflow grants OIDC permission only to the publish job. Repository visibility and publishing are separate owner actions.
+If publishing fails, inspect the Release workflow logs before retrying it with **Run workflow** on `main`. Check trusted publisher settings for the affected package and confirm whether any packages were published before the failure. Never overwrite or unpublish a released version to retry. If npm publication succeeded but a GitHub release is missing, check its tag and create the missing release from the corresponding package changelog; do not bump a version just to repair release notes.
 
 ## References
 
-- [npm organizations](https://docs.npmjs.com/creating-an-organization/)
 - [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
 - [Changesets automation](https://changesets.dev/guide/automating)
