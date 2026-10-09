@@ -55,19 +55,21 @@ test('AI setup gates the whole workspace without downloading on page load', asyn
 });
 
 test('hero animation advances and pauses on request', async ({ page }) => {
-  // Fit the full canvas so screenshots do not resize the viewport and redraw the scene.
+  // Fit the artwork so screenshots do not resize the viewport and redraw the scene.
   await page.setViewportSize({ width: 1280, height: 2000 });
   await page.goto('/');
   const canvas = page.locator('.hero-scene canvas');
   await expect(canvas).toBeVisible();
-  const initial = await canvas.screenshot();
+  // The oversized canvas overlaps the independently animated heading below the hero.
+  const art = page.locator('.hero-art');
+  const initial = await art.screenshot();
   await page.waitForTimeout(200);
-  expect((await canvas.screenshot()).equals(initial)).toBe(false);
+  expect((await art.screenshot()).equals(initial)).toBe(false);
   await page.getByRole('button', { name: 'Pause motion' }).click();
   await expect(page.getByRole('button', { name: 'Play motion' })).toHaveAttribute('aria-pressed', 'true');
-  const paused = await canvas.screenshot();
+  const paused = await art.screenshot();
   await page.waitForTimeout(200);
-  expect((await canvas.screenshot()).equals(paused)).toBe(true);
+  expect((await art.screenshot()).equals(paused)).toBe(true);
 });
 
 test('adapter directory keeps links accessible without animated borders', async ({ page }) => {
