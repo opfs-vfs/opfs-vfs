@@ -43,6 +43,8 @@ See [the website guide](../apps/website/README.md) for browser tests, storage li
 
 ## Releases
 
-Run `pnpm changeset` for user-facing library changes and commit the generated file with the change. Keep the workspace root, demos, and benchmarks private. The [release guide](RELEASING.md) covers version PRs, first publication, and the npm publishing gate.
+Changesets manage all six public workspace packages: `@opfs-vfs/opfs-vfs`, `@opfs-vfs/plugin-subscriptions`, `@opfs-vfs/react`, `@opfs-vfs/effect`, `@opfs-vfs/devtools`, and `@opfs-vfs/file-preview`. Run `pnpm changeset`, select each affected package, and commit the generated file with the change. Keep the workspace root, demos, and benchmarks private.
 
-The npm package contains `dist`, package metadata, README, and the PolyForm Noncommercial license. Keep root and package license copies identical. Use the `PolyForm-Noncommercial-1.0.0` SPDX identifier in package metadata and preserve third-party notices.
+After the version PR is merged and verification on `main` succeeds, every public package with an unpublished version is published automatically through npm trusted publishing. Each published package gets a `<name>@<version>` tag and a GitHub release generated from its package changelog. The [release guide](RELEASING.md) covers npm trusted-publisher setup and recovery.
+
+Each npm package contains `dist`, package metadata, README, and the PolyForm Noncommercial license. Keep root and package license copies identical. Use the `PolyForm-Noncommercial-1.0.0` SPDX identifier in package metadata and preserve third-party notices.
