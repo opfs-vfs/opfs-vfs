@@ -3,6 +3,11 @@
   "version": "0.2.0",
   "description": "Explore and manage OPFS VFS volumes with file previews, a shell, and debugging tools.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/opfs-vfs.git",
+    "directory": "packages/devtools"
+  },
   "files": [
     "dist",
     "LICENSE.md"
