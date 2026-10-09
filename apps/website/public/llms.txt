@@ -62,6 +62,6 @@ The repository uses the source-available PolyForm Noncommercial License 1.0.0. C
 - [Demos](https://opfs.dev/demos/): Interactive examples. Storage and model operations require a browser.
 - [Local AI](https://opfs.dev/demos/ai/): Gemma with a browser-local workspace, an explicit model download, and WebGPU requirements.
 - [Licensing](https://opfs.dev/licensing/): Full PolyForm Noncommercial license.
-- [Changelog](https://opfs.dev/changelog/): Versioned package changes.
+- [Changelog](https://opfs.dev/changelog/): Latest published Changesets release notes for every package, with links to GitHub releases and full changelogs.
 - [Sitemap](https://opfs.dev/sitemap/): All public pages.
 - [Source repository](https://github.com/opfs-vfs/opfs-vfs): Implementation, package documentation, and tests.

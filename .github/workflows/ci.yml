@@ -60,6 +60,7 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - run: pnpm build
         env:
+          GITHUB_TOKEN: ${{ github.ref == 'refs/heads/main' && github.token || '' }}
           VERCEL_SKEW_PROTECTION_ENABLED: '1'
           VERCEL_DEPLOYMENT_ID: dpl_ci
       - run: pnpm typecheck
@@ -107,6 +108,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build package and dependencies
         env:
+          GITHUB_TOKEN: ${{ github.ref == 'refs/heads/main' && github.token || '' }}
           VERCEL_SKEW_PROTECTION_ENABLED: '1'
           VERCEL_DEPLOYMENT_ID: dpl_ci
         run: pnpm --filter "$PACKAGE..." build

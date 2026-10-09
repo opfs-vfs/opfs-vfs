@@ -1,0 +1,23 @@
+name: Rebuild website
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      VERCEL_DEPLOY_HOOK_URL:
+        required: true
+
+permissions: {}
+
+jobs:
+  rebuild:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Rebuild the production website with published release notes
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$DEPLOY_HOOK_URL" || { echo 'Missing VERCEL_DEPLOY_HOOK_URL secret'; exit 1; }
+          curl --fail --silent --show-error --max-time 30 --retry 2 --request POST "$DEPLOY_HOOK_URL" > /dev/null
