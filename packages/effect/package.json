@@ -56,7 +56,7 @@
   "peerDependencies": {
     "@opfs-vfs/opfs-vfs": "workspace:^",
     "@opfs-vfs/plugin-subscriptions": "workspace:^",
-    "effect": "4.0.0"
+    "effect": "^4.0.0"
   },
   "engines": {
     "node": ">=22.12"
