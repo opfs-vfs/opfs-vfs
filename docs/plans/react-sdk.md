@@ -1,6 +1,6 @@
 # React SDK implementation plan
 
-Status: implementation and P7 evidence complete, September 27, 2026. `@opfs-vfs/react` 0.0.3 (changeset `5fc8f70`) documents the existing preview capabilities in the package's release history, with no new runtime behavior, and the preview is published as a preview release. Recorded core performance-budget exceptions remain open follow-up. This plan implements the reviewed [design](../designs/react-sdk.md) and [specification](../specs/react-sdk.md) from `628e200`. Those documents define behavior; this document defines delivery order, checks, and release evidence. Recheck source locations against the implementation branch before changing them.
+Status: implementation and P7 evidence complete, September 27, 2026. Release remains blocked on selecting actual published prerequisite versions and ranges, and on resolving recorded core performance-budget exceptions. React is unmerged and unpublished; no release action is authorized. This plan implements the reviewed [design](../designs/react-sdk.md) and [specification](../specs/react-sdk.md) from `628e200`. Those documents define behavior; this document defines delivery order, checks, and release evidence. Recheck source locations against the implementation branch before changing them.
 
 ## Scope
 
@@ -223,7 +223,7 @@ The React command is a deliverable, not an existing script. Add its Vitest brows
 
 Dry-run package packing for core, subscriptions and React, inspect file lists/declarations, add Changesets for publishable prerequisite changes and validate `pnpm changeset status`. This plan-only change needs no package changeset. Land/publish prerequisite core and subscriptions versions before the stable SDK consumes their released ranges, then repeat installed-consumer smoke checks with those published artifacts while the React layers remain unmerged. Do not guess future versions to make a release plan appear complete.
 
-The React package's release history is recorded by `@opfs-vfs/react` 0.0.3 (changeset `5fc8f70`), published as a preview release through the existing automatic publishing workflow. Recheck the packed manifest and release plan for any later release.
+Only a separate approved release change selects React's initial version and released dependency ranges and records its release notes/Changeset for the repository's new-package flow. Recheck the packed manifest and release plan in that change. Merging the React layers makes the package eligible for the existing automatic publishing workflow, so they merge only with that release change, never as an intermediate implementation PR.
 
 Completion means reviewed implementation, passing relevant CI, recorded compatibility/performance/private-integration evidence, working demos and docs, and a valid release plan. Actual package publication remains a separate release action. If evidence fails, fix the cause or explicitly review a narrower contract; do not silently waive a gate to call v1 complete.
 
@@ -231,13 +231,4 @@ Completion means reviewed implementation, passing relevant CI, recorded compatib
 
 The public SDK fixture, final-candidate public evidence, and private actual-encryption evidence are recorded in [the acceptance index](../REACT-SDK-ACCEPTANCE.md). The fixture uses the final built artifacts, records raw samples and artifact hashes, and passes its SDK structural checks. The final core A/B record has budget exceptions, so its performance gate is not passed and the authorized optimization follow-up remains open.
 
-Core prerequisite PR 86 (`c627d9c`) is intentionally core-only. It may be considered for its own merge and publication after its normal approvals.
-
-`@opfs-vfs/react` 0.0.3 (changeset `5fc8f70`) documents the existing preview capabilities in the package's release history, with no new runtime behavior. The release notes list:
-
-- `VolumeProvider`, with a built-in subscriptions worker when none is supplied. Automatic transport picks a compatible SharedWorker or falls back to a dedicated worker with an observable reason.
-- `useVolume` and `useVolumeClient`, a generation-safe, path-based command handle.
-- `useFile`, `useFileContent` and `useFolder`, plus the matching `File`, `FileContent` and `Folder` components.
-- `usePersistentStorage`, and `VolumeError` classified by kind and outcome.
-
-The preview requires React 19, the core package and the subscriptions plugin. Global shutdown and deletion remain caller-owned.
+Core prerequisite PR 86 (`c627d9c`) is intentionally core-only. It may be considered for its own merge and publication after its normal approvals; React remains unmerged and unpublished. Once the prerequisite core and subscriptions releases exist, a separate approved React release change must select the actual compatible ranges, add the React Changeset and release notes, and repeat installed-artifact checks. Completing P7 evidence neither performs nor authorizes that release.
