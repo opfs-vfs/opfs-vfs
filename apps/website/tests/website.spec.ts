@@ -1,5 +1,27 @@
 import { expect, test } from '@playwright/test';
 
+test('changelog renders published package notes and release links on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/changelog/');
+  const sections = page.locator('.releases > section');
+  await expect(sections.locator('h2')).toHaveText([
+    '@opfs-vfs/react',
+    '@opfs-vfs/effect',
+    '@opfs-vfs/devtools',
+    '@opfs-vfs/file-preview',
+    '@opfs-vfs/opfs-vfs',
+    '@opfs-vfs/plugin-subscriptions',
+  ]);
+  const effect = page.locator('#effect-0\\.3\\.1');
+  await expect(effect.locator('.release-notes')).toContainText('Allow stable Effect v4 releases');
+  await expect(effect.locator('h3 a')).toHaveAttribute(
+    'href',
+    'https://github.com/opfs-vfs/opfs-vfs/releases/tag/%40opfs-vfs%2Feffect%400.3.1',
+  );
+  await expect(page.getByRole('link', { name: 'Full package changelog' })).toHaveCount(6);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('marketing, docs, demos and changelog routes load', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

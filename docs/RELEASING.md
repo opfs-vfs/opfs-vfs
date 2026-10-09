@@ -63,3 +63,13 @@ If publishing fails, inspect the Release workflow logs before retrying it with *
 
 - [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
 - [Changesets automation](https://changesets.dev/guide/automating)
+
+## Website release notes
+
+The changelog page reads published, stable GitHub releases at build time and displays their Changesets-generated Markdown notes, grouped by public workspace package with React and Effect first. Each package links to its full changelog for history without GitHub releases. Existing tags can be backfilled with the matching changelog entry; do not invent tags or dates for older untagged versions. The website date is the GitHub release publication date, including for backfilled releases. Maintainer review confirmed the existing core 2.0.0 upgrade notes; those notes remain in the full changelog without a retroactive tag.
+
+After the publish action creates releases, `release.yml` calls `rebuild-website.yml`. It posts to the Vercel production deploy hook stored in the repository secret `VERCEL_DEPLOY_HOOK_URL`. Configure the hook for the website project's `main` branch under Vercel Settings → Git → Deploy Hooks. Treat its URL as a credential. The ordinary Git deployment can finish before publication; this additional build picks up the completed release notes.
+
+The hook workflow only requests a deployment. Check Vercel for a successful production deployment and verify `/changelog/` before considering a refresh complete. To recover from a failed hook or website build, or after manually backfilling release notes, run **Rebuild website** on `main`. This works even with pending Changesets and does not republish packages.
+
+GitHub API failures stop the website build, retaining the previous production deployment. Requests have a 15-second timeout. CI and publishing builds use their built-in GitHub token. Vercel and local builds use the public API unless an optional read-only `GITHUB_TOKEN` is configured in the build environment; configure it if unauthenticated API quotas become a problem. No token is sent to the browser.
