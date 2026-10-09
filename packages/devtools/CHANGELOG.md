@@ -1,5 +1,13 @@
 # @opfs-vfs/devtools
 
+## 0.2.1
+
+### Patch Changes
+
+- e43b836: Include the source repository and package directory in npm metadata so published packages link to their source and support GitHub Actions trusted publishing with provenance.
+- Updated dependencies [e43b836]
+  - @opfs-vfs/file-preview@0.1.1
+
 ## 0.2.0
 
 ### Minor Changes
