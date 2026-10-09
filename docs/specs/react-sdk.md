@@ -1,6 +1,13 @@
 # React SDK: first specification
 
-Status: proposal for design discussion, September 25, 2026. The SDK, demos, and documentation described here are not implemented. Names and signatures are illustrative, not a published contract.
+Status: proposal for design discussion, September 25, 2026, partly implemented by the `@opfs-vfs/react` 0.0.3 preview. That release records these capabilities:
+
+- `VolumeProvider` manages a volume for a React tree. It uses a built-in subscriptions worker when no worker is supplied. Automatic transport chooses a compatible SharedWorker or falls back to a dedicated worker with an observable reason.
+- `useVolume` exposes lifecycle and transport state. `useVolumeClient` returns a generation-safe, path-based command handle while the selected volume is ready.
+- `useFile`, `useFileContent`, and `useFolder`, plus the matching `File`, `FileContent`, and `Folder` components, keep reads current through subscriptions.
+- `usePersistentStorage` requests and reports browser persistence permission. `VolumeError` classifies failures by kind and outcome.
+
+The preview requires React 19, the core package, and the subscriptions plugin. SharedWorker support depends on browser capabilities. Global shutdown and deletion remain caller-owned. Proposals below that the preview does not record, including optional Suspense, the core prerequisites, demos, and documentation, remain unimplemented, and their names and signatures are illustrative. Where a constraint below conflicts with the released behavior, the released behavior applies.
 
 ## Recommendation
 
@@ -8,11 +15,11 @@ Build `@opfs-vfs/react` as a small React integration over the existing asynchron
 
 Start without TanStack Query or Effect. Reuse the existing subscriptions plugin for change notifications, improve worker error transport where needed, and use React's external-store subscription mechanism. Include optional Suspense reads after proving their lifecycle works with Strict Mode and abandoned renders.
 
-This spec defines behavior and design constraints. The [companion design](../designs/react-sdk.md) settles module responsibilities, core prerequisites, lifecycle and read algorithms, and release gates. Both remain proposals; neither authorizes implementation or a core rewrite.
+This spec defines behavior and design constraints. The [companion design](../designs/react-sdk.md) settles module responsibilities, core prerequisites, lifecycle and read algorithms, and release gates. Apart from the capabilities recorded in the status above, both remain proposals; neither authorizes a core rewrite.
 
 ## What exists today
 
-Repository facts checked against core `5bddbcc` and premium `dd24f15`. Proposed SDK exports and core additions below do not exist yet.
+Repository facts checked against core `5bddbcc` and premium `dd24f15`. Core additions below do not exist yet, and SDK exports other than those recorded in the status above are proposals.
 
 | Existing behavior                                                                                                                                                                                                                            | Consequence for the SDK                                                                                                                                                     |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,7 +36,7 @@ Repository facts checked against core `5bddbcc` and premium `dd24f15`. Proposed 
 
 The first release includes named providers, volume/file/folder hooks, function-as-children equivalents, generation-pinned write handles, structured errors, browser persistence requests, live subscriptions, and encryption plugin integration. Suspense is deferred from the first stable release until the companion design's lifecycle experiment passes; the section below records its intended follow-up behavior.
 
-Use a separate workspace package at `packages/react`. React and a compatible core version are peer dependencies. Reuse `@opfs-vfs/plugin-subscriptions` as the filesystem observation dependency; select compatible released versions using installed-consumer tests. The design proposes React `>=19.0.0 <20`, tested at the minimum and latest stable 19.x. V1 requires an application worker. React 18 compatibility is outside this release. The package must not introduce React dependencies into core.
+Use a separate workspace package at `packages/react`. React and a compatible core version are peer dependencies. Reuse `@opfs-vfs/plugin-subscriptions` as the filesystem observation dependency; select compatible released versions using installed-consumer tests. The design proposes React `>=19.0.0 <20`, tested at the minimum and latest stable 19.x. An application worker is optional: the released preview supplies a built-in subscriptions worker when none is given. React 18 compatibility is outside this release. The package must not introduce React dependencies into core.
 
 React, core, and `@opfs-vfs/plugin-subscriptions` are explicit peers, with workspace/dev dependencies for SDK development. The application installs subscriptions for both its worker and the SDK page client. Verify supported resolved versions on both sides; a matching plugin profile key is not proof of package or wire compatibility.
 
@@ -90,10 +97,10 @@ Providers support two mutually exclusive forms:
 
 | Form                                   | Proposed props                                                                                                  | Ownership                                                                                  |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Managed volume, plaintext or encrypted | `name?`, required `fileName`, required `worker`, `plugins?`, `options?` excluding worker/plugin/attachTo fields | SDK creates the core client after browser mount.                                           |
+| Managed volume, plaintext or encrypted | `name?`, required `fileName`, optional `worker`, `plugins?`, `options?` excluding worker/plugin/attachTo fields | SDK creates the core client after browser mount.                                           |
 | Borrowed core client                   | `name?`, `client`                                                                                               | Caller creates and closes the client. No filename, worker, or initialization options here. |
 
-For v1 require an application worker factory, rather than rely on the bundled core worker's empty registry. The SDK appends `subscriptionsRequest()` to managed plugin requests exactly once, validates an already supplied subscription request, and rejects duplicates or incompatible profiles. It cannot add the plugin to an existing owner. The application worker must register every requested implementation:
+When no worker is supplied, the SDK uses its built-in subscriptions worker. Supply an application worker factory when the volume needs other plugin implementations, rather than rely on the bundled core worker's empty registry. The SDK appends `subscriptionsRequest()` to managed plugin requests exactly once, validates an already supplied subscription request, and rejects duplicates or incompatible profiles. It cannot add the plugin to an existing owner. The application worker must register every requested implementation:
 
 ```ts
 // filesystem.worker.ts
@@ -103,7 +110,7 @@ import { subscriptions } from '@opfs-vfs/plugin-subscriptions';
 startVfsWorker({ plugins: [subscriptions] });
 ```
 
-Inline worker factories are supported; their function identity is not compared across renders. Core keeps the first factory for that client's lifetime. An ignored alternate factory is not instantiated or validated by profile negotiation. There is no SDK-bundled worker entry in v1; document application-worker bundling for supported Vite, webpack, and Next setups. The premium example below registers both plugins.
+Inline worker factories are supported; their function identity is not compared across renders. Core keeps the first factory for that client's lifetime. An ignored alternate factory is not instantiated or validated by profile negotiation. The SDK's built-in subscriptions worker is used only when no worker is supplied; document application-worker bundling for supported Vite, webpack, and Next setups. The premium example below registers both plugins.
 
 Both forms accept `persistentStorage?: 'manual' | 'request-on-mount'`, default `manual`, `onError?`, and ordinary children or a function receiving the volume result. Borrowed clients must already request a compatible subscriptions profile. Failure reports incompatibility instead of pretending to be live.
 
