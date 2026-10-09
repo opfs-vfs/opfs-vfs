@@ -12,12 +12,14 @@ test('changelog renders published package notes and release links on mobile', as
     '@opfs-vfs/opfs-vfs',
     '@opfs-vfs/plugin-subscriptions',
   ]);
-  const effect = page.locator('#effect-0\\.3\\.1');
-  await expect(effect.locator('.release-notes')).toContainText('Allow stable Effect v4 releases');
-  await expect(effect.locator('h3 a')).toHaveAttribute(
-    'href',
-    'https://github.com/opfs-vfs/opfs-vfs/releases/tag/%40opfs-vfs%2Feffect%400.3.1',
-  );
+  for (const section of await sections.all()) {
+    await expect(section.locator('article')).toHaveCount(1);
+    await expect(section.locator('.release-notes')).toContainText(/\S.{20}/);
+    await expect(section.locator('article h3 a')).toHaveAttribute(
+      'href',
+      /^https:\/\/github\.com\/opfs-vfs\/opfs-vfs\/releases\/tag\/%40opfs-vfs%2F.+%40\d+\.\d+\.\d+$/,
+    );
+  }
   await expect(page.getByRole('link', { name: 'Full package changelog' })).toHaveCount(6);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

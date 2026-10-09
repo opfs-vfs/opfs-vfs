@@ -9,11 +9,11 @@ const priority = ['@opfs-vfs/react', '@opfs-vfs/effect'];
 const packages = Object.entries(manifests).filter(([, pkg]) => !pkg.private).map(([path, pkg]) => ({
   name: pkg.name,
   directory: path.split('/').at(-2)!,
-  releases: releases.filter((release) => release.packageName === pkg.name),
+  releases: releases.filter((release) => release.packageName === pkg.name).slice(0, 1),
 })).sort((a, b) => (priority.indexOf(a.name) + 1 || 3) - (priority.indexOf(b.name) + 1 || 3) || a.name.localeCompare(b.name));
 ---
-<SiteLayout title="Changelog · OPFS VFS" description="Published release notes for every OPFS VFS package, including the React SDK, Effect adapter, core filesystem, plugins, and devtools.">
-  <section class="page-head"><div><p class="kicker">Changelog / package releases</p><h1>What changed</h1><p>Published package releases, with notes generated from Changesets. Full changelogs include older history.</p></div><a class="button" href="https://github.com/opfs-vfs/opfs-vfs/releases">View GitHub releases ↗</a></section>
+<SiteLayout title="Changelog · OPFS VFS" description="Latest release notes for every OPFS VFS package, including the React SDK, Effect adapter, core filesystem, plugins, and devtools.">
+  <section class="page-head"><div><p class="kicker">Changelog / package releases</p><h1>What changed</h1><p>The latest published release of each package, with notes generated from Changesets. Browse each package’s full changelog for older releases.</p></div><a class="button" href="https://github.com/opfs-vfs/opfs-vfs/releases">View GitHub releases ↗</a></section>
   <nav aria-label="Packages" class="package-links">{packages.map((pkg) => <a href={`#${pkg.directory}`}>{pkg.name}</a>)}</nav>
   <div class="releases">{packages.map((pkg) => <section id={pkg.directory} aria-labelledby={`${pkg.directory}-heading`}>
     <h2 id={`${pkg.directory}-heading`}>{pkg.name}</h2>
