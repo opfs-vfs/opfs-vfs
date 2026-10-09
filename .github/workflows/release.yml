@@ -44,9 +44,10 @@ jobs:
 
   publish:
     needs: verify
-    if: needs.verify.outputs.has-changesets == 'false' && vars.NPM_PUBLISH_ENABLED == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 10
+    if: needs.verify.outputs.has-changesets == 'false'
+    # npm trusted publishing requires a GitHub-hosted runner.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
@@ -63,3 +64,5 @@ jobs:
       - uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           script: pnpm release
+          create-github-releases: true
+          push-git-tags: true

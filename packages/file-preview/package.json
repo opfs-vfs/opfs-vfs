@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "Shared React file previews and virtualized text editor.",
   "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opfs-vfs/opfs-vfs.git",
+    "directory": "packages/file-preview"
+  },
   "files": [
     "dist",
     "LICENSE.md"
