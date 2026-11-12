@@ -1188,8 +1188,9 @@ export class OpfsVfs implements FileChangeSource {
         this.totalBlocks = meta.totalBlocks;
         this.inodes = meta.inodes;
         this.nextInodeNumber = meta.nextInodeNumber;
-        // Paths from binary format are already sorted — just extract
-        this.sortedPaths = Array.from(meta.inodes.keys());
+        // The snapshot's preorder walk is not string order ('/a/1' precedes '/a-1'),
+        // and every lookup binary-searches this list.
+        this.sortedPaths = Array.from(meta.inodes.keys()).sort();
 
         // Allocation state is always rebuilt from metadata (INT-4). A cached
         // `.bitmap` can be shorter than a grown snapshot, and typed arrays drop
