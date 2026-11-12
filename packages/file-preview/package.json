@@ -36,7 +36,7 @@
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.15",
     "@lezer/highlight": "1.2.5",
-    "pdfjs-dist": "5.4.530",
+    "pdfjs-dist": "6.5.438",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1"
   },
@@ -44,7 +44,7 @@
     "@types/node": "25.5.0",
     "@types/react": "19.3.0",
     "react": "19.3.1",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vite": "8.3.8"
   },
   "peerDependencies": {

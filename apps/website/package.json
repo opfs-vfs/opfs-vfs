@@ -16,7 +16,7 @@
     "test:edgejs": "playwright test --config playwright.edgejs.config.ts"
   },
   "dependencies": {
-    "@astrojs/react": "6.0.4",
+    "@astrojs/react": "7.1.7",
     "@astrojs/starlight": "0.42.10",
     "@astrojs/vercel": "11.0.21",
     "@base-ui/react": "1.9.0",
@@ -40,7 +40,7 @@
     "clsx": "2.1.1",
     "docx-preview": "0.4.1",
     "jszip": "3.10.2",
-    "just-bash": "2.14.2",
+    "just-bash": "3.6.0",
     "lucide-react": "1.72.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

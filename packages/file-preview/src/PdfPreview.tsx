@@ -20,10 +20,7 @@ export default function PdfPreview({ file }: PreviewProps) {
     setRendered(false);
     setError('');
     GlobalWorkerOptions.workerSrc = workerUrl;
-    const task = getDocument({
-      data: file.bytes?.slice() ?? new TextEncoder().encode(file.content),
-      isEvalSupported: false,
-    });
+    const task = getDocument({ data: file.bytes?.slice() ?? new TextEncoder().encode(file.content) });
     void task.promise
       .then(async (pdf) => {
         if (!live) return;
