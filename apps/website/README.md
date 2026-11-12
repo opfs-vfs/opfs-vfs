@@ -19,7 +19,7 @@ pnpm --filter @opfs-vfs/website build
 pnpm --filter @opfs-vfs/website preview --host localhost
 ```
 
-To test the contact form locally, set `RESEND_API_KEY` in `apps/website/.env`. Resend must verify the `opfs.dev` domain before it can send as `website@opfs.dev`. The static production preview does not serve the contact endpoint; use the development server for that request.
+To test the contact form locally, start the development server with `RESEND_API_KEY` in its process environment, for example `RESEND_API_KEY=re_… pnpm --filter @opfs-vfs/website dev`. The endpoint reads only `process.env`, so the key is never inlined into a build; a value in `apps/website/.env` is not used. Resend must verify the `opfs.dev` domain before it can send as `website@opfs.dev`. The static production preview does not serve the contact endpoint; use the development server for that request.
 
 ## Content
 

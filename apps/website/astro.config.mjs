@@ -32,7 +32,8 @@ const copyVercelHeaders = () => ({
 });
 const packageVersion = manifest('../../packages/opfs-vfs/package.json').version;
 const pgliteVersion = manifest('./package.json').dependencies['@electric-sql/pglite'];
-let sourceCommit = 'unavailable';
+// Vercel builds have no Git metadata (.vercelignore excludes .git) but expose the deployed commit.
+let sourceCommit = process.env.VERCEL_GIT_COMMIT_SHA || 'unavailable';
 try {
   const root = new URL('../../', import.meta.url);
   sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();

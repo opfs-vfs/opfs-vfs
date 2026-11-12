@@ -67,6 +67,16 @@ export default function ContactDialog() {
               <label>
                 Message <Textarea name="message" rows={6} maxLength={10_000} required />
               </label>
+              {/* Honeypot: hidden from people and assistive technology; automated submissions fill it. */}
+              <input
+                className="contact-honeypot"
+                name="website"
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                defaultValue=""
+              />
               {status === 'error' && (
                 <p className="contact-status" role="alert">
                   We couldn’t send that. Please try again.

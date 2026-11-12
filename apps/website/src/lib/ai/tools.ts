@@ -115,6 +115,18 @@ export function parseAiTools(output: string, remaining = 12): AiTool[] | null {
   return tools;
 }
 
+// ponytail: a textual check for `rm` with -r/-R/--recursive; commands that build the flag at runtime are not caught.
+const recursiveRm = /(?:^|[\s;&|(`])rm\s+(?:[^;&|\n]*\s)?(?:-[A-Za-z]*[rR][A-Za-z]*|--recursive)(?=[\s;&|)`]|$)/;
+
+/** Returns the question to ask before a destructive tool runs, or null when it needs no confirmation. */
+export function destructiveToolPrompt(tool: AiTool): string | null {
+  if (tool.tool === 'delete_file')
+    return `The model wants to delete ${tool.path}${tool.recursive ? ' and everything inside it' : ''}. Allow this?`;
+  if (tool.tool === 'bash' && recursiveRm.test(tool.command))
+    return `The model wants to run a recursive delete:\n\n${tool.command.slice(0, 500)}\n\nAllow this?`;
+  return null;
+}
+
 export function createAiShell(fs: IFileSystem) {
   // This adapter exposes only the selected virtual volume. No host filesystem,
   // network/fetch, JavaScript or Python runtime is attached to the interpreter.
