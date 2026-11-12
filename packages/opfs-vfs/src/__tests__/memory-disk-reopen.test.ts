@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 
-import { deleteVolume, OpenFlags } from '../index';
-import { OpfsVfsWorker } from '../index_internal';
+import { deleteVolume, OpenFlags } from '../index.js';
+import { OpfsVfsWorker } from '../index_internal.js';
 
 const BLOCK_SIZE = 4096;
 

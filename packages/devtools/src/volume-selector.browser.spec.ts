@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { DebugPanel } from './DebugPanel';
+import { DebugPanel } from './DebugPanel.tsx';
 
 test('volume menu stays outside its trigger, fits the viewport, and supports keyboard selection', async () => {
   await page.viewport(1000, 800);

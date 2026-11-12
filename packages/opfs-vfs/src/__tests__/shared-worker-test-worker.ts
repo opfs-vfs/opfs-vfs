@@ -1,5 +1,5 @@
-import { startVfsSharedWorker } from '../shared-worker';
-import { changesTransportPlugin } from './changes-transport-plugin';
+import { startVfsSharedWorker } from '../shared-worker.js';
+import { changesTransportPlugin } from './changes-transport-plugin.js';
 
 const control = new BroadcastChannel('opfs-vfs-shared-worker-test-control');
 const NativeMessageChannel = MessageChannel;

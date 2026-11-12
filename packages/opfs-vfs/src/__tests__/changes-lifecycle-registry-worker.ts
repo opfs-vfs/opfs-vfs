@@ -1,5 +1,5 @@
-import { startVfsWorker } from '../worker-runtime';
-import type { ConfiguredVfsPlugin, VfsPluginRegistration } from '../plugins';
+import { startVfsWorker } from '../worker-runtime.js';
+import type { ConfiguredVfsPlugin, VfsPluginRegistration } from '../plugins.js';
 
 const contribution = {
   version: 1 as const,

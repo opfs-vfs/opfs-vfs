@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import type { ChangeCommand, ChangeFrame, FileChangeChannel, WireSubscribeOptions } from '../changes';
-import { OpfsVfsWorker } from '../index_internal';
-import { deleteVolume } from '../volume-files';
-import { inspectWorker } from '../worker-client';
-import { changesTransportRequest } from './changes-transport-plugin';
+import type { ChangeCommand, ChangeFrame, FileChangeChannel, WireSubscribeOptions } from '../changes.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { deleteVolume } from '../volume-files.js';
+import { inspectWorker } from '../worker-client.js';
+import { changesTransportRequest } from './changes-transport-plugin.js';
 
 const clients: OpfsVfsWorker[] = [];
 const owners = new Map<string, OpfsVfsWorker>();

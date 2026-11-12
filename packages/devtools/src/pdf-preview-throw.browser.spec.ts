@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { FilePreview } from '@opfs-vfs/file-preview';
-import { pdfWithPages } from './pdf-fixture';
+import { pdfWithPages } from './pdf-fixture.ts';
 
 // Own file: a worker cached by an earlier test would hide the constructor.
 test('pdf preview reports a Worker constructor that throws', async () => {

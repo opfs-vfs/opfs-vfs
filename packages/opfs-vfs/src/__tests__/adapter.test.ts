@@ -1,9 +1,9 @@
 import { ERRNO_CODES } from '@electric-sql/pglite/basefs';
 import { describe, expect, it, vi } from 'vitest';
-import { OpfsVfsPGliteAdapter, type VfsSyncApi } from '../adapter';
-import { OpfsVfsWorker } from '../index_internal';
-import { OpenFlags, type VfsStat } from '../opfs-vfs';
-import { createVfsError } from '../fs-errors';
+import { OpfsVfsPGliteAdapter, type VfsSyncApi } from '../adapter.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpenFlags, type VfsStat } from '../opfs-vfs.js';
+import { createVfsError } from '../fs-errors.js';
 
 function makeStat(overrides: Partial<VfsStat> = {}): VfsStat {
   return {

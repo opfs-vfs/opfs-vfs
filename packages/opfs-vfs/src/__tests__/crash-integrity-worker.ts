@@ -1,6 +1,6 @@
-import { testPlugin } from './test-plugin';
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs';
-import { MetaSnapshotCorruptionError } from '../binary-metadata';
+import { testPlugin } from './test-plugin.js';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs.js';
+import { MetaSnapshotCorruptionError } from '../binary-metadata.js';
 
 export type Scenario =
   | 'gap'

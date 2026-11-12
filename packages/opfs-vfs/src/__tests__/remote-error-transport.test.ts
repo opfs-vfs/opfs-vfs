@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
-import { changesTransportRequest } from './changes-transport-plugin';
-import { registryTestRequest } from './registry-test-plugin';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { changesTransportRequest } from './changes-transport-plugin.js';
+import { registryTestRequest } from './registry-test-plugin.js';
 
 const name = () => `remote-error-transport-${crypto.randomUUID()}.bin`;
 const registryFactory = () => new Worker(new URL('./registry-test-worker.ts', import.meta.url), { type: 'module' });

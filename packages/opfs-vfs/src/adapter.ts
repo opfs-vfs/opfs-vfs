@@ -1,7 +1,7 @@
 import type { PGlite, postgresMod } from '@electric-sql/pglite';
 import { BaseFilesystem, ERRNO_CODES, type FsStats } from '@electric-sql/pglite/basefs';
-import { normalizeFsPath } from './fs-path';
-import { type LocalPersistenceStatus, OpenFlags, type VfsStat } from './opfs-vfs';
+import { normalizeFsPath } from './fs-path.js';
+import { type LocalPersistenceStatus, OpenFlags, type VfsStat } from './opfs-vfs.js';
 
 const PGLITE_DATA_DIR = '/pglite/data';
 const ENOSYS_ERRNO = 52;

@@ -1,6 +1,6 @@
-import type { PersistenceSource } from './mount-context';
-import type { DataWalSalvageEvent, LocalPersistenceState } from './opfs-vfs';
-import { parseRemoteError, serializeRemoteError, type RemoteErrorDetails } from './remote-error';
+import type { PersistenceSource } from './mount-context.js';
+import type { DataWalSalvageEvent, LocalPersistenceState } from './opfs-vfs.js';
+import { parseRemoteError, serializeRemoteError, type RemoteErrorDetails } from './remote-error.js';
 
 /** Worker command that enables frames for one generation and requests a fresh one. */
 export const PERSISTENCE_STATUS = 'PERSISTENCE_STATUS';

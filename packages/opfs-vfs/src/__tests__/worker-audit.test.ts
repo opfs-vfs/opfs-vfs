@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
-import { OpenFlags } from '../opfs-vfs';
-import { Status } from '../sync-messenger';
-import { OpfsVfsWorkerClient } from '../worker-client';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpenFlags } from '../opfs-vfs.js';
+import { Status } from '../sync-messenger.js';
+import { OpfsVfsWorkerClient } from '../worker-client.js';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

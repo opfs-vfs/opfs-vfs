@@ -9,8 +9,8 @@ import type {
   WireSubscribeOptions,
 } from '@opfs-vfs/opfs-vfs/changes';
 import type { ConfiguredVfsPlugin } from '@opfs-vfs/opfs-vfs/plugins';
-import { SUBSCRIPTIONS_COMPATIBILITY_KEY } from './config';
-import { error, normalizePath } from './validation';
+import { SUBSCRIPTIONS_COMPATIBILITY_KEY } from './config.js';
+import { error, normalizePath } from './validation.js';
 
 const MAX_PENDING = 4096;
 const MAX_MOUNT_PENDING = 16384;

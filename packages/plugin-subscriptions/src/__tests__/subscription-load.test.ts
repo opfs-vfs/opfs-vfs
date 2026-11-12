@@ -1,8 +1,8 @@
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { describe, expect, it } from 'vitest';
-import { subscribe } from '../client';
-import { subscriptionsRequest } from '../config';
+import { subscribe } from '../client.js';
+import { subscriptionsRequest } from '../config.js';
 
 const enabled = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUBSCRIPTIONS_LOAD === '1';
 const worker = () => new Worker(new URL('./subscription-registration-worker.ts', import.meta.url), { type: 'module' });

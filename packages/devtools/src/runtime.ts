@@ -4,8 +4,8 @@ import { inspectWorker } from '@opfs-vfs/opfs-vfs/worker-client';
 import { deleteVolume, peekVolume, VolumeImportingError } from '@opfs-vfs/opfs-vfs';
 import { OpfsVfsJustBashAdapter } from '@opfs-vfs/opfs-vfs/just-bash';
 import { canEdit, MAX_PREVIEW_BYTES } from '@opfs-vfs/file-preview';
-import type { MockFile, MockVolume } from './mock-state';
-import { parentPath, within, leafPath, type FileOperation, type FileClipboard } from './mock-files';
+import type { MockFile, MockVolume } from './mock-state.ts';
+import { parentPath, within, leafPath, type FileOperation, type FileClipboard } from './mock-files.ts';
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 // Owned clients outlive the UI: application followers may already depend on them.
@@ -465,7 +465,7 @@ export class DevtoolsSession {
     if (this.busy) throw new Error('A transfer is already running.');
     this.busy = true;
     try {
-      const { importArchive, exportArchive } = await import('./archive');
+      const { importArchive, exportArchive } = await import('./archive.ts');
       if (kind === 'import') {
         if (!input) throw new Error('Choose a ZIP file.');
         // Validate/decompress everything before creating a destination volume.

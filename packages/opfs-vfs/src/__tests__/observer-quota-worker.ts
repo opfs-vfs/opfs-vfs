@@ -1,3 +1,3 @@
-import { startVfsWorker } from '../worker-runtime';
+import { startVfsWorker } from '../worker-runtime.js';
 
 startVfsWorker();

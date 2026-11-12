@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { FilePreview } from '@opfs-vfs/file-preview';
-import { pdfWithPages } from './pdf-fixture';
+import { pdfWithPages } from './pdf-fixture.ts';
 
 // Own file: the shared pdf.js worker is cached per module instance, and each spec file gets a fresh page.
 test('pdf preview reports a worker that cannot start and retries with a new worker', async () => {

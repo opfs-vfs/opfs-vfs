@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
-import { OpfsVfsJustBashAdapter } from '../just-bash-adapter';
-import { OpfsVfsWasmerAdapter, type WasmerWorkspace } from '../wasmer-adapter';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpfsVfsJustBashAdapter } from '../just-bash-adapter.js';
+import { OpfsVfsWasmerAdapter, type WasmerWorkspace } from '../wasmer-adapter.js';
 
 const volumes: OpfsVfsWorker[] = [];
 afterEach(async () => {

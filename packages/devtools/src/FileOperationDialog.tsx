@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FileOperation } from './mock-files';
+import type { FileOperation } from './mock-files.ts';
 export type FileRequest = { volume: string; path: string; kind: 'file' | 'folder' | 'rename' | 'delete' };
 export function FileOperationDialog({
   simulated = false,

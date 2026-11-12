@@ -1,4 +1,4 @@
-import { createVfsError } from './fs-errors';
+import { createVfsError } from './fs-errors.js';
 
 const SUFFIXES = [
   '.bin',

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { VfsCorruptionError, VfsError } from '../fs-errors';
+import { VfsCorruptionError, VfsError } from '../fs-errors.js';
 import {
   parseRemoteError,
   reviveRemoteError,
   serializeRemoteError,
   toRemoteErrorDetails,
   type RemoteErrorDetails,
-} from '../remote-error';
+} from '../remote-error.js';
 
 describe('remote errors', () => {
   it('keeps the supported VFS and platform error details', () => {

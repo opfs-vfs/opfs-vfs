@@ -1,5 +1,5 @@
 import { samplePng, samplePdf, largeLog } from './preview-fixtures.ts';
-import type { MockFile, MockVolume } from './mock-state';
+import type { MockFile, MockVolume } from './mock-state.ts';
 const date = Date.UTC(2026, 8, 21, 12, 32);
 const file = (path: string, content: string, minutes = 0): MockFile => ({
   path,

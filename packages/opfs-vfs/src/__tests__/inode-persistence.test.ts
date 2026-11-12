@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
-import type { Expected } from './inode-persistence-worker';
+import { deleteVolume } from '../volume-files.js';
+import type { Expected } from './inode-persistence-worker.js';
 
 async function run(payload: Record<string, unknown>): Promise<Expected> {
   const worker = new Worker(new URL('./inode-persistence-worker.ts', import.meta.url), { type: 'module' });

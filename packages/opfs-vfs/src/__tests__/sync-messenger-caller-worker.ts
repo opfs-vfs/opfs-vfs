@@ -1,7 +1,7 @@
 // Test helper worker: runs SyncMessenger.call() (which requires a worker
 // context because it blocks on Atomics.wait). Driven by the main test thread,
 // which owns the listen() side over a shared SAB.
-import { SyncMessenger } from '../sync-messenger';
+import { SyncMessenger } from '../sync-messenger.js';
 
 let messenger: SyncMessenger | null = null;
 

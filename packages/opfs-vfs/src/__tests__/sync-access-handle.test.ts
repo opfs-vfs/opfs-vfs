@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type SyncAccessHandle, withCompleteIo } from '../sync-access-handle';
+import { type SyncAccessHandle, withCompleteIo } from '../sync-access-handle.js';
 
 describe('Complete OPFS I/O', () => {
   it('preserves view offsets and method receivers through partial progress and EOF', () => {

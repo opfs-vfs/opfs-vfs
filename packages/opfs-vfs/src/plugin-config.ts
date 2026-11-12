@@ -1,8 +1,8 @@
-import { createVfsError } from './fs-errors';
-import type { ConfiguredVfsPlugin, StorageSidecarSuffix } from './plugins';
-import type { LogicalChangeContribution } from './changes';
-import type { VolumeStorageFactory } from './storage-contract';
-import { isValidPluginId } from './worker-plugins';
+import { createVfsError } from './fs-errors.js';
+import type { ConfiguredVfsPlugin, StorageSidecarSuffix } from './plugins.js';
+import type { LogicalChangeContribution } from './changes.js';
+import type { VolumeStorageFactory } from './storage-contract.js';
+import { isValidPluginId } from './worker-plugins.js';
 
 type OpenMode = 'open-or-create' | 'create-new' | 'open-existing';
 

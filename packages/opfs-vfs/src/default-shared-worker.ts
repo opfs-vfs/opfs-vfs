@@ -1,3 +1,3 @@
-import { startVfsSharedWorker } from './shared-worker';
+import { startVfsSharedWorker } from './shared-worker.js';
 
 startVfsSharedWorker();

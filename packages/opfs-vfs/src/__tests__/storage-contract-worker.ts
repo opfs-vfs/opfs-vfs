@@ -1,7 +1,7 @@
-import { testPlugin } from './test-plugin';
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs';
-import type { ConfiguredVfsPlugin, VolumeStorageFactory, VolumeStorageOpenContext } from '../plugins';
-import { deleteVolume, volumeFileNames } from '../volume-files';
+import { testPlugin } from './test-plugin.js';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs.js';
+import type { ConfiguredVfsPlugin, VolumeStorageFactory, VolumeStorageOpenContext } from '../plugins.js';
+import { deleteVolume, volumeFileNames } from '../volume-files.js';
 
 type Check = { pass: boolean; detail: string };
 

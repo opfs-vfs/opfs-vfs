@@ -1,6 +1,6 @@
 import type { VfsPluginFactory } from '@opfs-vfs/opfs-vfs/plugins';
-import { subscriptions as configure } from './owner';
-import { error } from './validation';
+import { subscriptions as configure } from './owner.js';
+import { error } from './validation.js';
 
 /** Configure bounded file change subscriptions for a direct mount, or register the worker factory. */
 export const subscriptions = Object.assign(

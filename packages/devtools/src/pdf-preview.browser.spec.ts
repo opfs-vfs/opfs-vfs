@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { FilePreview } from '@opfs-vfs/file-preview';
-import { pdfWithPages } from './pdf-fixture';
+import { pdfWithPages } from './pdf-fixture.ts';
 
 const pdf = (path: string, ...texts: string[]) => ({ path, content: '', bytes: pdfWithPages(...texts) });
 

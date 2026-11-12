@@ -2,9 +2,9 @@ import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import type { ChangeFrame, FileChangeChannel } from '@opfs-vfs/opfs-vfs/changes';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { describe, expect, it, vi } from 'vitest';
-import { startCurrentView } from '../../examples/current-view';
+import { startCurrentView } from '../../examples/current-view.js';
 import { subscribe, type Subscription } from '@opfs-vfs/plugin-subscriptions/client';
-import { subscriptionsRequest } from '../config';
+import { subscriptionsRequest } from '../config.js';
 
 const worker = () => new Worker(new URL('./subscription-content-worker.ts', import.meta.url), { type: 'module' });
 

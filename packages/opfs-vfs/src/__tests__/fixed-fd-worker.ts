@@ -1,5 +1,5 @@
-import { OpfsVfs } from '../opfs-vfs';
-import { startVfsWorker } from '../worker-runtime';
+import { OpfsVfs } from '../opfs-vfs.js';
+import { startVfsWorker } from '../worker-runtime.js';
 
 // Deterministic descriptor reuse makes takeover invalidation observable.
 // oxlint-disable-next-line typescript/unbound-method -- reapplied to its original receiver below

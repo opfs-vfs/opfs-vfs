@@ -1,5 +1,5 @@
-import { OpfsVfs, OpenFlags } from '../opfs-vfs';
-import { createWasmerFileSystem } from '../wasmer-sync-adapter';
+import { OpfsVfs, OpenFlags } from '../opfs-vfs.js';
+import { createWasmerFileSystem } from '../wasmer-sync-adapter.js';
 import type * as Sdk from '../../../../apps/website/public/vendor/edgejs/0.2.0-opfs-vfs.1/sdk/dist/index.js';
 
 const encoder = new TextEncoder();

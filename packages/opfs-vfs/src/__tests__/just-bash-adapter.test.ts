@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { OpfsVfsWorker } from '../index_internal';
-import { OpfsVfsJustBashAdapter } from '../just-bash-adapter';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpfsVfsJustBashAdapter } from '../just-bash-adapter.js';
 
 type AdapterContext = {
   fs: OpfsVfsJustBashAdapter;

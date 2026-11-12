@@ -24,7 +24,7 @@
  * hygiene) but is not counted.
  */
 
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs.js';
 
 // ── Fault-injection proxy ──
 

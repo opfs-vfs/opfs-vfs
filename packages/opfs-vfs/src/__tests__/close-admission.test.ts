@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, type MockInstance } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
-import { OpfsVfsWorkerClient } from '../worker-client';
-import { changesTransportRequest } from './changes-transport-plugin';
-import { registryTestRequest } from './registry-test-plugin';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpfsVfsWorkerClient } from '../worker-client.js';
+import { changesTransportRequest } from './changes-transport-plugin.js';
+import { registryTestRequest } from './registry-test-plugin.js';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

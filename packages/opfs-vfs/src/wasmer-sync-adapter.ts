@@ -1,6 +1,6 @@
-import { createVfsError } from './fs-errors';
-import { normalizeFsPath } from './fs-path';
-import { OpenFlags, type OpfsVfs, type VfsStat } from './opfs-vfs';
+import { createVfsError } from './fs-errors.js';
+import { normalizeFsPath } from './fs-path.js';
+import { OpenFlags, type OpfsVfs, type VfsStat } from './opfs-vfs.js';
 
 export interface WasmerSyncMetadata {
   kind: 'file' | 'directory';

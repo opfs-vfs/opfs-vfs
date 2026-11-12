@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
-import type { Expected } from './recovery-regressions-worker';
+import { deleteVolume } from '../volume-files.js';
+import type { Expected } from './recovery-regressions-worker.js';
 
 /** Runs one action in a fresh worker, then terminates it: `prepare` leaves its volume open, like a killed tab. */
 async function run(payload: Record<string, unknown>): Promise<Expected> {

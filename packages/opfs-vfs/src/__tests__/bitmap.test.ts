@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { Bitmap } from '../opfs-vfs';
+import { Bitmap } from '../opfs-vfs.js';
 
 describe('Bitmap.alloc (PERF-6 word scan)', () => {
   it('hands out sequential blocks starting after the reserved block 0', () => {

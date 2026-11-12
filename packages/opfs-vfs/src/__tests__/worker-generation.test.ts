@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { GENERATION_METHODS, OpfsVfsWorker, VfsCommandError } from '../index_internal';
+import { GENERATION_METHODS, OpfsVfsWorker, VfsCommandError } from '../index_internal.js';
 
 const name = () => `generation-${crypto.randomUUID()}.bin`;
 const state = (client: OpfsVfsWorker) =>

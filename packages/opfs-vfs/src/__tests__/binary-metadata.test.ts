@@ -9,11 +9,11 @@ import {
   serializeLogRecord,
   serializeLogTransaction,
   serializeMeta,
-} from '../binary-metadata';
-import { VfsCorruptionError } from '../fs-errors';
-import { crc32 } from '../data-wal';
-import type { RecordCodec } from '../storage-contract';
-import type { Inode } from '../opfs-vfs';
+} from '../binary-metadata.js';
+import { VfsCorruptionError } from '../fs-errors.js';
+import { crc32 } from '../data-wal.js';
+import type { RecordCodec } from '../storage-contract.js';
+import type { Inode } from '../opfs-vfs.js';
 
 const testCodec: RecordCodec = {
   overheadBytes: 1,

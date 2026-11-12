@@ -7,8 +7,8 @@ import type {
   SubscriptionError,
   SubscriptionRetirement,
   SubscriptionSetup,
-} from './types';
-import { abortError, error, validateOptions } from './validation';
+} from './types.js';
+import { abortError, error, validateOptions } from './validation.js';
 
 type Local = {
   readonly id: string;
@@ -529,4 +529,4 @@ export type {
   SubscriptionRetirement,
   SubscribeLifecycle,
   SubscriptionSetup,
-} from './types';
+} from './types.js';

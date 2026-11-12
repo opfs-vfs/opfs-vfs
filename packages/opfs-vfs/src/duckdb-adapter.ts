@@ -1,5 +1,5 @@
 import type { DuckDBFileInfo, DuckDBModule, DuckDBRuntime } from '@duckdb/duckdb-wasm/blocking';
-import { OpenFlags, type OpfsVfs } from './opfs-vfs';
+import { OpenFlags, type OpfsVfs } from './opfs-vfs.js';
 
 // DuckDB 1.33.1's public runtime flags. Type-only imports keep Node's blocking
 // entry point out of browser bundles and avoid coupling to generated glue.

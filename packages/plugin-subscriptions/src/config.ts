@@ -1,5 +1,5 @@
 import type { VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
-import { error } from './validation';
+import { error } from './validation.js';
 
 export const SUBSCRIPTIONS_COMPATIBILITY_KEY = 'subscriptions-v1';
 

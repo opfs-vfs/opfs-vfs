@@ -1,7 +1,7 @@
-import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path';
-import type { OpfsVfsWorker } from './index_internal';
-import type { OpfsVfs } from './opfs-vfs';
-import { OpenFlags, type VfsDirEntry, type MkdirOptions as VfsMkdirOptions, type VfsStat } from './opfs-vfs';
+import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path.js';
+import type { OpfsVfsWorker } from './index_internal.js';
+import type { OpfsVfs } from './opfs-vfs.js';
+import { OpenFlags, type VfsDirEntry, type MkdirOptions as VfsMkdirOptions, type VfsStat } from './opfs-vfs.js';
 
 export type BufferEncoding = 'utf8' | 'utf-8' | 'ascii' | 'binary' | 'base64' | 'hex' | 'latin1';
 

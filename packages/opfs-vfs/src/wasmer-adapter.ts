@@ -1,7 +1,7 @@
 import type { SandboxFileSystem } from '@wasmer/sdk/browser';
-import type { OpfsVfsWorker } from './index_internal';
-import { OpfsVfsJustBashAdapter } from './just-bash-adapter';
-import type { OpfsVfs } from './opfs-vfs';
+import type { OpfsVfsWorker } from './index_internal.js';
+import { OpfsVfsJustBashAdapter } from './just-bash-adapter.js';
+import type { OpfsVfs } from './opfs-vfs.js';
 
 /** The public Wasmer SDK 0.14 workspace operations used by this adapter. */
 export type WasmerWorkspace = Pick<SandboxFileSystem, 'readDir' | 'readFile' | 'writeFile' | 'mkdir' | 'remove'>;

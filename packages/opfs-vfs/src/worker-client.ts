@@ -5,9 +5,9 @@ import {
   type VfsDirEntry,
   type VfsStat,
   type WriteFileBufferOptions,
-} from './opfs-vfs';
-import { SAB_SIZE, SyncMessenger } from './sync-messenger';
-import type { VfsPluginRequest } from './plugins';
+} from './opfs-vfs.js';
+import { SAB_SIZE, SyncMessenger } from './sync-messenger.js';
+import type { VfsPluginRequest } from './plugins.js';
 import {
   announcedSharedProfile,
   createSharedMountProfile,
@@ -17,28 +17,28 @@ import {
   sharedMountProfileMismatch,
   type MountProfile,
   type SharedMountProfile,
-} from './worker-plugins';
-import { findVolumeFile, volumeFileNames, VolumeImportingError } from './volume-files';
-import type { ChangeCommand, ChangeFrame, ChangeReply, FileChangeChannel } from './changes';
-import { isChangeReply, snapshotChangeCommand, snapshotChangeFrame } from './change-protocol';
+} from './worker-plugins.js';
+import { findVolumeFile, volumeFileNames, VolumeImportingError } from './volume-files.js';
+import type { ChangeCommand, ChangeFrame, ChangeReply, FileChangeChannel } from './changes.js';
+import { isChangeReply, snapshotChangeCommand, snapshotChangeFrame } from './change-protocol.js';
 import {
   parseRemoteError,
   reviveRemoteError,
   serializeRemoteError,
   toRemoteErrorDetails,
   type RemoteErrorDetails,
-} from './remote-error';
+} from './remote-error.js';
 import {
   parsePersistenceFrame,
   PERSISTENCE_FRAME,
   PERSISTENCE_STATUS,
   type ClientPersistenceStatus,
-} from './persistence-status';
-import { getSupport } from './support';
+} from './persistence-status.js';
+import { getSupport } from './support.js';
 
-export { getSupport, type VfsSupport, type VfsSupportRequirement } from './support';
-export type { RemoteErrorDetails } from './remote-error';
-export type { ClientPersistenceStatus } from './persistence-status';
+export { getSupport, type VfsSupport, type VfsSupportRequirement } from './support.js';
+export type { RemoteErrorDetails } from './remote-error.js';
+export type { ClientPersistenceStatus } from './persistence-status.js';
 
 export type VfsWorkerFactory = () => Worker;
 export interface VfsWorkerEndpoint {

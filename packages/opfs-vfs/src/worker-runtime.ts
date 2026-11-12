@@ -1,15 +1,25 @@
-import { createVfsError } from './fs-errors';
-import { serializeRemoteError } from './remote-error';
-import { MAX_WHOLE_FILE_BYTES, OpfsVfs, OpenFlags, type OpfsVfsOptions, type WriteFileBufferOptions } from './opfs-vfs';
-import { assertUnclaimedConfiguredPlugins, validateConfiguredPlugins, validatedPluginOptions } from './plugin-config';
-import type { ConfiguredVfsPlugin, VfsPluginRegistration } from './plugins';
-import { SyncMessenger } from './sync-messenger';
-import { closeVolume, volumeFileNames } from './volume-files';
-import { shouldLogWorkerError } from './worker-errors';
-import { createMountProfile, isValidPluginId, preparePluginRequests } from './worker-plugins';
-import { markMountReplacement, mountGenerations, persistenceSources, workerChangeOpeners } from './mount-context';
-import type { ChangeCommand, ChangeFrame, FileChangeChannel } from './changes';
-import { encodePersistenceFrame, PERSISTENCE_FRAME, PERSISTENCE_STATUS } from './persistence-status';
+import { createVfsError } from './fs-errors.js';
+import { serializeRemoteError } from './remote-error.js';
+import {
+  MAX_WHOLE_FILE_BYTES,
+  OpfsVfs,
+  OpenFlags,
+  type OpfsVfsOptions,
+  type WriteFileBufferOptions,
+} from './opfs-vfs.js';
+import {
+  assertUnclaimedConfiguredPlugins,
+  validateConfiguredPlugins,
+  validatedPluginOptions,
+} from './plugin-config.js';
+import type { ConfiguredVfsPlugin, VfsPluginRegistration } from './plugins.js';
+import { SyncMessenger } from './sync-messenger.js';
+import { closeVolume, volumeFileNames } from './volume-files.js';
+import { shouldLogWorkerError } from './worker-errors.js';
+import { createMountProfile, isValidPluginId, preparePluginRequests } from './worker-plugins.js';
+import { markMountReplacement, mountGenerations, persistenceSources, workerChangeOpeners } from './mount-context.js';
+import type { ChangeCommand, ChangeFrame, FileChangeChannel } from './changes.js';
+import { encodePersistenceFrame, PERSISTENCE_FRAME, PERSISTENCE_STATUS } from './persistence-status.js';
 
 export type WorkerInitPayload = Record<string, unknown>;
 

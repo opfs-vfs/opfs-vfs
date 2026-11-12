@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
-import { deleteVolume } from '../index';
-import { OpfsVfsWorker } from '../index_internal';
-import { persistenceFaultRequest } from './persistence-fault-plugin';
+import { deleteVolume } from '../index.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { persistenceFaultRequest } from './persistence-fault-plugin.js';
 
 const name = () => `persistence-status-${crypto.randomUUID()}.bin`;
 const factory = () => new Worker(new URL('./persistence-status-worker.ts', import.meta.url), { type: 'module' });

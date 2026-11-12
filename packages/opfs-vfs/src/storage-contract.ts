@@ -1,4 +1,4 @@
-import type { SyncAccessHandle } from './sync-access-handle';
+import type { SyncAccessHandle } from './sync-access-handle.js';
 
 /** Stable on-disk record identities. Implementations must preserve these values. */
 export const RecordRole = Object.freeze({ metaLog: 0x03, snapshot: 0x02, dataWal: 0x04 });

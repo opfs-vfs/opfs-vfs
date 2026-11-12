@@ -1,5 +1,5 @@
-import type { VolumeStorageFactory } from './storage-contract';
-import type { LogicalChangeContribution } from './changes';
+import type { VolumeStorageFactory } from './storage-contract.js';
+import type { LogicalChangeContribution } from './changes.js';
 
 /** Reserved protection files that a storage plugin may own. */
 export type StorageSidecarSuffix = '.vault' | '.crypt' | '.crypt.log';
@@ -39,6 +39,6 @@ export interface VfsPluginFactory<Options> extends VfsPluginRegistration {
   (options: Options): ConfiguredVfsPlugin;
 }
 
-export { RecordRole } from './storage-contract';
-export type { RecordCodec, VolumeStorage, VolumeStorageFactory, VolumeStorageOpenContext } from './storage-contract';
-export type { SyncAccessHandle } from './sync-access-handle';
+export { RecordRole } from './storage-contract.js';
+export type { RecordCodec, VolumeStorage, VolumeStorageFactory, VolumeStorageOpenContext } from './storage-contract.js';
+export type { SyncAccessHandle } from './sync-access-handle.js';

@@ -1,6 +1,6 @@
-import { OpfsVfsWorker } from '../index_internal';
-import { deleteVolume } from '../volume-files';
-import { measureAsync, measureColdAsync, prepareDataset, type Workload } from './benchmark-worker-client-workloads';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { deleteVolume } from '../volume-files.js';
+import { measureAsync, measureColdAsync, prepareDataset, type Workload } from './benchmark-worker-client-workloads.js';
 
 type Mode = 'disk' | 'memory';
 type SabRequest =

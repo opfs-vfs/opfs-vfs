@@ -1,6 +1,6 @@
-import { createVfsError } from './fs-errors';
-import type { OpfsVfsOptions } from './opfs-vfs';
-import type { VfsPluginRequest } from './plugins';
+import { createVfsError } from './fs-errors.js';
+import type { OpfsVfsOptions } from './opfs-vfs.js';
+import type { VfsPluginRequest } from './plugins.js';
 
 export interface MountProfile {
   readonly version: 2;

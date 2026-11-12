@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { Bitmap, OpenFlags, OpfsVfs } from '../opfs-vfs';
-import { replayLog } from '../binary-metadata';
+import { Bitmap, OpenFlags, OpfsVfs } from '../opfs-vfs.js';
+import { replayLog } from '../binary-metadata.js';
 
 function expectErrorCode(fn: () => unknown, code: string) {
   try {

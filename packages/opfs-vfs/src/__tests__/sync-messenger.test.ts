@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { VfsCorruptionError, VfsError } from '../fs-errors';
-import { SAB_SIZE, Status, SyncMessenger } from '../sync-messenger';
+import { VfsCorruptionError, VfsError } from '../fs-errors.js';
+import { SAB_SIZE, Status, SyncMessenger } from '../sync-messenger.js';
 
 // Int32 header slot layout (mirrors sync-messenger.ts internals).
 const STATUS_SLOT = 0;

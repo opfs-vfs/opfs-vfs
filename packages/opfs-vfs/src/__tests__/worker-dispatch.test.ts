@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
+import { OpfsVfsWorker } from '../index_internal.js';
 
 const name = () => `dispatch-${crypto.randomUUID()}.bin`;
 const state = (client: OpfsVfsWorker) => client as unknown as { worker: Worker | null; channel: BroadcastChannel };

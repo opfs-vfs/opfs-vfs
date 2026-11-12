@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { CURRENT_BINARY_VERSION, frameMetaSnapshot, serializeMeta } from '../binary-metadata';
-import { peekVolume } from '../peek-volume';
+import { CURRENT_BINARY_VERSION, frameMetaSnapshot, serializeMeta } from '../binary-metadata.js';
+import { peekVolume } from '../peek-volume.js';
 
 for (const suffix of ['.meta.a', '.meta.b']) {
   it(`recognizes a current plaintext snapshot in ${suffix}`, async () => {

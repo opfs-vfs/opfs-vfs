@@ -1,4 +1,4 @@
-import { OpenFlags } from '../opfs-vfs';
+import { OpenFlags } from '../opfs-vfs.js';
 
 export const BLOCK = 4096;
 export const DATA_BLOCKS = 256;

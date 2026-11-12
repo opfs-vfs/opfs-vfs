@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { getSupport } from '../index_internal';
+import { getSupport } from '../index_internal.js';
 
 afterEach(() => vi.unstubAllGlobals());
 

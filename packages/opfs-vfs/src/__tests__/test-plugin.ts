@@ -1,4 +1,4 @@
-import type { ConfiguredVfsPlugin, StorageSidecarSuffix, VolumeStorageFactory } from '../plugins';
+import type { ConfiguredVfsPlugin, StorageSidecarSuffix, VolumeStorageFactory } from '../plugins.js';
 
 export function testPlugin(
   factory: VolumeStorageFactory,

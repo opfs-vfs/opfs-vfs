@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { OpfsVfsPGliteAdapter, type VfsSyncApi } from '../adapter';
-import { OpfsVfsWorker } from '../index_internal';
-import { SyncMessenger } from '../sync-messenger';
-import { deleteVolume } from '../volume-files';
-import type { OpfsVfsWorkerClient } from '../worker-client';
+import { OpfsVfsPGliteAdapter, type VfsSyncApi } from '../adapter.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { SyncMessenger } from '../sync-messenger.js';
+import { deleteVolume } from '../volume-files.js';
+import type { OpfsVfsWorkerClient } from '../worker-client.js';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 

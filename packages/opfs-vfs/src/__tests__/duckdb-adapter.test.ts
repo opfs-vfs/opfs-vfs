@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
+import { deleteVolume } from '../volume-files.js';
 
 type Observation = {
   rows: { category: number; count: number; total: number }[];

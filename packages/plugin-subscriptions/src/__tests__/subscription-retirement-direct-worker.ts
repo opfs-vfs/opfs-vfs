@@ -1,7 +1,7 @@
 import { deleteVolume, OpfsVfs } from '@opfs-vfs/opfs-vfs';
 import type { ChangeCommand, ChangeReply, FileChangeChannel, FileChangeSource } from '@opfs-vfs/opfs-vfs/changes';
-import { subscribe } from '../client';
-import { subscriptions } from '../owner';
+import { subscribe } from '../client.js';
+import { subscriptions } from '../owner.js';
 
 const options = {
   path: '/',

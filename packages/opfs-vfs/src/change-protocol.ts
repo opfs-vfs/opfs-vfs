@@ -1,4 +1,4 @@
-import { createVfsError } from './fs-errors';
+import { createVfsError } from './fs-errors.js';
 import type {
   ChangeCommand,
   ChangeFrame,
@@ -7,7 +7,7 @@ import type {
   FileChange,
   TerminalCode,
   WireSubscribeOptions,
-} from './changes';
+} from './changes.js';
 
 const MAX_BYTES = 16 * 1024 * 1024;
 const changeTypes = new Set<ChangeType>(['create', 'update', 'delete']);

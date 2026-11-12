@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore, useState, type ReactNode } from 'react';
-import { configurationError, VolumeError } from './errors';
-import { useVolumeBinding, type VolumeName } from './volume';
+import { configurationError, VolumeError } from './errors.js';
+import { useVolumeBinding, type VolumeName } from './volume.js';
 import type {
   FileContentResult,
   FileInfo,
@@ -11,8 +11,8 @@ import type {
   ResourceKind,
   ResourceResult,
   ResourceValue,
-} from './resources';
-import { MAX_CONTENT_BYTES } from './resources';
+} from './resources.js';
+import { MAX_CONTENT_BYTES } from './resources.js';
 
 const idle = Object.freeze({
   status: 'idle' as const,

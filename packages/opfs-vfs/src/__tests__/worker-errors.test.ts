@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldLogWorkerError } from '../worker-errors';
+import { shouldLogWorkerError } from '../worker-errors.js';
 
 describe('shouldLogWorkerError', () => {
   it('suppresses expected missing-path probes from filesystem clients', () => {

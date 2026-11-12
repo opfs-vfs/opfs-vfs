@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
-import { inspectWorker } from '../worker-client';
-import { peekVolume } from '../peek-volume';
-import { deleteVolume } from '../volume-files';
-import { registryTestRequest } from './registry-test-plugin';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { inspectWorker } from '../worker-client.js';
+import { peekVolume } from '../peek-volume.js';
+import { deleteVolume } from '../volume-files.js';
+import { registryTestRequest } from './registry-test-plugin.js';
 
 const name = () => `plugin-client-${crypto.randomUUID()}.bin`;
 const factory = () => new Worker(new URL('./registry-test-worker.ts', import.meta.url), { type: 'module' });

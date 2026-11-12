@@ -1,7 +1,7 @@
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs';
-import { testPlugin } from './test-plugin';
-import { deleteVolume } from '../volume-files';
-import type { VolumeStorageFactory } from '../storage-contract';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs.js';
+import { testPlugin } from './test-plugin.js';
+import { deleteVolume } from '../volume-files.js';
+import type { VolumeStorageFactory } from '../storage-contract.js';
 
 const volumes: string[] = [];
 const unique = () => {

@@ -1,7 +1,7 @@
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
-import type { ChangeFrame } from '../changes';
-import { changesTransportPlugin } from './changes-transport-plugin';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
+import type { ChangeFrame } from '../changes.js';
+import { changesTransportPlugin } from './changes-transport-plugin.js';
 
 const options = {
   path: '/',

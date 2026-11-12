@@ -2,19 +2,19 @@
 import VfsWorker from './worker?worker&inline';
 // @ts-expect-error Vite SharedWorker import with query string
 import DefaultSharedWorker from './default-shared-worker?sharedworker';
-import { OpfsVfsWorkerClient, type OpfsVfsWorkerClientOptions, type VfsWorkerFactory } from './worker-client';
-import { createVfsError } from './fs-errors';
-import { getSupport } from './support';
-import { createSharedWorkerFollower, probeSharedWorker, type SharedWorkerFactory } from './shared-worker';
-import { mountProfileMismatch, preparePluginRequests } from './worker-plugins';
+import { OpfsVfsWorkerClient, type OpfsVfsWorkerClientOptions, type VfsWorkerFactory } from './worker-client.js';
+import { createVfsError } from './fs-errors.js';
+import { getSupport } from './support.js';
+import { createSharedWorkerFollower, probeSharedWorker, type SharedWorkerFactory } from './shared-worker.js';
+import { mountProfileMismatch, preparePluginRequests } from './worker-plugins.js';
 export {
   createSharedWorkerFollower,
   probeSharedWorker,
   startVfsSharedWorker,
   type SharedWorkerFactory,
-} from './shared-worker';
+} from './shared-worker.js';
 
-export { getSupport, type VfsSupport, type VfsSupportRequirement } from './support';
+export { getSupport, type VfsSupport, type VfsSupportRequirement } from './support.js';
 export {
   GENERATION_METHODS,
   VfsCommandError,
@@ -26,7 +26,7 @@ export {
   type GenerationMethod,
   type RemoteErrorDetails,
   type VfsDispatch,
-} from './worker-client';
+} from './worker-client.js';
 
 export interface OpfsVfsWorkerOptions extends OpfsVfsWorkerClientOptions {
   /** Create a fresh application worker for each ownership acquisition. */
@@ -34,7 +34,7 @@ export interface OpfsVfsWorkerOptions extends OpfsVfsWorkerClientOptions {
   /** Enable passive observers for an application worker that supports the bundled protocol. */
   observerProtocol?: boolean;
 }
-export type { VfsWorkerFactory } from './worker-client';
+export type { VfsWorkerFactory } from './worker-client.js';
 
 export type OpenOpfsVfsWorkerOptions = Omit<OpfsVfsWorkerOptions, 'transport' | 'fallbackReason'> & {
   /** `auto` prefers a compatible SharedWorker and otherwise keeps a dedicated worker. */

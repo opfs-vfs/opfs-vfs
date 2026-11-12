@@ -1,5 +1,5 @@
-import { RecordRole, type RecordCodec } from './storage-contract';
-import { VfsCorruptionError } from './fs-errors';
+import { RecordRole, type RecordCodec } from './storage-contract.js';
+import { VfsCorruptionError } from './fs-errors.js';
 
 const WAL_FRAME_HEADER_BYTES = 8;
 // Version 4 removes checkpoint frames. Checkpointing now truncates the WAL.

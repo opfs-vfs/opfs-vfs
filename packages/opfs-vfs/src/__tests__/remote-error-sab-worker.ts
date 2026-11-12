@@ -1,4 +1,4 @@
-import { OpfsVfsWorker } from '../index_internal';
+import { OpfsVfsWorker } from '../index_internal.js';
 
 self.onmessage = async () => {
   const client = new OpfsVfsWorker(`remote-error-sab-${crypto.randomUUID()}.bin`, { forceLeader: true });

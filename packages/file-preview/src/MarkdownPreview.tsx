@@ -1,10 +1,10 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { lazy } from 'react';
-import { fileSize } from './preview-policy';
-import type { PreviewProps } from './FilePreview';
-const TextEditor = lazy(() => import('./TextEditor'));
-const BinaryPreview = lazy(() => import('./BinaryPreview'));
+import { fileSize } from './preview-policy.ts';
+import type { PreviewProps } from './FilePreview.tsx';
+const TextEditor = lazy(() => import('./TextEditor.tsx'));
+const BinaryPreview = lazy(() => import('./BinaryPreview.tsx'));
 export default function MarkdownPreview({ file }: PreviewProps) {
   if (file.bytes) return <BinaryPreview file={file} />;
   // ponytail: large Markdown uses the virtualized source view; AST rendering is bounded to 256 KiB.

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { deleteVolume, volumeFileNames } from '../volume-files';
-import { mountProfileMismatch, preparePluginRequests } from '../worker-plugins';
-import { peekVolume } from '../peek-volume';
-import { registryTestRequest } from './registry-test-plugin';
+import { deleteVolume, volumeFileNames } from '../volume-files.js';
+import { mountProfileMismatch, preparePluginRequests } from '../worker-plugins.js';
+import { peekVolume } from '../peek-volume.js';
+import { registryTestRequest } from './registry-test-plugin.js';
 
 const workers: Worker[] = [];
 const names: string[] = [];

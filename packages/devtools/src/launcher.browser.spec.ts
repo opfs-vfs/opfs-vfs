@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { DebugPanel, type LauncherPosition } from './DebugPanel';
+import { DebugPanel, type LauncherPosition } from './DebugPanel.tsx';
 
 const positions: [LauncherPosition, number, number][] = [
   ['top-left', 0, 0],

@@ -1,8 +1,8 @@
 import { act, StrictMode } from 'react';
 import { expect, it, vi } from 'vitest';
 import type { ClientStatus, OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
-import { VolumeProvider, usePersistentStorage, type PersistentStorageResult } from '../index';
-import { mount, waitFor } from './harness';
+import { VolumeProvider, usePersistentStorage, type PersistentStorageResult } from '../index.js';
+import { mount, waitFor } from './harness.js';
 
 function storage(value: Pick<StorageManager, 'persisted' | 'persist'>) {
   const previous = Object.getOwnPropertyDescriptor(navigator, 'storage');

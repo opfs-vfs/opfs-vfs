@@ -1,5 +1,5 @@
-import { OpfsVfsWorker } from '../index_internal';
-import { measureColdAsync, measureSync, prepareDataset, type Workload } from './benchmark-worker-client-workloads';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { measureColdAsync, measureSync, prepareDataset, type Workload } from './benchmark-worker-client-workloads.js';
 
 type Request =
   | { id: number; type: 'open'; name: string; mode: 'disk' | 'memory' }

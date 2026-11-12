@@ -1,7 +1,7 @@
 import { VfsCommandError } from '@opfs-vfs/opfs-vfs/worker';
 import type { RemoteErrorDetails } from '@opfs-vfs/opfs-vfs/worker';
 import { describe, expect, it } from 'vitest';
-import { classify, toVolumeError, VolumeError } from '../errors';
+import { classify, toVolumeError, VolumeError } from '../errors.js';
 
 const details = (code?: string, name?: string, category?: RemoteErrorDetails['category']): RemoteErrorDetails => ({
   message: code ?? name ?? 'failure',

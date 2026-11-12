@@ -1,5 +1,5 @@
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
 
 const opts: OpfsVfsOptions = { bufferMode: 'disk', noatime: true };
 const fresh: OpfsVfsOptions = { ...opts, openMode: 'create-new' };

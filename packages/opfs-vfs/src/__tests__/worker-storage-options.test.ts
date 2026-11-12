@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { OpfsVfsWorker, type OpfsVfsWorkerOptions } from '../index_internal';
+import { OpfsVfsWorker, type OpfsVfsWorkerOptions } from '../index_internal.js';
 
 function initCoreWorker(payload: Record<string, unknown>) {
   return new Promise<{ type: string; result?: { error?: string; code?: string } }>((resolve, reject) => {

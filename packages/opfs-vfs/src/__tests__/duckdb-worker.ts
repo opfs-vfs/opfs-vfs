@@ -3,8 +3,8 @@ import { DuckDB, VoidLogger, DuckDBAccessMode } from '../../.duckdb/duckdb.js';
 // @ts-expect-error Vite asset URL import
 // fallow-ignore-next-line unresolved-import -- supplied by the external engine build
 import wasm from '../../.duckdb/duckdb.wasm?url';
-import { OpfsVfs, OpenFlags } from '../opfs-vfs';
-import { createDuckDBRuntime } from '../duckdb-adapter';
+import { OpfsVfs, OpenFlags } from '../opfs-vfs.js';
+import { createDuckDBRuntime } from '../duckdb-adapter.js';
 
 self.onmessage = async ({ data }: MessageEvent<{ name: string; phase: string }>) => {
   const vfs = new OpfsVfs(data.name, { bufferMode: 'disk', localDurabilityMode: 'strict' });

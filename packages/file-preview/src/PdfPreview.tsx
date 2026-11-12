@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions, PDFWorker } from 'pdfjs-dist';
-import type { PreviewProps } from './FilePreview';
-import { pdfWorkerSrc } from './pdf-worker-src';
+import type { PreviewProps } from './FilePreview.tsx';
+import { pdfWorkerSrc } from './pdf-worker-src.ts';
 
 // The library build replaces this with `new URL('./pdf.worker.js', import.meta.url)` (see vite.config.ts), so dist
 // contains the `new Worker(new URL(…, import.meta.url))` pattern that the consumer's bundler resolves and bundles.

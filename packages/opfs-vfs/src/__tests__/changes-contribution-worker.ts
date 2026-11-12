@@ -1,6 +1,6 @@
-import { OpfsVfs } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
-import { changeTestPlugin, eventFrame, type ChangePluginState } from './changes-test-plugin';
+import { OpfsVfs } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
+import { changeTestPlugin, eventFrame, type ChangePluginState } from './changes-test-plugin.js';
 
 const name = (label: string) => `${label}-${crypto.randomUUID()}.bin`;
 const check = (pass: boolean, detail: string) => ({ pass, detail });

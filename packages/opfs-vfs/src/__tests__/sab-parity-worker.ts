@@ -3,8 +3,8 @@
 // diverged on errno semantics. This worker runs ONE assertion function over
 // BOTH transports and reports the captured errno/value for each scenario; the
 // test asserts they are identical.
-import { OpfsVfsWorker } from '../index_internal';
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
 
 const origError = console.error;
 const formatError = (error: unknown) =>

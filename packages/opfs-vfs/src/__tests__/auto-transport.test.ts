@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { OpfsVfsWorker, openOpfsVfsWorker } from '../index_internal';
-import { deleteVolume } from '../volume-files';
-import { createMountProfile } from '../worker-plugins';
+import { OpfsVfsWorker, openOpfsVfsWorker } from '../index_internal.js';
+import { deleteVolume } from '../volume-files.js';
+import { createMountProfile } from '../worker-plugins.js';
 
 const name = (prefix: string) => `${prefix}-${crypto.randomUUID()}.bin`;
 const supportsSharedSyncHandle = /AppleWebKit/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);

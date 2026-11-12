@@ -6,8 +6,8 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { LanguageDescription, syntaxHighlighting } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { classHighlighter } from '@lezer/highlight';
-import { limitTextChanges, textFits } from './text-limit';
-import { extension } from './preview-policy';
+import { limitTextChanges, textFits } from './text-limit.ts';
+import { extension } from './preview-policy.ts';
 
 function Editor({
   path,

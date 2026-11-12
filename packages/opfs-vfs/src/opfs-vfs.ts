@@ -22,7 +22,7 @@ import {
   serializeLogRecord,
   serializeLogTransaction,
   serializeMeta,
-} from './binary-metadata';
+} from './binary-metadata.js';
 import {
   crc32,
   DataWalCorruptionError,
@@ -30,8 +30,8 @@ import {
   decodeDataWalRecords,
   encodeDataWalRecord,
   replayDataWalRecords,
-} from './data-wal';
-import { createVfsError, isVfsErrno, StoragePluginRequiredError, VfsCorruptionError } from './fs-errors';
+} from './data-wal.js';
+import { createVfsError, isVfsErrno, StoragePluginRequiredError, VfsCorruptionError } from './fs-errors.js';
 import type {
   ChangeClient,
   ChangeFrame,
@@ -44,15 +44,21 @@ import type {
   LogicalChangeSession,
   LogicalRecord,
   WireSubscribeOptions,
-} from './changes';
-import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path';
-import { isChangeReply, snapshotChangeCommand, snapshotChangeFrame, utf8Charge } from './change-protocol';
-import { isMountReplacement, mountGenerations, persistenceSources, workerChangeOpeners } from './mount-context';
-import { claimConfiguredPlugins, validateConfiguredPlugins, validatedPluginOptions } from './plugin-config';
-import type { ConfiguredVfsPlugin, StorageSidecarSuffix } from './plugins';
-import { type SyncAccessHandle, withCompleteIo } from './sync-access-handle';
-import { type RecordCodec, type VolumeStorage, type VolumeStorageFactory } from './storage-contract';
-import { acquireVolumeLock, findVolumeFile, isNotFound, VolumeImportingError, volumeFileNames } from './volume-files';
+} from './changes.js';
+import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path.js';
+import { isChangeReply, snapshotChangeCommand, snapshotChangeFrame, utf8Charge } from './change-protocol.js';
+import { isMountReplacement, mountGenerations, persistenceSources, workerChangeOpeners } from './mount-context.js';
+import { claimConfiguredPlugins, validateConfiguredPlugins, validatedPluginOptions } from './plugin-config.js';
+import type { ConfiguredVfsPlugin, StorageSidecarSuffix } from './plugins.js';
+import { type SyncAccessHandle, withCompleteIo } from './sync-access-handle.js';
+import { type RecordCodec, type VolumeStorage, type VolumeStorageFactory } from './storage-contract.js';
+import {
+  acquireVolumeLock,
+  findVolumeFile,
+  isNotFound,
+  VolumeImportingError,
+  volumeFileNames,
+} from './volume-files.js';
 
 const attachedBuffer = (buffer: ArrayBuffer) => {
   try {

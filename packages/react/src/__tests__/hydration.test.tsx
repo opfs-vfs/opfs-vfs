@@ -2,8 +2,8 @@ import { act } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { VolumeProvider, type VolumeResult } from '../index';
-import { closeManaged, countingWorker, volumeName, waitFor } from './harness';
+import { VolumeProvider, type VolumeResult } from '../index.js';
+import { closeManaged, countingWorker, volumeName, waitFor } from './harness.js';
 
 describe('hydration', () => {
   it('renders pending on the server and hydrates without recoverable errors before opening', async () => {

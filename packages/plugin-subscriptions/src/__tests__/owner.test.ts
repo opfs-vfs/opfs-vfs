@@ -6,7 +6,7 @@ import type {
   WireSubscribeOptions,
 } from '@opfs-vfs/opfs-vfs/changes';
 import { describe, expect, it, vi } from 'vitest';
-import { subscriptions } from '../owner';
+import { subscriptions } from '../owner.js';
 
 const base: WireSubscribeOptions = {
   path: '/',

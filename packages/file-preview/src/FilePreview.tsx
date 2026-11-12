@@ -1,9 +1,9 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
-import type { PreviewFile } from './preview-policy';
-import { canEdit, extension, fileSize, MAX_PREVIEW_BYTES } from './preview-policy';
+import type { PreviewFile } from './preview-policy.ts';
+import { canEdit, extension, fileSize, MAX_PREVIEW_BYTES } from './preview-policy.ts';
 
-export const TextEditor = lazy(() => import('./TextEditor'));
-const BinaryPreview = lazy(() => import('./BinaryPreview'));
+export const TextEditor = lazy(() => import('./TextEditor.tsx'));
+const BinaryPreview = lazy(() => import('./BinaryPreview.tsx'));
 export type PreviewProps = { file: Readonly<PreviewFile> };
 // Trusted application code, not a sandbox. Renderers get data, never a volume or save callback.
 export type PreviewExtension = {
@@ -81,11 +81,11 @@ function PlainTextPreview({ file }: PreviewProps) {
 }
 const builtins: PreviewExtension[] = [
   { id: 'image', matches: (path) => !!imageMime[extension(path)], load: async () => ({ default: ImagePreview }) },
-  { id: 'pdf', matches: (path) => extension(path) === 'pdf', load: () => import('./PdfPreview') },
+  { id: 'pdf', matches: (path) => extension(path) === 'pdf', load: () => import('./PdfPreview.tsx') },
   {
     id: 'markdown',
     matches: (path) => ['md', 'markdown'].includes(extension(path)),
-    load: () => import('./MarkdownPreview'),
+    load: () => import('./MarkdownPreview.tsx'),
   },
   { id: 'text', matches: () => true, load: async () => ({ default: PlainTextPreview }) },
 ];

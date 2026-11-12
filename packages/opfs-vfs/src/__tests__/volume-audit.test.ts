@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deleteVolume } from '../index';
-import { OpfsVfsWorker } from '../index_internal';
-import { peekVolume } from '../peek-volume';
-import { closeVolume } from '../volume-files';
-import { CURRENT_BINARY_VERSION } from '../binary-metadata';
+import { deleteVolume } from '../index.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { peekVolume } from '../peek-volume.js';
+import { closeVolume } from '../volume-files.js';
+import { CURRENT_BINARY_VERSION } from '../binary-metadata.js';
 
 function run(payload: Record<string, unknown>) {
   return new Promise<void>((resolve, reject) => {

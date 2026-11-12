@@ -1,4 +1,4 @@
-import type { ConfiguredVfsPlugin, VfsPluginFactory, VfsPluginRequest } from '../plugins';
+import type { ConfiguredVfsPlugin, VfsPluginFactory, VfsPluginRequest } from '../plugins.js';
 
 const id = 'persistence-fault';
 const compatibilityKey = 'persistence-fault-v1';

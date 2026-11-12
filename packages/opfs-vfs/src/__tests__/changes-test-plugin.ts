@@ -1,5 +1,5 @@
-import type { ChangeCommand, ChangeClient, ChangeFrame, LogicalChangeHost, LogicalChangeSession } from '../changes';
-import type { ConfiguredVfsPlugin } from '../plugins';
+import type { ChangeCommand, ChangeClient, ChangeFrame, LogicalChangeHost, LogicalChangeSession } from '../changes.js';
+import type { ConfiguredVfsPlugin } from '../plugins.js';
 
 export interface ChangePluginState {
   creates: number;

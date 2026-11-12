@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
 import type * as Sdk from '@wasmer/sdk/browser';
-import { OpfsVfsWorker } from '../index_internal';
-import { OpfsVfsJustBashAdapter } from '../just-bash-adapter';
-import { OpfsVfsWasmerAdapter } from '../wasmer-adapter';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpfsVfsJustBashAdapter } from '../just-bash-adapter.js';
+import { OpfsVfsWasmerAdapter } from '../wasmer-adapter.js';
 
 it('runs upstream EdgeJS and preserves guest writes after OPFS and sandbox reopen', async () => {
   const sdkUrl = new URL('/dist/index.js', location.origin).href;

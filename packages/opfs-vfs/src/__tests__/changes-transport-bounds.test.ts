@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import type { ChangeFrame, WireSubscribeOptions } from '../changes';
-import { snapshotChangeCommand } from '../change-protocol';
-import { OpfsVfsWorker } from '../index_internal';
-import { deleteVolume } from '../volume-files';
-import { changesTransportRequest } from './changes-transport-plugin';
+import type { ChangeFrame, WireSubscribeOptions } from '../changes.js';
+import { snapshotChangeCommand } from '../change-protocol.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { deleteVolume } from '../volume-files.js';
+import { changesTransportRequest } from './changes-transport-plugin.js';
 
 const clients: OpfsVfsWorker[] = [];
 const names: string[] = [];

@@ -2,9 +2,9 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
-import { DebugPanel } from './DebugPanel';
-import { DevtoolsSession } from './runtime';
-import type { MockVolume } from './mock-state';
+import { DebugPanel } from './DebugPanel.tsx';
+import { DevtoolsSession } from './runtime.ts';
+import type { MockVolume } from './mock-state.ts';
 
 test('volume details distinguish unavailable and zero sizes and format large totals', async () => {
   await page.viewport(1000, 800);

@@ -1,4 +1,4 @@
-import type { VfsCorruptionCategory } from './fs-errors';
+import type { VfsCorruptionCategory } from './fs-errors.js';
 
 /** Bounded, validated error fields that may cross a worker, relay, status or SAB boundary. */
 export interface RemoteErrorDetails {

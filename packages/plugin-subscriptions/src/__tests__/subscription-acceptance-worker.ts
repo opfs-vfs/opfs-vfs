@@ -1,8 +1,8 @@
 import { deleteVolume, OpfsVfs } from '@opfs-vfs/opfs-vfs';
 import type { CompletedLogicalOperation } from '@opfs-vfs/opfs-vfs/changes';
 import type { ConfiguredVfsPlugin } from '@opfs-vfs/opfs-vfs/plugins';
-import { subscribe, type Subscription } from '../client';
-import { subscriptions } from '../index';
+import { subscribe, type Subscription } from '../client.js';
+import { subscriptions } from '../index.js';
 
 type Mode = 'none' | 'metadata' | 'content';
 type Result = {
