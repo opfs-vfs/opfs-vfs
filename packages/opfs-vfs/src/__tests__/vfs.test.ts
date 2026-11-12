@@ -328,7 +328,7 @@ describe('Memory-mode data WAL recovery (OpfsVfs)', () => {
     }
   }, 60000);
 
-  it('ignores partial trailing data WAL records and salvages a bad-checksum WAL (INT-5)', async () => {
+  it('ignores partial trailing data WAL records and a bad-checksum final frame (INT-5)', async () => {
     const result = await runPersistenceWorkerScenario('RUN_MEMORY_WAL_PARTIAL_TRAILING_TEST');
     for (const r of result) {
       expect(r.pass, `${r.check}${r.detail ? `: ${r.detail}` : ''}`).toBe(true);

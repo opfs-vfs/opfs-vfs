@@ -137,9 +137,48 @@ describe('memory-mode recovery after a killed tab', () => {
       }),
     30_000,
   );
+
+  it(
+    'a final data WAL frame that fails its checksum is a torn append, even in fail-stop mode',
+    () =>
+      withVolume('recovery-torn-frame', async (name) => {
+        const expected = await run({ name, action: 'prepare', scenario: 'wal-two-files' });
+        await run({ name, action: 'tear-final-frame' });
+        await run({ name, action: 'verify', mode: 'memory', recoveryMode: 'fail-stop', expected });
+      }),
+    30_000,
+  );
+});
+
+describe('data WAL frames behind a damaged frame', () => {
+  it(
+    'a damaged length field of an early frame is corruption, not a torn append: fail-stop refuses and salvage reports it',
+    () =>
+      withVolume('recovery-damaged-length', async (name) => {
+        await run({ name, action: 'prepare', scenario: 'wal-three-files' });
+        await run({ name, action: 'damaged-wal-length' });
+        await run({ name, action: 'damaged-wal-verify' });
+      }),
+    30_000,
+  );
 });
 
 describe('volumes damaged by the path-order bug of an earlier release', () => {
+  for (const blocker of ['file', 'file+nested', 'file+lost-file', 'file+lost-dir'] as const) {
+    it(
+      `entries under a non-directory move to a free lost+found directory (${blocker})`,
+      () =>
+        withVolume('recovery-blocked', async (name) => {
+          const mode = blocker === 'file' || blocker === 'file+nested' ? 'memory' : 'disk';
+          await run({ name, action: 'detached-forge', mode, blocker });
+          for (let round = 0; round < 2; round++) {
+            await run({ name, action: 'detached-verify', mode, blocker, recoveryMode: 'fail-stop', round });
+          }
+        }),
+      30_000,
+    );
+  }
+
   for (const [mode, recoveryMode] of [
     ['memory', 'salvage'],
     ['disk', 'fail-stop'],
@@ -159,6 +198,48 @@ describe('volumes damaged by the path-order bug of an earlier release', () => {
 });
 
 describe('storage error handling', () => {
+  for (const mode of ['memory', 'disk'] as const) {
+    it(
+      `${mode}: salvage reports the rollback to an older snapshot and fail-stop refuses it`,
+      () => withVolume('rollback-report', (name) => run({ name, action: 'rollback-report', mode }).then(() => {})),
+      30_000,
+    );
+  }
+
+  for (const durability of ['relaxed', 'balanced', 'strict'] as const) {
+    it(
+      `${durability}: a namespace operation whose log write fails ${durability === 'strict' ? 'throws' : 'succeeds and the next sync retries'}`,
+      () =>
+        withVolume('deferred-namespace', (name) =>
+          run({ name, action: 'deferred-namespace', durability }).then(() => {}),
+        ),
+      30_000,
+    );
+  }
+
+  for (const durability of ['relaxed', 'balanced'] as const) {
+    for (const variant of ['sync-fails', 'sync-succeeds'] as const) {
+      it(
+        `${durability}: an unlink whose log write failed does not let a ${variant === 'sync-fails' ? 'failing' : 'later'} sync reuse its blocks before the delete is durable`,
+        () =>
+          withVolume('unwritten-namespace', async (name) => {
+            const expected = await run({ name, action: 'unwritten-namespace', durability, variant });
+            await run({ name, action: 'unwritten-verify', variant, expected });
+          }),
+        30_000,
+      );
+    }
+
+    it(
+      `${durability}: a namespace log write that fails for a non-storage reason still throws`,
+      () =>
+        withVolume('non-storage-namespace', (name) =>
+          run({ name, action: 'non-storage-namespace', durability }).then(() => {}),
+        ),
+      30_000,
+    );
+  }
+
   it(
     'an all-zero data WAL on a protected volume is an empty log, even in fail-stop mode',
     () => withVolume('zero-protected-wal', (name) => run({ name, action: 'zero-protected-wal' }).then(() => {})),

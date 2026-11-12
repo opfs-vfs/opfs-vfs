@@ -553,7 +553,9 @@ it('includes mount-time WAL salvage in the initial persistence snapshot', async 
     const root = await navigator.storage.getDirectory();
     const log = await root.getFileHandle(fileName.replace(/\.bin$/, '.data.log'));
     const bytes = new Uint8Array(await (await log.getFile()).arrayBuffer());
-    bytes[bytes.length - 1] ^= 0xff;
+    // The first frame of two: a checksum failure with a valid frame after it is corruption,
+    // while a failing final frame would be dropped quietly as a torn append.
+    bytes[8] ^= 0xff;
     const writable = await log.createWritable({ keepExistingData: true });
     await writable.write(bytes);
     await writable.close();
@@ -782,7 +784,9 @@ for (const [source, failures] of [
         worker.postMessage({ case: source });
       });
       expect(result).toMatchObject({
-        thrown: Array(failures).fill(true),
+        // In balanced mode a namespace operation succeeds when its log write fails:
+        // the failure is recorded and the next sync retries it.
+        thrown: Array(failures).fill(source !== 'snapshot'),
         failed: { state: 'error', failureRevision: failures, retained: true },
         recovered: { state: 'clean', failureRevision: failures, retained: true },
       });

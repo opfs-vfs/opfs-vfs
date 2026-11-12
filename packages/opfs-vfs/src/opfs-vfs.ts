@@ -749,6 +749,12 @@ export class OpfsVfs implements FileChangeSource {
    * durable at the sync barrier.
    */
   private metaLogFlushPending = false;
+  /**
+   * Set when a relaxed/balanced namespace record's log write failed and was
+   * swallowed: the record is NOT in the log, so fsyncing the log is not enough.
+   * flushRecoveryLogs writes it before the data file is touched.
+   */
+  private metaLogWriteFailed = false;
   private dataLogOffset = 0;
   private dataWalTruncatePending = false;
   /**
@@ -857,6 +863,12 @@ export class OpfsVfs implements FileChangeSource {
   private lastError?: unknown;
   /** Corruption the mount survived; reported for the life of the mount, whatever the state. */
   private mountCorruption?: VfsCorruptionError;
+
+  /** The first finding stays the reported error; later ones are appended to its message. */
+  private reportMountCorruption(error: VfsCorruptionError) {
+    if (this.mountCorruption) this.mountCorruption.message += `; ${error.message}`;
+    else this.mountCorruption = error;
+  }
   private failureRevision = 0;
   private retainedFailure: unknown;
   private persistenceListener?: () => void;
@@ -1249,10 +1261,16 @@ export class OpfsVfs implements FileChangeSource {
           this.metaSnapshotSequence,
           this.sealer,
         );
-        if (replay.generationMismatch === 'newer' && this.recoveryMode === 'fail-stop') {
-          throw new MetaSnapshotCorruptionError(
+        if (replay.generationMismatch === 'newer') {
+          const rollback = new MetaSnapshotCorruptionError(
             `Meta log generation is newer than the readable snapshot ${this.metaSnapshotSequence}`,
           );
+          if (this.recoveryMode === 'fail-stop') throw rollback;
+          // Salvage keeps the volume mounting on the older snapshot; the newer
+          // log is dropped below. Say so: changes since that snapshot are gone,
+          // and files it describes may now read blocks that were reused.
+          rollback.message += '; mounted that older snapshot and dropped the newer log';
+          this.reportMountCorruption(rollback);
         }
         replayedMutations = replay.count;
         const validEnd = replay.validEnd;
@@ -1668,34 +1686,74 @@ export class OpfsVfs implements FileChangeSource {
    * removal without its children, leaving entries whose parent directory is
    * gone. Nothing could reach them, and no snapshot could be written again.
    * Recreate each missing parent as an empty directory so the entries are
-   * reachable at their old path, and report it. Runs in every recovery mode:
-   * it discards nothing, and these volumes mounted before.
+   * reachable at their old path. Where a file has since taken the directory's
+   * name, the entries below it move to `/lost+found/<old path>` instead. Runs
+   * in every recovery mode: it discards nothing, and these volumes mounted
+   * before. The repair is reported.
    */
   private reattachDetachedPaths() {
+    let detached = false;
+    const findings: string[] = [];
+    // A moved file can still have moved descendants below it, so repeat until
+    // nothing is blocked. Each pass peels one level of file-under-file nesting
+    // and moves only entries that were blocked, so it terminates.
+    for (;;) {
+      // Entries with a non-directory above them, parents first (string order).
+      const blocked = new Set<string>();
+      for (const path of this.sortedPaths) {
+        if (path === '/') continue;
+        let ancestor = parentPath(path);
+        while (ancestor !== '/' && !this.inodes.has(ancestor)) {
+          ancestor = parentPath(ancestor);
+          detached = true;
+        }
+        if (blocked.has(ancestor) || this.inodes.get(ancestor)?.isDir === false) blocked.add(path);
+      }
+      if (blocked.size === 0) break;
+      // A root nothing uses yet, not even a detached entry below it: no user
+      // entry is touched and no target can clash.
+      const used = (root: string) => this.inodes.has(root) || this.sortedPaths.some((p) => p.startsWith(`${root}/`));
+      let root = '/lost+found';
+      for (let n = 2; used(root); n++) root = `/lost+found-${n}`;
+      for (const path of blocked) {
+        this.inodes.set(root + path, this.inodes.get(path)!);
+        this.inodes.delete(path);
+      }
+      this.sortedPaths = Array.from(this.inodes.keys()).sort();
+      const moved = [...blocked];
+      findings.push(
+        `Moved ${moved.length} entr${moved.length === 1 ? 'y' : 'ies'} that sat under a non-directory to ${root}: ` +
+          moved.slice(0, 8).join(', ') +
+          (moved.length > 8 ? ', …' : ''),
+      );
+    }
+    if (!detached && findings.length === 0) return;
+
     const missing = new Set<string>();
     for (const path of this.inodes.keys()) {
       for (let parent = parentPath(path); parent !== '/' && !this.inodes.has(parent); parent = parentPath(parent)) {
         missing.add(parent);
       }
     }
-    if (missing.size === 0) return;
     let ino = this.nextInodeNumber;
     for (const inode of this.inodes.values()) ino = Math.max(ino, inode.ino + 1);
-    for (const path of missing) {
-      this.inodes.set(path, newDirInode(ino++));
-      sortedInsert(this.sortedPaths, path);
-    }
+    for (const path of missing) this.inodes.set(path, newDirInode(ino++));
     this.nextInodeNumber = ino;
+    if (missing.size > 0) {
+      const recreated = [...missing].sort();
+      findings.push(
+        `Recreated ${recreated.length} missing parent director${recreated.length === 1 ? 'y' : 'ies'}: ` +
+          recreated.slice(0, 8).join(', ') +
+          (recreated.length > 8 ? ', …' : ''),
+      );
+    }
+    this.sortedPaths = Array.from(this.inodes.keys()).sort();
     // The next metadata write is a full snapshot: it carries the repair.
     this.dirtyStructure = true;
-    const recreated = [...missing].sort();
-    this.mountCorruption = new VfsCorruptionError(
-      'meta-log',
-      `Recreated ${recreated.length} missing parent director${recreated.length === 1 ? 'y' : 'ies'} ` +
-        `for entries an earlier release left detached: ${recreated.slice(0, 8).join(', ')}` +
-        (recreated.length > 8 ? ', …' : ''),
+    this.reportMountCorruption(
+      new VfsCorruptionError('meta-log', `Repaired entries an earlier release left detached. ${findings.join('. ')}`),
     );
-    this.logWalDebug('reattached detached paths', { recreated });
+    this.logWalDebug('reattached detached paths', { findings });
   }
 
   /**
@@ -1778,9 +1836,11 @@ export class OpfsVfs implements FileChangeSource {
     // the rebuilt truth, keeping the artifact useful for debugging/warm starts.
 
     if (doubleClaims > 0) {
-      this.mountCorruption = new VfsCorruptionError(
-        'meta-snapshot',
-        `${doubleClaims} data block(s) are claimed by more than one file; their contents may belong to another file`,
+      this.reportMountCorruption(
+        new VfsCorruptionError(
+          'meta-snapshot',
+          `${doubleClaims} data block(s) are claimed by more than one file; their contents may belong to another file`,
+        ),
       );
       this.logWalDebug('rebuildBitmapFromMetadata detected double-claimed blocks', {
         doubleClaims,
@@ -2878,7 +2938,11 @@ export class OpfsVfs implements FileChangeSource {
   }
 
   private utimesSyncImpl(rawPath: string, atimeMs: number, mtimeMs: number): void {
-    if (!Number.isFinite(atimeMs) || !Number.isFinite(mtimeMs)) throw createVfsError('EINVAL', rawPath, 'Invalid time');
+    // Metadata stores unsigned 32-bit seconds: anything outside that range would
+    // wrap on reopen. Fractional milliseconds are fine. (NaN fails both tests.)
+    for (const time of [atimeMs, mtimeMs]) {
+      if (!(time >= 0 && time < 2 ** 32 * 1000)) throw createVfsError('EINVAL', rawPath, 'Invalid time');
+    }
     const normalized = normalizeFsPath(rawPath);
     const path = this.resolveInodePath(normalized.path, true);
     const { requiresDirectory } = normalized;
@@ -5187,7 +5251,23 @@ export class OpfsVfs implements FileChangeSource {
     // (not flushing) per op is REQUIRED: the data WAL is keyed by inode id, so a
     // created inode must be in the namespace log for a later WAL write record to
     // replay against it.
-    this.writeMeta(false, this.localDurabilityMode !== 'strict');
+    if (this.localDurabilityMode === 'strict') {
+      this.writeMeta(false, false);
+      return;
+    }
+    try {
+      this.writeMeta(false, true);
+    } catch (error) {
+      // Only a failed storage write (a DOMException, or ENOSPC / EIO) is
+      // swallowed; anything else, a serializer invariant say, propagates.
+      const code = (error as { code?: unknown } | null)?.code;
+      if (!(error instanceof DOMException || code === 'ENOSPC' || code === 'EIO')) throw error;
+      // The operation is already applied in memory, and balanced/relaxed only
+      // promise durability at the next sync. writeMeta recorded the error
+      // state and kept the dirty sets, so that sync retries (and reports a
+      // failure that persists). Strict promises durability now, so it throws.
+      this.metaLogWriteFailed = true;
+    }
   }
 
   /**
@@ -5198,6 +5278,9 @@ export class OpfsVfs implements FileChangeSource {
    */
   private flushRecoveryLogs() {
     if (this.walPendingBytes > 0 && this.localDurabilityMode !== 'strict') this.dataLogHandle.flush();
+    // A record whose write failed is not in the log, so flushing the log would
+    // not cover it: write it now, and fail the sync before the data file changes.
+    if (this.metaLogWriteFailed) this.writeMeta(false, true);
     this.flushPendingMetaLog();
   }
 
@@ -5516,6 +5599,7 @@ export class OpfsVfs implements FileChangeSource {
     this.dirtyInodes.clear();
     this.attrDirtyInodes.clear();
     this.deletedInodes.clear();
+    this.metaLogWriteFailed = false;
 
     // INT-3: the meta recording every quarantined free is now durable (every
     // branch above ends in a logHandle/targetHandle flush), so it is finally

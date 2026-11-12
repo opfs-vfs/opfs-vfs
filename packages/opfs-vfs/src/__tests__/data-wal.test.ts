@@ -132,7 +132,7 @@ describe('data WAL codec', () => {
     expect(decoded.hadPartialTail).toBe(true);
   });
 
-  it('reports a corruption offset for checksum failures instead of throwing (INT-5)', () => {
+  it('treats a checksum-failing final frame as a torn append instead of throwing (INT-5)', () => {
     const write = encodeDataWalRecord({
       version: DATA_WAL_VERSION,
       op: 'write',
@@ -141,13 +141,177 @@ describe('data WAL codec', () => {
       offset: 0,
       data: new Uint8Array([1]),
     });
-    write[write.length - 1] ^= 0xff;
+    const torn = write.slice();
+    torn[torn.length - 1] ^= 0xff;
 
-    const decoded = decodeDataWalRecords(write);
+    // The only frame: nothing valid follows it, so nothing durable is lost.
+    const only = decodeDataWalRecords(torn);
+    expect(only.records).toHaveLength(0);
+    expect(only.hadPartialTail).toBe(true);
+    expect(only.corruptionOffset).toBeUndefined();
+    expect(only.parsedBytes).toBe(0);
+
+    // The last frame, with unreadable bytes after it: earlier frames are kept.
+    const log = new Uint8Array(write.length + torn.length + 5);
+    log.set(write, 0);
+    log.set(torn, write.length);
+    log.set([9, 9, 9, 9, 9], write.length + torn.length);
+    const last = decodeDataWalRecords(log);
+    expect(last.records).toHaveLength(1);
+    expect(last.hadPartialTail).toBe(true);
+    expect(last.corruptionOffset).toBeUndefined();
+    expect(last.parsedBytes).toBe(write.length);
+  });
+
+  it('reports a checksum failure as corruption when a valid frame follows it', () => {
+    const write = encodeDataWalRecord({
+      version: DATA_WAL_VERSION,
+      op: 'write',
+      inodeId: 2,
+      path: '/file.bin',
+      offset: 0,
+      data: new Uint8Array([1]),
+    });
+    const corrupt = write.slice();
+    corrupt[corrupt.length - 1] ^= 0xff;
+    // Two failing frames in a row, then a valid one: the first is still corruption.
+    const log = new Uint8Array(write.length * 3);
+    log.set(corrupt, 0);
+    log.set(corrupt, write.length);
+    log.set(write, write.length * 2);
+
+    const decoded = decodeDataWalRecords(log);
     expect(decoded.records).toHaveLength(0);
     expect(decoded.hadPartialTail).toBe(false);
     expect(decoded.corruptionOffset).toBe(0);
     expect(decoded.parsedBytes).toBe(0);
+  });
+
+  it('reports corruption when the length field of an early frame is damaged and valid frames follow', () => {
+    const frames = [0, 1, 2].map((i) =>
+      encodeDataWalRecord({
+        version: DATA_WAL_VERSION,
+        op: 'write',
+        inodeId: 2 + i,
+        path: `/file${i}.bin`,
+        offset: 0,
+        data: new Uint8Array([i, i, i]),
+      }),
+    );
+    const log = new Uint8Array(frames.reduce((n, f) => n + f.length, 0));
+    let at = 0;
+    for (const frame of frames) {
+      log.set(frame, at);
+      at += frame.length;
+    }
+    // Length one short: still fits in the file, but the walk from it is misaligned.
+    const view = new DataView(log.buffer);
+    view.setUint32(0, view.getUint32(0, true) - 1, true);
+
+    const decoded = decodeDataWalRecords(log);
+    expect(decoded.records).toHaveLength(0);
+    expect(decoded.hadPartialTail).toBe(false);
+    expect(decoded.corruptionOffset).toBe(0);
+  });
+
+  it('reports corruption when a damaged length points past the end of the file and valid frames follow', () => {
+    const frames = [0, 1].map((i) =>
+      encodeDataWalRecord({
+        version: DATA_WAL_VERSION,
+        op: 'write',
+        inodeId: 2 + i,
+        path: `/file${i}.bin`,
+        offset: 0,
+        data: new Uint8Array([i]),
+      }),
+    );
+    const log = new Uint8Array(frames[0].length + frames[1].length);
+    log.set(frames[0], 0);
+    log.set(frames[1], frames[0].length);
+    new DataView(log.buffer).setUint32(0, log.length * 2, true);
+
+    const decoded = decodeDataWalRecords(log);
+    expect(decoded.records).toHaveLength(0);
+    expect(decoded.hadPartialTail).toBe(false);
+    expect(decoded.corruptionOffset).toBe(0);
+  });
+
+  it('classifies a torn multi-megabyte write as a torn append without scanning it expensively', () => {
+    // Every aligned offset reads as a plausible 16 KiB length, which would cost a CRC each without the layout filter.
+    const data = new Uint8Array(8 * 1024 * 1024);
+    for (let i = 0; i < data.length; i += 4) data[i + 1] = 0x40;
+    const frame = encodeDataWalRecord({
+      version: DATA_WAL_VERSION,
+      op: 'write',
+      inodeId: 2,
+      path: '/big.bin',
+      offset: 0,
+      data,
+    });
+    const torn = frame.subarray(0, frame.length - 1000);
+
+    const started = performance.now();
+    const decoded = decodeDataWalRecords(torn);
+    const elapsed = performance.now() - started;
+    expect(decoded.records).toHaveLength(0);
+    expect(decoded.hadPartialTail).toBe(true);
+    expect(decoded.corruptionOffset).toBeUndefined();
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it('reports corruption for a sealed log whose early frame length is damaged and a valid sealed frame follows', () => {
+    // Stand-in codec: the payload followed by a tag derived from the frame's identity.
+    const sealer = {
+      overheadBytes: 4,
+      seal(plaintext: Uint8Array, _role: number, identity: number) {
+        const out = new Uint8Array(plaintext.length + 4);
+        out.set(plaintext, 0);
+        out.fill(identity & 0xff, plaintext.length);
+        return out;
+      },
+      sealInto(plaintext: Uint8Array, role: number, identity: number, out: Uint8Array, outOffset: number) {
+        const sealed = sealer.seal(plaintext, role, identity);
+        out.set(sealed, outOffset);
+        return sealed.length;
+      },
+      open(sealed: Uint8Array, _role: number, identity: number) {
+        const body = sealed.subarray(0, sealed.length - 4);
+        if (sealed.subarray(body.length).some((byte) => byte !== (identity & 0xff))) throw new Error('bad tag');
+        return body;
+      },
+    };
+    const frames: Uint8Array[] = [];
+    let at = 0;
+    for (let i = 0; i < 3; i++) {
+      const frame = encodeDataWalRecord(
+        {
+          version: DATA_WAL_VERSION,
+          op: 'write',
+          inodeId: 2 + i,
+          path: `/f${i}`,
+          offset: 0,
+          data: new Uint8Array([i]),
+        },
+        sealer,
+        at,
+      );
+      frames.push(frame);
+      at += frame.length;
+    }
+    const log = new Uint8Array(at);
+    at = 0;
+    for (const frame of frames) {
+      log.set(frame, at);
+      at += frame.length;
+    }
+    expect(decodeDataWalRecords(log, sealer).records).toHaveLength(3);
+
+    const view = new DataView(log.buffer);
+    view.setUint32(0, view.getUint32(0, true) - 1, true);
+    const decoded = decodeDataWalRecords(log, sealer);
+    expect(decoded.records).toHaveLength(0);
+    expect(decoded.hadPartialTail).toBe(false);
+    expect(decoded.corruptionOffset).toBe(0);
   });
 
   it('reports a corruption offset for structurally invalid payloads (INT-5)', () => {
