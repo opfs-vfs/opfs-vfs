@@ -1831,11 +1831,16 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
               }),
             }),
           );
+        // Subscription targets are textual; resolve through the volume so `..` and symlinked ancestors agree with every other call.
+        // A directory (including a `.`/`..` final component) uses its realpath; a file keeps its own name under its parent's realpath.
+        const resolvedPath = target.is_dir
+          ? yield* pinnedRealPath(state, generation, path, budget)
+          : joinPath(yield* pinnedRealPath(state, generation, parentPath(path), budget), baseName(path));
         const admission: SubscriptionAdmission = { generation, budget };
         const subscription = yield* makeSubscriptionInternal(
           state,
           {
-            path,
+            path: resolvedPath,
             scope: target.is_dir ? 'directory' : 'file',
             recursive: target.is_dir && (options?.recursive ?? false),
             content: false,

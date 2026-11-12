@@ -178,7 +178,7 @@ Treat a stream failure as a stale view. The [reconciled view example](https://gi
 
 ### Standard FileSystem watch
 
-`fs.watch('/documents', { recursive: true })` uses the same logical-change capability. It emits `Create`, `Update`, and `Remove` events with absolute volume paths. Acquisition checks the target: a missing path fails with `NotFound`, and a symlink target fails with `BadResource`. Directory watches report symlink entries without following their targets. The watched path is matched textually against event paths, so avoid targets that go through `..` after a symlink: `/link/../x` is checked where the volume resolves it but subscribes to the textual `/x`.
+`fs.watch('/documents', { recursive: true })` uses the same logical-change capability. It emits `Create`, `Update`, and `Remove` events with absolute volume paths. Acquisition checks the target: a missing path fails with `NotFound`, and a symlink target fails with `BadResource`. Directory watches report symlink entries without following their targets. `watch` resolves its target through the volume, so it agrees with every other call, and reports canonical paths.
 
 Owner takeover ends the watch with `Unknown` and a `SubscriptionError` cause whose code is `SUBSCRIPTION_INTERRUPTED`; it does not silently resubscribe. Readiness and retirement timeouts map to `TimedOut`. Counts and ordering can differ from operating-system watchers. The standard API has no registration-ready signal, so use rich subscriptions for subscribe-before-scan views. Recovery must invalidate and reconcile the view, even when a bounded retry is appropriate.
 

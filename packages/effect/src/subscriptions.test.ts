@@ -86,6 +86,10 @@ class FakeSource implements FileChangeSource {
     return this.targetStat;
   }
 
+  realpathSync(path: string) {
+    return path;
+  }
+
   readdirEntriesSync(_path: string) {
     this.onReadDirectory?.();
     if (this.readError) throw this.readError;

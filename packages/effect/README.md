@@ -87,9 +87,8 @@ watches regular files or directories and emits absolute volume paths as
 `Create`, `Update`, or `Remove`. Recursive directory watching preserves the
 native descendant records for directory renames; symlink entries inside a
 watched directory are reported, but a symlink target is not followed. The watched
-path is matched textually against event paths: a target that reaches its file
-through `..` after a symlink, such as `/link/../x`, is checked where the volume
-resolves it but subscribes to the textual `/x`.
+path is resolved through the volume, so `watch` agrees with every other call
+and reports canonical paths.
 
 Watch notifications are hints, not a replayable log. Preflight checks and
 directory scans are not atomic snapshots; logical event counts and ordering can
