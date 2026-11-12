@@ -642,6 +642,8 @@ export interface LocalPersistenceStatus {
    * The error from the most recent failed flush/sync (INT-6). Populated whenever
    * `localPersistenceState` is `'error'` — including a swallowed pagehide-hook
    * flush failure — so callers can observe persistence loss after the fact.
+   * Corruption found while mounting (two files claiming one data block) stays
+   * reported here after the state leaves `'error'`, until the volume is closed.
    */
   lastError?: unknown;
 }
@@ -810,6 +812,14 @@ export class OpfsVfs implements FileChangeSource {
   private totalBlocks = INITIAL_BLOCKS;
   /** Pending pages belong to the shared inode, independent of its pathnames. */
   private dirtyPages = new Map<Inode, Set<number>>();
+  /**
+   * Memory mode: the size each inode's blocks back, as of mount or its last
+   * completed persist. Metadata written while an inode has pending pages
+   * records this size, never the in-memory one: blocks keep old bytes past the
+   * persisted end, and a recorded larger size would hydrate them into holes
+   * that data-WAL replay has no record to clear.
+   */
+  private persistedSize = new WeakMap<Inode, number>();
   private pendingDeletedInodes = new Set<Inode>();
   private nextInodeNumber = 2;
   /** True when structural changes need metadata persistence */
@@ -845,6 +855,8 @@ export class OpfsVfs implements FileChangeSource {
   private lastSalvage?: DataWalSalvageEvent;
   /** Last flush/sync error (INT-6); surfaced in {@link getLocalPersistenceStatusSync}. */
   private lastError?: unknown;
+  /** Corruption the mount survived; reported for the life of the mount, whatever the state. */
+  private mountCorruption?: VfsCorruptionError;
   private failureRevision = 0;
   private retainedFailure: unknown;
   private persistenceListener?: () => void;
@@ -1021,7 +1033,7 @@ export class OpfsVfs implements FileChangeSource {
       lastLocalCheckpointAt: this.lastLocalCheckpointAt,
       localPersistenceState: this.localPersistenceState,
       lastSalvage: this.lastSalvage,
-      lastError: this.localPersistenceState === 'error' ? this.lastError : undefined,
+      lastError: this.localPersistenceState === 'error' ? this.lastError : this.mountCorruption,
     };
   }
 
@@ -1224,6 +1236,7 @@ export class OpfsVfs implements FileChangeSource {
       // never ran), so this is unconditional.
       //
       this.logOffset = 0;
+      let replayedMutations = 0;
       const logSize = this.logHandle.getSize();
       if (logSize > 0) {
         const logBuf = new Uint8Array(logSize);
@@ -1241,6 +1254,7 @@ export class OpfsVfs implements FileChangeSource {
             `Meta log generation is newer than the readable snapshot ${this.metaSnapshotSequence}`,
           );
         }
+        replayedMutations = replay.count;
         const validEnd = replay.validEnd;
         if (validEnd < logSize) {
           this.logHandle.truncate(validEnd);
@@ -1254,6 +1268,8 @@ export class OpfsVfs implements FileChangeSource {
         }
       }
 
+      // A snapshot is always a connected tree; only log records can detach one.
+      if (replayedMutations > 0) this.reattachDetachedPaths();
       this.normalizeLoadedInodes();
       this.rebuildIndexesFromPathMap();
       this.storage?.validateAfterMetadata?.(
@@ -1281,6 +1297,9 @@ export class OpfsVfs implements FileChangeSource {
           this.logWalDebug('reconcileDiskState repair flush failed', error);
         }
       }
+
+      // Report what the mount survived last, so no recovery step above clears it.
+      if (this.mountCorruption) this.setLocalPersistenceState('error', this.mountCorruption);
 
       if (retireRecoveredFirstMount) {
         // Retire ACTIVE only after the snapshot and any real meta-log records
@@ -1645,6 +1664,41 @@ export class OpfsVfs implements FileChangeSource {
   }
 
   /**
+   * A release before the path-order fix could log a directory's rename or
+   * removal without its children, leaving entries whose parent directory is
+   * gone. Nothing could reach them, and no snapshot could be written again.
+   * Recreate each missing parent as an empty directory so the entries are
+   * reachable at their old path, and report it. Runs in every recovery mode:
+   * it discards nothing, and these volumes mounted before.
+   */
+  private reattachDetachedPaths() {
+    const missing = new Set<string>();
+    for (const path of this.inodes.keys()) {
+      for (let parent = parentPath(path); parent !== '/' && !this.inodes.has(parent); parent = parentPath(parent)) {
+        missing.add(parent);
+      }
+    }
+    if (missing.size === 0) return;
+    let ino = this.nextInodeNumber;
+    for (const inode of this.inodes.values()) ino = Math.max(ino, inode.ino + 1);
+    for (const path of missing) {
+      this.inodes.set(path, newDirInode(ino++));
+      sortedInsert(this.sortedPaths, path);
+    }
+    this.nextInodeNumber = ino;
+    // The next metadata write is a full snapshot: it carries the repair.
+    this.dirtyStructure = true;
+    const recreated = [...missing].sort();
+    this.mountCorruption = new VfsCorruptionError(
+      'meta-log',
+      `Recreated ${recreated.length} missing parent director${recreated.length === 1 ? 'y' : 'ies'} ` +
+        `for entries an earlier release left detached: ${recreated.slice(0, 8).join(', ')}` +
+        (recreated.length > 8 ? ', …' : ''),
+    );
+    this.logWalDebug('reattached detached paths', { recreated });
+  }
+
+  /**
    * INT-4: rebuild the in-memory allocation bitmap from the loaded (log-replayed,
    * normalized and — in disk mode — reconciled) metadata, demoting the persisted
    * `.bitmap` file to a non-authoritative warm-start/debugging artifact.
@@ -1724,7 +1778,10 @@ export class OpfsVfs implements FileChangeSource {
     // the rebuilt truth, keeping the artifact useful for debugging/warm starts.
 
     if (doubleClaims > 0) {
-      this.setLocalPersistenceState('error');
+      this.mountCorruption = new VfsCorruptionError(
+        'meta-snapshot',
+        `${doubleClaims} data block(s) are claimed by more than one file; their contents may belong to another file`,
+      );
       this.logWalDebug('rebuildBitmapFromMetadata detected double-claimed blocks', {
         doubleClaims,
         totalBlocks: this.totalBlocks,
@@ -1758,6 +1815,9 @@ export class OpfsVfs implements FileChangeSource {
       });
       this.fileData.set(path, data);
       hydrated.set(inode, data);
+      // The mounted size, even where an earlier release logged it past the
+      // blocks: that tail reads as zeros, and re-logging it exposes nothing new.
+      this.persistedSize.set(inode, inode.size);
     }
   }
 
@@ -1785,6 +1845,15 @@ export class OpfsVfs implements FileChangeSource {
     this.setLocalPersistenceState('recovering');
     const bytes = new Uint8Array(size);
     this.dataLogHandle.read(bytes, { at: 0 });
+    // Only zeros: the first append's length landed before its bytes. There is
+    // no cycle stamp and no record to lose, exactly as in an empty log.
+    if (bytes.every((byte) => byte === 0)) {
+      this.dataLogHandle.truncate(0);
+      this.dataLogHandle.flush();
+      this.dataLogOffset = 0;
+      this.setLocalPersistenceState('clean');
+      return;
+    }
     // #54/M1: an encrypted WAL begins with a cycle stamp; its salt reconstructs
     // the cycle-bound sealer the frames were sealed with. On an encrypted volume
     // a non-empty WAL whose head is NOT a valid stamp is discarded outright — it
@@ -3160,6 +3229,20 @@ export class OpfsVfs implements FileChangeSource {
     // SEC-4: a grow-via-truncate counts toward maxTotalBytes (opt-in).
     this.assertTotalBytesWithinQuota(inode, size, path);
     if (inode.isDir) throw createVfsError('EISDIR', path);
+    // Allocate before logging or changing the inode: a failed allocation must
+    // not leave a WAL record, or a size the buffer cannot back.
+    let nextBuf: Uint8Array | undefined;
+    if (this.bufferMode === 'memory') {
+      const existingBuffer = this.lookupFileDataForInode(this.pathForInode(inode), inode);
+      const openBuffer = Array.from(this.openFiles.values()).find((openFile) => openFile.inode === inode)?.data;
+      const buf = existingBuffer ?? openBuffer ?? new Uint8Array(0);
+      if (size <= buf.length) {
+        nextBuf = buf.slice(0, size);
+      } else {
+        nextBuf = new Uint8Array(size);
+        nextBuf.set(buf);
+      }
+    }
     const changed = inode.size !== size;
     if (changed) this.impactInode(inode);
     this.invalidateFlush();
@@ -3187,18 +3270,7 @@ export class OpfsVfs implements FileChangeSource {
     this.touchInode(path, Date.now(), inode);
     if (changed) this.recordLogicalUpdate(inode);
 
-    if (this.bufferMode === 'memory') {
-      const livePath = this.pathForInode(inode);
-      const existingBuffer = this.lookupFileDataForInode(livePath, inode);
-      const openBuffer = Array.from(this.openFiles.values()).find((openFile) => openFile.inode === inode)?.data;
-      const buf = existingBuffer ?? openBuffer ?? new Uint8Array(0);
-      let nextBuf: Uint8Array;
-      if (size <= buf.length) {
-        nextBuf = buf.slice(0, size);
-      } else {
-        nextBuf = new Uint8Array(size);
-        nextBuf.set(buf);
-      }
+    if (nextBuf) {
       this.syncFileDataForInode(inode, nextBuf);
       this.updateOpenFileBuffers(inode, nextBuf);
       this.markResized(inode, oldSize, size);
@@ -3354,13 +3426,14 @@ export class OpfsVfs implements FileChangeSource {
         return;
       }
       this.flushRecoveryLogs();
-      this.persistToOpfs();
-      const hasDirtyMeta = this.hasDirtyMeta;
       // #54/H2: sidecar (journaled) before the data flush — the guaranteed skew
       // direction then reads old content via prev-pair salvage (see the disk
       // branch above for the full rationale).
-      this.storage?.beforeDataCommit?.();
-      this.flushData();
+      this.persistToOpfs(() => {
+        this.storage?.beforeDataCommit?.();
+        this.flushData();
+      });
+      const hasDirtyMeta = this.hasDirtyMeta;
       if (hasDirtyMeta) {
         this.writeMeta();
       }
@@ -3530,16 +3603,20 @@ export class OpfsVfs implements FileChangeSource {
     if (this.closed || this.flushed) return;
     this.setLocalPersistenceState('flushing');
     try {
-      if (this.bufferMode === 'memory') {
-        this.flushRecoveryLogs();
-        this.persistToOpfs();
-      }
       // Ordering barrier: data blocks must be durable before meta records the
       // sizes/block tables that reference them.
       // #54/H2: sidecar (journaled) before the data flush — the guaranteed skew
       // direction then reads old content via prev-pair salvage (see syncSync).
-      this.storage?.beforeDataCommit?.();
-      this.flushData(true);
+      const commitData = () => {
+        this.storage?.beforeDataCommit?.();
+        this.flushData(true);
+      };
+      if (this.bufferMode === 'memory') {
+        this.flushRecoveryLogs();
+        this.persistToOpfs(commitData);
+      } else {
+        commitData();
+      }
       this.writeMeta(true); // force = full snapshot + clear log (bumps generation)
       if (this.bufferMode === 'memory') this.checkpointDataWal();
       this.lastLocalFlushAt = Date.now();
@@ -5131,112 +5208,150 @@ export class OpfsVfs implements FileChangeSource {
     this.metaLogFlushPending = false;
   }
 
-  /** Persist dirty in-memory file data to OPFS */
-  private persistToOpfs() {
-    if (this.dirtyPages.size === 0) return;
-    for (const [inode, pages] of this.dirtyPages) {
-      const path = this.pathForInode(inode);
-      if (!path || inode.isDir || isSymlinkInode(inode)) continue;
-      const data = this.lookupFileDataForInode(path, inode);
-      if (!data) continue;
-
-      // Ensure enough blocks are allocated
-      const blocksNeeded = inode.size === 0 ? 0 : Math.ceil(inode.size / BLOCK_SIZE);
-      const oldBlockCount = inode.blocks.length;
-      // PERF-6: prefer one contiguous run for the whole grow so persistToOpfs's
-      // dirty-page writes (PERF-1) coalesce into a single OPFS write. Fall back
-      // to scattered per-block allocation (+ grow) when no run fits.
-      const need = blocksNeeded - inode.blocks.length;
-      if (need > 1) {
-        const first = this.bitmap.allocRun(need);
-        if (first >= 0) {
-          for (let i = 0; i < need; i++) inode.blocks.push(first + i);
+  /**
+   * Persist dirty in-memory file data to OPFS, then make it durable with
+   * `commitData`. The pass is all or nothing for block tables: until the data
+   * flush has succeeded, no inode keeps a table (or a persisted size) that a
+   * later metadata record could publish ahead of its data.
+   */
+  private persistToOpfs(commitData: () => void) {
+    const staged: { inode: Inode; blocksBefore: number[]; released: number[] }[] = [];
+    try {
+      for (const [inode, pages] of this.dirtyPages) {
+        const path = this.pathForInode(inode);
+        if (!path || inode.isDir || isSymlinkInode(inode)) continue;
+        const data = this.lookupFileDataForInode(path, inode);
+        if (!data) continue;
+        const entry = { inode, blocksBefore: inode.blocks.slice(), released: [] as number[] };
+        staged.push(entry);
+        this.persistInodePages(inode, pages, path, data, entry.released);
+      }
+      commitData();
+    } catch (error) {
+      // Mounting would read past the data file, or stale bytes, through a
+      // block whose write or flush never landed.
+      for (const { inode, blocksBefore } of staged) {
+        const kept = new Set(blocksBefore);
+        for (const block of inode.blocks) {
+          if (block !== 0 && !kept.has(block)) this.bitmap.free(block);
         }
+        inode.blocks = blocksBefore;
       }
-      while (inode.blocks.length < blocksNeeded) {
-        let block = this.bitmap.alloc();
-        if (block < 0) {
-          this.growStorage();
-          block = this.bitmap.alloc();
-          if (block < 0) throw createVfsError('ENOSPC');
-        }
-        inode.blocks.push(block);
-      }
-      while (inode.blocks.length > blocksNeeded) {
-        const block = inode.blocks.pop()!;
-        if (block !== 0) this.releaseBlock(block);
-      }
-      // A file opened in memory mode can carry holes from an earlier disk mount.
-      // Keep untouched zero pages sparse; materialize only pages with data.
-      for (const p of pages) {
-        if (p >= Math.min(oldBlockCount, blocksNeeded)) continue;
-        if (
-          inode.blocks[p] !== 0 ||
-          !data.subarray(p * BLOCK_SIZE, Math.min((p + 1) * BLOCK_SIZE, inode.size)).some((byte) => byte !== 0)
-        )
-          continue;
-        let block = this.bitmap.alloc();
-        if (block < 0) {
-          this.growStorage();
-          block = this.bitmap.alloc();
-          if (block < 0) throw createVfsError('ENOSPC');
-        }
-        inode.blocks[p] = block;
-        pages.add(p);
-        this.dirtyInodes.add(path);
-      }
-      if (inode.blocks.length !== oldBlockCount) {
-        this.dirtyInodes.add(path);
-      }
-      // Every newly mapped block is written in full; a reused block must never
-      // keep a previous owner's bytes behind this file's size.
-      for (let p = oldBlockCount; p < blocksNeeded; p++) pages.add(p);
-
-      // PERF-1: write dirty pages coalesced into runs that are contiguous both
-      // logically (sequential page indices) and physically (sequential blocks).
-      // Sort the dirty page set first so adjacent pages can be merged. Pages at
-      // or past the current block count are stale (file shrank) and skipped.
-      const sortedPages = Array.from(pages)
-        .filter((p) => p < inode.blocks.length && inode.blocks[p] !== 0)
-        .sort((a, b) => a - b);
-      for (let i = 0; i < sortedPages.length;) {
-        const startPage = sortedPages[i];
-        const startBlock = inode.blocks[startPage];
-        // Extend the run while the next dirty page is the immediate logical
-        // successor AND its block is the immediate physical successor. The run
-        // may only grow across pages we know are full BLOCK_SIZE; the final
-        // page of the file may be partial (EOF), so we stop extending there.
-        let j = i;
-        let lastPage = startPage;
-        while (
-          j + 1 < sortedPages.length &&
-          sortedPages[j + 1] === lastPage + 1 &&
-          inode.blocks[sortedPages[j + 1]] === inode.blocks[lastPage] + 1 &&
-          // every page strictly before the file's last page is full
-          (lastPage + 1) * BLOCK_SIZE <= inode.size
-        ) {
-          j++;
-          lastPage = sortedPages[j];
-        }
-        const pos = startPage * BLOCK_SIZE;
-        const endByte = Math.min((lastPage + 1) * BLOCK_SIZE, inode.size);
-        const chunkSize = endByte - pos;
-        if (chunkSize > 0) {
-          this.dataHandle.write(data.subarray(pos, pos + chunkSize), { at: startBlock * BLOCK_SIZE });
-          const tailBytes = endByte % BLOCK_SIZE;
-          // Disk recovery requires complete physical blocks. Encrypted handles
-          // already materialize them; do not reseal their tail a second time.
-          if (tailBytes > 0 && this.dataHandle.getSize() < (startBlock + lastPage - startPage + 1) * BLOCK_SIZE) {
-            this.dataHandle.write(this.zeroSource(BLOCK_SIZE - tailBytes), {
-              at: startBlock * BLOCK_SIZE + chunkSize,
-            });
-          }
-          this.markDataDirty();
-        }
-        i = j + 1;
-      }
+      throw error;
+    }
+    for (const { inode, released } of staged) {
+      for (const block of released) this.releaseBlock(block);
+      // A record written while pages were pending carried the old size.
+      if ((this.persistedSize.get(inode) ?? 0) !== inode.size) this.markAllPathsForInode(inode);
+      this.persistedSize.set(inode, inode.size);
     }
     this.dirtyPages.clear();
+  }
+
+  /** Blocks dropped by a shrink go to `released`; the caller frees them once the whole pass is durable. */
+  private persistInodePages(inode: Inode, pages: Set<number>, path: string, data: Uint8Array, released: number[]) {
+    // Ensure enough blocks are allocated
+    const blocksNeeded = inode.size === 0 ? 0 : Math.ceil(inode.size / BLOCK_SIZE);
+    const oldBlockCount = inode.blocks.length;
+    // PERF-6: prefer one contiguous run for the whole grow so persistToOpfs's
+    // dirty-page writes (PERF-1) coalesce into a single OPFS write. Fall back
+    // to scattered per-block allocation (+ grow) when no run fits.
+    const need = blocksNeeded - inode.blocks.length;
+    if (need > 1) {
+      const first = this.bitmap.allocRun(need);
+      if (first >= 0) {
+        for (let i = 0; i < need; i++) inode.blocks.push(first + i);
+      }
+    }
+    while (inode.blocks.length < blocksNeeded) {
+      let block = this.bitmap.alloc();
+      if (block < 0) {
+        this.growStorage();
+        block = this.bitmap.alloc();
+        if (block < 0) throw createVfsError('ENOSPC');
+      }
+      inode.blocks.push(block);
+    }
+    while (inode.blocks.length > blocksNeeded) {
+      const block = inode.blocks.pop()!;
+      if (block !== 0) released.push(block);
+    }
+    // A file opened in memory mode can carry holes from an earlier disk mount.
+    // Keep untouched zero pages sparse; materialize only pages with data.
+    for (const p of pages) {
+      if (p >= Math.min(oldBlockCount, blocksNeeded)) continue;
+      if (
+        inode.blocks[p] !== 0 ||
+        !data.subarray(p * BLOCK_SIZE, Math.min((p + 1) * BLOCK_SIZE, inode.size)).some((byte) => byte !== 0)
+      )
+        continue;
+      let block = this.bitmap.alloc();
+      if (block < 0) {
+        this.growStorage();
+        block = this.bitmap.alloc();
+        if (block < 0) throw createVfsError('ENOSPC');
+      }
+      inode.blocks[p] = block;
+      pages.add(p);
+      this.dirtyInodes.add(path);
+    }
+    if (inode.blocks.length !== oldBlockCount) {
+      this.dirtyInodes.add(path);
+    }
+    // Every newly mapped block is written in full; a reused block must never
+    // keep a previous owner's bytes behind this file's size.
+    for (let p = oldBlockCount; p < blocksNeeded; p++) pages.add(p);
+
+    // PERF-1: write dirty pages coalesced into runs that are contiguous both
+    // logically (sequential page indices) and physically (sequential blocks).
+    // Sort the dirty page set first so adjacent pages can be merged. Pages at
+    // or past the current block count are stale (file shrank) and skipped.
+    const sortedPages = Array.from(pages)
+      .filter((p) => p < inode.blocks.length && inode.blocks[p] !== 0)
+      .sort((a, b) => a - b);
+    for (let i = 0; i < sortedPages.length;) {
+      const startPage = sortedPages[i];
+      const startBlock = inode.blocks[startPage];
+      // Extend the run while the next dirty page is the immediate logical
+      // successor AND its block is the immediate physical successor. The run
+      // may only grow across pages we know are full BLOCK_SIZE; the final
+      // page of the file may be partial (EOF), so we stop extending there.
+      let j = i;
+      let lastPage = startPage;
+      while (
+        j + 1 < sortedPages.length &&
+        sortedPages[j + 1] === lastPage + 1 &&
+        inode.blocks[sortedPages[j + 1]] === inode.blocks[lastPage] + 1 &&
+        // every page strictly before the file's last page is full
+        (lastPage + 1) * BLOCK_SIZE <= inode.size
+      ) {
+        j++;
+        lastPage = sortedPages[j];
+      }
+      const pos = startPage * BLOCK_SIZE;
+      const endByte = Math.min((lastPage + 1) * BLOCK_SIZE, inode.size);
+      const chunkSize = endByte - pos;
+      if (chunkSize > 0) {
+        this.withQuotaMapped(
+          () => this.dataHandle.write(data.subarray(pos, pos + chunkSize), { at: startBlock * BLOCK_SIZE }),
+          path,
+        );
+        const tailBytes = endByte % BLOCK_SIZE;
+        // Disk recovery requires complete physical blocks. Encrypted handles
+        // already materialize them; do not reseal their tail a second time.
+        if (tailBytes > 0 && this.dataHandle.getSize() < (startBlock + lastPage - startPage + 1) * BLOCK_SIZE) {
+          this.withQuotaMapped(
+            () =>
+              this.dataHandle.write(this.zeroSource(BLOCK_SIZE - tailBytes), {
+                at: startBlock * BLOCK_SIZE + chunkSize,
+              }),
+            path,
+          );
+        }
+        this.markDataDirty();
+      }
+      i = j + 1;
+    }
   }
 
   /**
@@ -5254,6 +5369,26 @@ export class OpfsVfs implements FileChangeSource {
     } catch (error) {
       this.setLocalPersistenceState('error', error);
       throw error;
+    }
+  }
+
+  /**
+   * Memory mode: serialize inodes that have pending pages at the size their
+   * blocks back (see persistedSize). The data WAL carries the difference until
+   * persistToOpfs lands it and records the real size.
+   */
+  private atPersistedSize<T>(inodes: Iterable<Inode>, serialize: () => T): T {
+    if (this.bufferMode !== 'memory' || this.dirtyPages.size === 0) return serialize();
+    const sizes: [Inode, number][] = [];
+    for (const inode of inodes) {
+      if (!this.dirtyPages.has(inode)) continue;
+      sizes.push([inode, inode.size]);
+      inode.size = this.persistedSize.get(inode) ?? 0;
+    }
+    try {
+      return serialize();
+    } finally {
+      for (const [inode, size] of sizes) inode.size = size;
     }
   }
 
@@ -5275,7 +5410,9 @@ export class OpfsVfs implements FileChangeSource {
       // (still-active) slot untouched, so the previous consistent snapshot is
       // always recoverable — no in-place truncate(0) data-loss window.
       const payload = new Uint8Array(
-        serializeMeta(this.inodes, this.totalBlocks, BLOCK_SIZE, this.sortedPaths, this.nextInodeNumber),
+        this.atPersistedSize(this.dirtyPages.keys(), () =>
+          serializeMeta(this.inodes, this.totalBlocks, BLOCK_SIZE, this.sortedPaths, this.nextInodeNumber),
+        ),
       );
       this.lastSnapshotSize = payload.byteLength; // PERF-9 snapshot-trigger baseline.
       const nextSequence = (this.metaSnapshotSequence + 1) >>> 0;
@@ -5332,7 +5469,7 @@ export class OpfsVfs implements FileChangeSource {
       for (const path of this.dirtyInodes) {
         const inode = this.inodes.get(path);
         if (inode) {
-          records.push(serializeLogRecord(path, inode));
+          records.push(this.atPersistedSize([inode], () => serializeLogRecord(path, inode)));
         }
       }
       // PERF-9: attr-only changes → compact records (no block table / children).
@@ -5344,7 +5481,7 @@ export class OpfsVfs implements FileChangeSource {
         if (this.dirtyInodes.has(path) || this.deletedInodes.has(path)) continue;
         const inode = this.inodes.get(path);
         if (inode) {
-          records.push(serializeLogAttrRecord(path, inode));
+          records.push(this.atPersistedSize([inode], () => serializeLogAttrRecord(path, inode)));
         }
       }
       if (records.length > 0) {

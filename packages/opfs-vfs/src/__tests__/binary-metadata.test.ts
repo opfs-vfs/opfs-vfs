@@ -767,6 +767,18 @@ describe('binary-metadata codec', () => {
 
 // ── INT-9: bitmap warm-start cache framing (checksum + generation) ──
 
+describe('snapshot namespace validation', () => {
+  it('refuses to serialize an entry whose parent is not a directory', () => {
+    const inodes = new Map<string, Inode>();
+    inodes.set('/', makeInode({ ino: 1, kind: 'dir', isDir: true }));
+    inodes.set('/a', makeInode({ ino: 2 }));
+    inodes.set('/a/1', makeInode({ ino: 3 }));
+
+    // Written as is, the snapshot would fail deserializeBinaryMeta on the next mount.
+    expect(() => serializeMeta(inodes, 16, 4096)).toThrow('Parent of /a/1 is not a directory');
+  });
+});
+
 describe('compact metadata log records', () => {
   // PERF-9 — compact attr-only log records.
   it('serializes an attr-only record much smaller than a full record', () => {

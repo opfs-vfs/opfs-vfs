@@ -336,6 +336,8 @@ export function serializeMeta(
     const inode = inodes.get(path)!;
     const parent = inodes.get(parentPath(path));
     if (!parent) throw new Error(`Missing parent inode for path ${path}`);
+    // deserializeBinaryMeta rejects such an entry: never write a snapshot that cannot be read back.
+    if (!parent.isDir) throw new Error(`Parent of ${path} is not a directory`);
     const rec = dirEntryBase + i * DIR_ENTRY_RECORD_U32S;
     const name = baseName(path);
     const nameByteLen = dirEntryNameByteLengths[i];
@@ -483,7 +485,8 @@ export function deserializeBinaryMeta(buffer: ArrayBuffer): DeserializedMeta {
     entries.push({ name, childId });
   }
 
-  // Iterative preorder walk (the path order doubles as the sorted path list). A
+  // Iterative preorder walk. Its order is NOT string order ('/a/1' precedes
+  // '/a-1'), so callers that binary-search the paths must sort them first. A
   // directory may be reached only once: that rejects cycles and the DAGs whose
   // expansion is exponential, and deep trees cannot overflow the call stack.
   const inodes = new Map<string, Inode>();

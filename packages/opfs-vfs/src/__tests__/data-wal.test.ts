@@ -169,6 +169,45 @@ describe('data WAL codec', () => {
     expect(decoded.corruptionOffset).toBe(0);
   });
 
+  it('treats an all-zero tail as a torn append, not corruption', () => {
+    const write = encodeDataWalRecord({
+      version: DATA_WAL_VERSION,
+      op: 'write',
+      inodeId: 2,
+      path: '/file.bin',
+      offset: 0,
+      data: new Uint8Array([1]),
+    });
+    for (const zeros of [FRAME_HEADER_BYTES, 64]) {
+      const log = new Uint8Array(write.length + zeros);
+      log.set(write, 0);
+
+      const decoded = decodeDataWalRecords(log);
+      expect(decoded.records).toHaveLength(1);
+      expect(decoded.hadPartialTail).toBe(true);
+      expect(decoded.corruptionOffset).toBeUndefined();
+      expect(decoded.parsedBytes).toBe(write.length);
+    }
+  });
+
+  it('still reports corruption when bytes follow an all-zero frame header', () => {
+    const write = encodeDataWalRecord({
+      version: DATA_WAL_VERSION,
+      op: 'write',
+      inodeId: 2,
+      path: '/file.bin',
+      offset: 0,
+      data: new Uint8Array([1]),
+    });
+    const log = new Uint8Array(FRAME_HEADER_BYTES + write.length);
+    log.set(write, FRAME_HEADER_BYTES);
+
+    const decoded = decodeDataWalRecords(log);
+    expect(decoded.records).toHaveLength(0);
+    expect(decoded.hadPartialTail).toBe(false);
+    expect(decoded.corruptionOffset).toBe(0);
+  });
+
   it('keeps frames before a mid-WAL corruption and discards the corrupt frame and everything after (INT-5)', () => {
     const first = encodeDataWalRecord({
       version: DATA_WAL_VERSION,
