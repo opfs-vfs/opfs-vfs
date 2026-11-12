@@ -409,3 +409,24 @@ describe('Large directory stress test (OpfsVfs in Worker)', () => {
     }
   }, 90000);
 });
+
+describe('Path order after remount (OpfsVfs)', () => {
+  it('keeps children reachable when a directory with a name-extending sibling is renamed', async () => {
+    const name = `path-order-${Math.random().toString(36).slice(2)}.bin`;
+    const bytes = new TextEncoder().encode('x');
+    let vfs = new OpfsVfsWorker(name, { forceLeader: true });
+    await vfs.ready;
+    await vfs.mkdir('/a');
+    await vfs.writeFileBuffer('/a/1', bytes);
+    for (const n of [1, 2, 3, 4]) await vfs.writeFileBuffer(`/a-${n}`, bytes);
+    await vfs.closeVfs();
+
+    vfs = new OpfsVfsWorker(name, { forceLeader: true });
+    await vfs.ready;
+    await vfs.rename('/a', '/b');
+    expect(await vfs.exists('/b/1')).toBe(true);
+    expect(await vfs.exists('/a/1')).toBe(false);
+    expect(await vfs.listPaths()).toEqual(['/', '/a-1', '/a-2', '/a-3', '/a-4', '/b', '/b/1']);
+    await vfs.closeVfs();
+  });
+});
