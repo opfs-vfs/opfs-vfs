@@ -19,11 +19,11 @@
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
-    "@shadcn/lint": "0.2.0",
+    "@shadcn/lint": "0.2.5",
     "fallow": "3.27.0",
-    "oxfmt": "0.68.0",
-    "oxlint": "1.83.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxfmt": "0.78.0",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006",
     "typescript": "7.0.2"
   },
   "engines": {

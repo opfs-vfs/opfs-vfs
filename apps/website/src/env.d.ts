@@ -1,2 +1,2 @@
-// oxlint-disable-next-line typescript/triple-slash-reference -- Starlight's global declarations require a path reference; an import resolves locals.ts instead.
-/// <reference path="../node_modules/@astrojs/starlight/locals.d.ts" />
+// oxlint-disable-next-line typescript/triple-slash-reference -- Starlight's App.Locals types are global declarations, loaded by reference.
+/// <reference types="@astrojs/starlight" />

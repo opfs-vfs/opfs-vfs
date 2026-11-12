@@ -19,7 +19,7 @@ const https = tlsKey && tlsCert ? { key: readFileSync(tlsKey), cert: readFileSyn
 
 export default defineConfig({
   define: {
-    __OPFS_VFS_REACT_VERSION__: JSON.stringify(process.env.VITE_OPFS_VFS_REACT_VERSION ?? '19.2.4'),
+    __OPFS_VFS_REACT_VERSION__: JSON.stringify(process.env.VITE_OPFS_VFS_REACT_VERSION ?? '19.3.1'),
     __OPFS_VFS_REQUIRE_HTTPS__: JSON.stringify(process.env.OPFS_VFS_REQUIRE_HTTPS === 'true'),
   },
   resolve: { dedupe: ['react', 'react-dom'] },

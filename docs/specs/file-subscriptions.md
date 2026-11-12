@@ -39,7 +39,8 @@ export interface SubscriptionError extends Error {
 }
 
 export type SubscriptionRetirement =
-  { readonly status: 'released' } | { readonly status: 'unknown'; readonly error: SubscriptionError };
+  | { readonly status: 'released' }
+  | { readonly status: 'unknown'; readonly error: SubscriptionError };
 
 export type FileChange = CoreFileChange;
 
