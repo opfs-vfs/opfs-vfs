@@ -108,6 +108,8 @@ test('real application attachment, permissions, conditional saves, exclusive cop
       'ln -s /note.txt /blocked-link',
       'ln /note.txt /blocked-hard-link',
       'touch /note.txt',
+      'mktemp -p / blocked-XXXXXX',
+      'mktemp -d -p / blocked-XXXXXX',
     ]) {
       // Each of these succeeds on a writable connection; some commands replace the refusal text with their own.
       expect((await session.run(name, command)).exitCode, command).not.toBe(0);
@@ -116,6 +118,7 @@ test('real application attachment, permissions, conditional saves, exclusive cop
     expect(await owner.exists('/note.txt')).toBe(true);
     expect(await owner.exists('/blocked-dir')).toBe(false);
     expect(await owner.exists('/blocked-link')).toBe(false);
+    expect((await owner.readdir('/')).filter((entry) => entry.startsWith('blocked-'))).toEqual([]);
     session.dispose();
     await owner.writeFileBuffer('/after-detach.txt', encode('application is still alive'));
     expect(await owner.exists('/after-detach.txt')).toBe(true);

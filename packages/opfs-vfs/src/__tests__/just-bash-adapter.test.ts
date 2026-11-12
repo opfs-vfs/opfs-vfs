@@ -275,10 +275,7 @@ for (const backend of backends) {
 
       try {
         await fs.mkdir('/dir');
-        // COR-8: non-recursive rm rejects a directory (POSIX/Node fs.rm); the
-        // recursive flag is the only way to remove one.
-        await expect(fs.rm('/dir')).rejects.toMatchObject({ code: 'EISDIR' });
-        await fs.rm('/dir', { recursive: true });
+        await fs.rm('/dir');
         await expect(fs.exists('/dir')).resolves.toBe(false);
       } finally {
         followerHandle.abortController.abort();
@@ -412,6 +409,8 @@ for (const backend of backends) {
       expect(listed()).toContain('/made/log.txt');
       await shell.mkdir('/empty');
       expect(listed()).toContain('/empty');
+      await shell.createExclusive('/exclusive', { mode: 0o600 });
+      expect(listed()).toContain('/exclusive');
       await shell.cp('/made', '/copy', { recursive: true });
       expect(listed()).toContain('/copy/note.txt');
       await shell.mv('/made/note.txt', '/made/renamed.txt');
@@ -477,6 +476,90 @@ for (const backend of backends) {
       await shell.writeFile('/recorded.txt', 'x');
       expect(writes).toEqual(['/recorded.txt']);
       expect(shell.getAllPaths()).toContain('/recorded.txt');
+    });
+
+    it('non-recursive rm removes an empty directory, refuses a non-empty one, and unlinks symlinks', async () => {
+      const fs = await createAdapter();
+      await fs.mkdir('/empty');
+      await fs.rm('/empty');
+      expect(await fs.exists('/empty')).toBe(false);
+
+      await fs.writeFile('/full/file.txt', 'x');
+      await expect(fs.rm('/full')).rejects.toMatchObject({
+        code: 'ENOTEMPTY',
+        message: "ENOTEMPTY: directory not empty, rm '/full'",
+      });
+      await expect(fs.rm('/full', { force: true })).rejects.toMatchObject({ code: 'ENOTEMPTY' });
+      expect(await fs.readFile('/full/file.txt')).toBe('x');
+
+      await fs.symlink('/full', '/link');
+      await fs.rm('/link');
+      expect(await fs.exists('/link')).toBe(false);
+      expect(await fs.readFile('/full/file.txt')).toBe('x');
+
+      await fs.rm('/full/file.txt');
+      expect(await fs.exists('/full/file.txt')).toBe(false);
+      await expect(fs.rm('/missing')).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.rm('/missing', { force: true })).resolves.toBeUndefined();
+    });
+
+    it('force tolerates a directory that vanishes between the unlink and the rmdir fallback', async () => {
+      const id = Math.random().toString(36).slice(2);
+      const vfs = new OpfsVfsWorker(`just-bash-race-${id}.bin`, { forceLeader: true });
+      await vfs.ready;
+      context = { fs: new OpfsVfsJustBashAdapter(vfs), close: () => vfs.closeVfs() };
+      // Another client removes the directory first: the fallback rmdir then reports ENOENT.
+      const racing = new Proxy(vfs, {
+        get(target, key) {
+          if (key === 'rmdir')
+            return async (path: string) => {
+              await target.rmdir(path);
+              throw Object.assign(new Error('gone'), { code: 'ENOENT' });
+            };
+          const value: unknown = Reflect.get(target, key, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+      const fs = new OpfsVfsJustBashAdapter(racing);
+      await fs.mkdir('/vanishing');
+      await expect(fs.rm('/vanishing', { force: true })).resolves.toBeUndefined();
+      await fs.mkdir('/vanishing');
+      await expect(fs.rm('/vanishing')).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('createExclusive creates a file or directory with the mode, and collides on anything at the path', async () => {
+      const fs = await createAdapter();
+      await fs.mkdir('/tmp');
+
+      await fs.createExclusive('/tmp/f', { mode: 0o600 });
+      expect(await fs.readFile('/tmp/f')).toBe('');
+      expect(await fs.stat('/tmp/f')).toMatchObject({ isFile: true, mode: 0o100600 });
+      await fs.createExclusive('/tmp/d', { mode: 0o700, directory: true });
+      expect(await fs.stat('/tmp/d')).toMatchObject({ isDirectory: true, mode: 0o40700 });
+
+      await fs.writeFile('/tmp/existing', 'keep');
+      await fs.symlink('/tmp/existing', '/tmp/link');
+      await fs.symlink('/tmp/nowhere', '/tmp/dangling');
+      for (const path of ['/tmp/existing', '/tmp/d', '/tmp/link', '/tmp/dangling']) {
+        await expect(fs.createExclusive(path, { mode: 0o600 })).rejects.toMatchObject({
+          code: 'EEXIST',
+          message: `EEXIST: file already exists, open '${path}'`,
+        });
+        await expect(fs.createExclusive(path, { mode: 0o700, directory: true })).rejects.toMatchObject({
+          code: 'EEXIST',
+          message: `EEXIST: file already exists, mkdir '${path}'`,
+        });
+      }
+      expect(await fs.readFile('/tmp/existing')).toBe('keep');
+      expect((await fs.lstat('/tmp/link')).isSymbolicLink).toBe(true);
+      expect(await fs.exists('/tmp/nowhere')).toBe(false);
+
+      for (const directory of [false, true]) {
+        await expect(fs.createExclusive('/nope/x', { mode: 0o600, directory })).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
+      }
+      expect(await fs.exists('/nope')).toBe(false);
     });
 
     it('decodes ascii by masking the high bit', async () => {

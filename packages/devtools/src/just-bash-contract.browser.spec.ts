@@ -35,6 +35,26 @@ test('forJustBash() satisfies just-bash IFileSystem and serves a real shell', as
     expect((await bash.exec('rm b.txt')).exitCode).toBe(0);
     expect(fs.getAllPaths()).not.toContain('/workspace/b.txt');
 
+    // `rmdir` removes an empty directory and refuses a non-empty one; `rm` without -r never removes a directory.
+    expect((await bash.exec('mkdir d && rmdir d')).exitCode).toBe(0);
+    expect(await adapter.exists('/workspace/d')).toBe(false);
+    expect((await bash.exec('rmdir notes')).exitCode).not.toBe(0);
+    expect((await bash.exec('mkdir e && rm e')).stderr).toContain('Is a directory');
+    expect(await adapter.exists('/workspace/notes/c.txt')).toBe(true);
+    expect(await adapter.exists('/workspace/e')).toBe(true);
+
+    // `mktemp` needs its directory to exist: it defaults to /tmp, which the adapter does not create for you.
+    expect((await bash.exec('mktemp')).exitCode).not.toBe(0);
+    expect((await bash.exec('mkdir /tmp')).exitCode).toBe(0);
+    const file = (await bash.exec('mktemp')).stdout.trim();
+    expect(file).toMatch(/^\/tmp\/tmp\.[A-Za-z0-9]{10}$/);
+    expect(await adapter.readFile(file)).toBe('');
+    expect((await adapter.stat(file)).mode & 0o777).toBe(0o600);
+    const dir = (await bash.exec('mktemp -d')).stdout.trim();
+    expect((await adapter.stat(dir)).isDirectory).toBe(true);
+    expect((await adapter.stat(dir)).mode & 0o777).toBe(0o700);
+    expect(fs.getAllPaths()).toEqual(expect.arrayContaining([file, dir]));
+
     // just-bash's own composition iterates the base list synchronously; a Promise there is "not iterable".
     expect(new MountableFs({ base: fs }).getAllPaths()).toContain('/workspace/notes/c.txt');
     void raw;
