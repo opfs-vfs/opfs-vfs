@@ -64,7 +64,8 @@ listing, removal, rename, recursive copy and volume-local temporary paths.
 Unlike Node's filesystem, operands must be absolute volume paths; relative
 symlink targets are preserved. Recursive copy does not follow symlinks, keeps
 copied relative link targets as written (Node's default copy resolves them to
-the source), is not atomic, and does not preserve hard-link topology. `glob`
+the source), is not atomic, and does not preserve hard-link topology. As in
+Node, `remove` rejects any directory, empty or not, unless `recursive` is set. `glob`
 needs an absolute `root` or pattern. `chown` remains intentionally unsupported
 in v1 and returns a typed `ENOTSUP` error. Scoped temporary paths remove only their private directory
 when the scope closes; the default parent is `/tmp` inside the volume. A temporary
@@ -80,7 +81,10 @@ path fails with `NotFound`, and a symlink target fails with `BadResource`. It
 watches regular files or directories and emits absolute volume paths as
 `Create`, `Update`, or `Remove`. Recursive directory watching preserves the
 native descendant records for directory renames; symlink entries inside a
-watched directory are reported, but a symlink target is not followed.
+watched directory are reported, but a symlink target is not followed. The watched
+path is matched textually against event paths: a target that reaches its file
+through `..` after a symlink, such as `/link/../x`, is checked where the volume
+resolves it but subscribes to the textual `/x`.
 
 Watch notifications are hints, not a replayable log. Preflight checks and
 directory scans are not atomic snapshots; logical event counts and ordering can

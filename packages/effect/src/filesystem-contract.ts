@@ -52,6 +52,13 @@ export interface FileSystemContractResult {
     readonly missing: string;
     readonly forcedMissing: string;
     readonly forcedRecursiveMissing: string;
+    readonly directories: Readonly<Record<'empty' | 'full' | 'forcedEmpty', Readonly<Record<string, unknown>>>>;
+  };
+  readonly dots: {
+    readonly copiedThroughParent: boolean;
+    readonly existingUntouched: boolean;
+    readonly selfCopyRejected: boolean;
+    readonly selfCopyCreated: boolean;
   };
   readonly concurrentAppend: string;
   readonly largeAppend: {
@@ -195,7 +202,53 @@ export const runFilesystemContract = (
     const missingRemoval = yield* Effect.result(fs.remove(removeMissing));
     const forcedMissing = yield* Effect.result(fs.remove(removeMissing, { force: true }));
     const forcedRecursiveMissing = yield* Effect.result(fs.remove(removeMissing, { recursive: true, force: true }));
+    // Dot segments after an existing directory: Node and the volume reach the same place here. They
+    // differ after a missing component or a symlink, which this suite therefore does not cover.
+    yield* fs.makeDirectory(path('dots', 'existing'), { recursive: true });
+    yield* fs.makeDirectory(path('dots', 'out'));
+    yield* fs.makeDirectory(path('dots', 'source'));
+    yield* fs.writeFile(path('dots', 'source', 'file.bin'), payload);
+    const dottedExisting = `${path('dots', 'existing')}/..`;
+    yield* fs.copy(path('dots', 'source', 'file.bin'), `${dottedExisting}/out/file.bin`);
+    const dottedSelf = yield* Effect.result(fs.copy(path('dots', 'source'), `${dottedExisting}/source/inner`));
+    const dots = {
+      copiedThroughParent: sameBytes(yield* fs.readFile(path('dots', 'out', 'file.bin')), payload),
+      existingUntouched: (yield* fs.readDirectory(path('dots', 'existing'))).length === 0,
+      selfCopyRejected: dottedSelf._tag === 'Failure',
+      selfCopyCreated: yield* fs.exists(path('dots', 'source', 'inner')),
+    };
+    const removeEmptyDirectory = path('remove', 'empty-directory');
+    const removeFullDirectory = path('remove', 'full-directory');
+    yield* fs.makeDirectory(removeEmptyDirectory);
+    yield* fs.makeDirectory(removeFullDirectory);
+    yield* fs.writeFile(path('remove', 'full-directory', 'leaf.bin'), payload);
+    // Node reports the rejection as Unknown with an ERR_FS_EISDIR cause (errno 21); adapters expose it via details.
+    const directoryRemoval = (directory: string, options?: { readonly force?: boolean }) =>
+      Effect.gen(function* () {
+        const result = yield* Effect.result(fs.remove(directory, options));
+        const exists = yield* fs.exists(directory);
+        if (result._tag === 'Success') return { result: 'Success', exists };
+        const reason = result.failure.reason;
+        const cause = (reason.cause ?? {}) as {
+          readonly code?: unknown;
+          readonly errno?: unknown;
+          readonly details?: { readonly errno?: unknown } | null;
+        };
+        return {
+          result: reason._tag,
+          syscall: 'syscall' in reason ? reason.syscall : undefined,
+          code: cause.code,
+          errno: cause.errno ?? cause.details?.errno,
+          exists,
+        };
+      });
+    const removeDirectories = {
+      empty: yield* directoryRemoval(removeEmptyDirectory),
+      full: yield* directoryRemoval(removeFullDirectory),
+      forcedEmpty: yield* directoryRemoval(removeEmptyDirectory, { force: true }),
+    };
     const remove = {
+      directories: removeDirectories,
       fileRemoved: !(yield* fs.exists(removeFile)),
       linkRemoved: (yield* Effect.result(fs.readLink(removeLink)))._tag === 'Failure',
       linkTargetKept: sameBytes(yield* fs.readFile(removeTarget), payload),
@@ -257,6 +310,7 @@ export const runFilesystemContract = (
         size: cursorSize,
       },
       remove,
+      dots,
       concurrentAppend: new TextDecoder().decode(concurrentBytes),
       largeAppend: {
         size: ByteSize.toBigInt(largeAppendInfo.size),

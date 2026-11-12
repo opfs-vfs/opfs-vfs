@@ -79,7 +79,7 @@ The [worker session example](https://github.com/opfs-vfs/opfs-vfs/blob/main/pack
 
 Filesystem operands must be absolute volume paths. They are not host filesystem paths. Relative symlink targets are preserved.
 
-The adapter supports scoped descriptor I/O, metadata, permissions, links, directories, rename, removal, recursive copy, and volume-local temporary paths. `glob` needs an absolute `root` or pattern. `chown` fails with a typed `ENOTSUP` error. Recursive copy does not follow symlinks, is not atomic, and does not preserve hard-link topology.
+The adapter supports scoped descriptor I/O, metadata, permissions, links, directories, rename, removal, recursive copy, and volume-local temporary paths. `glob` needs an absolute `root` or pattern. `chown` fails with a typed `ENOTSUP` error. Recursive copy does not follow symlinks, is not atomic, and does not preserve hard-link topology. As in Node, `remove` rejects any directory, empty or not, unless `recursive` is set.
 
 Whole-file worker helpers use a fast path up to 16 MiB. Larger files and other open flags use descriptor I/O, but `readFile` still allocates the whole result. Use `fs.stream` and `fs.sink` to copy without loading the entire file into memory. The [streaming example](https://github.com/opfs-vfs/opfs-vfs/blob/main/packages/effect/examples/filesystem-stream.ts) copies a file in 64 KiB chunks and synchronizes afterward.
 
@@ -176,7 +176,7 @@ Treat a stream failure as a stale view. The [reconciled view example](https://gi
 
 ### Standard FileSystem watch
 
-`fs.watch('/documents', { recursive: true })` uses the same logical-change capability. It emits `Create`, `Update`, and `Remove` events with absolute volume paths. Acquisition checks the target: a missing path fails with `NotFound`, and a symlink target fails with `BadResource`. Directory watches report symlink entries without following their targets.
+`fs.watch('/documents', { recursive: true })` uses the same logical-change capability. It emits `Create`, `Update`, and `Remove` events with absolute volume paths. Acquisition checks the target: a missing path fails with `NotFound`, and a symlink target fails with `BadResource`. Directory watches report symlink entries without following their targets. The watched path is matched textually against event paths, so avoid targets that go through `..` after a symlink: `/link/../x` is checked where the volume resolves it but subscribes to the textual `/x`.
 
 Owner takeover ends the watch with `Unknown` and a `SubscriptionError` cause whose code is `SUBSCRIPTION_INTERRUPTED`; it does not silently resubscribe. Readiness and retirement timeouts map to `TimedOut`. Counts and ordering can differ from operating-system watchers. The standard API has no registration-ready signal, so use rich subscriptions for subscribe-before-scan views. Recovery must invalidate and reconcile the view, even when a bounded retry is appropriate.
 
