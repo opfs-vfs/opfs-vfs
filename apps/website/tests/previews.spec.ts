@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
-import { choose, continueDialog } from './ui';
+import { choose, continueDialog, fillEditor } from './ui';
 
 const route = '/demos/filesystem/';
 const unique = () => `previews-${Date.now().toString(36)}`;
@@ -152,7 +152,7 @@ test('dirty editor survives cross-tab refresh and reset succeeds after the peer 
   await choose(second, 'Volume', name);
   await first.getByRole('treeitem', { name: /README\.md/ }).click();
   await first.getByRole('button', { name: 'Source', exact: true }).click();
-  await first.getByLabel('Edit README.md').fill('# Unsaved draft survives');
+  await fillEditor(first, 'Edit README.md', '# Unsaved draft survives');
   await first.getByRole('treeitem', { name: /notes\.txt/ }).click();
   const dirtyDialog = first.getByRole('dialog');
   await expect(dirtyDialog.getByRole('heading', { name: 'Discard unsaved preview changes?' })).toBeVisible();

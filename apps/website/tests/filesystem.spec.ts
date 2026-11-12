@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { choose, continueDialog } from './ui';
+import { choose, continueDialog, fillEditor } from './ui';
 
 const route = '/demos/filesystem/';
 const unique = (prefix: string) => `${prefix}-${Date.now().toString(36)}`;
@@ -113,7 +113,7 @@ test('drop, move, edit, export, and import use logical files', async ({ page }) 
   await expect(page.getByRole('treeitem', { name: /dropped\.txt/ })).toBeVisible();
   await page.getByRole('treeitem', { name: /README\.md/ }).click();
   await page.getByRole('button', { name: 'Source', exact: true }).click();
-  await page.getByLabel('Edit README.md').fill('# Edited locally');
+  await fillEditor(page, 'Edit README.md', '# Edited locally');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export ZIP' }).click();

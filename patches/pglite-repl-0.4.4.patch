@@ -1,7 +1,19 @@
 diff --git a/dist/Repl.js b/dist/Repl.js
+index 75b69e75c566731d30d92699ff17214b4cf314d9..98741e48983420ef18f09989e0680ee3afff74d4 100644
 --- a/dist/Repl.js
 +++ b/dist/Repl.js
-@@ -676,9 +676,7 @@
+@@ -593,7 +593,9 @@ function Repl({
+                 }, 0);
+               }
+               if (!disableUpdateSchema) {
+-                getSchema(pg).then(setSchema);
++                // The schema only feeds autocomplete and the next query refreshes it, so a failed
++                // refresh (a leader change while it is pending, for one) must not surface as an unhandled rejection.
++                getSchema(pg).then(setSchema).catch(() => {});
+               }
+             });
+             historyPos.current = -1;
+@@ -676,9 +678,7 @@ function Repl({
    const extractStyles = () => {
      var _a, _b;
      const cmEditorEl = (_b = (_a = rcm.current) == null ? void 0 : _a.editor) == null ? void 0 : _b.querySelector(".cm-editor");
@@ -12,3 +24,12 @@ diff --git a/dist/Repl.js b/dist/Repl.js
      const gutterEl = cmEditorEl.querySelector(".cm-gutters");
      const cmEditorElComputedStyles = window.getComputedStyle(cmEditorEl);
      const foregroundColor = cmEditorElComputedStyles.color;
+@@ -726,7 +726,7 @@ function Repl({
+             onCreateEditor: () => {
+               extractStyles();
+               setTimeout(extractStyles, 0);
+-              getSchema(pg).then(setSchema);
++              getSchema(pg).then(setSchema).catch(() => {});
+             }
+           }
+         )
