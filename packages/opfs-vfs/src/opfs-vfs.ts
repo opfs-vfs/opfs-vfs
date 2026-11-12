@@ -45,7 +45,7 @@ import type {
   LogicalRecord,
   WireSubscribeOptions,
 } from './changes';
-import { baseName, normalizeFsPath, parentPath } from './fs-path';
+import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path';
 import { isChangeReply, snapshotChangeCommand, snapshotChangeFrame, utf8Charge } from './change-protocol';
 import { isMountReplacement, mountGenerations, persistenceSources, workerChangeOpeners } from './mount-context';
 import { claimConfiguredPlugins, validateConfiguredPlugins, validatedPluginOptions } from './plugin-config';
@@ -2191,69 +2191,66 @@ export class OpfsVfs implements FileChangeSource {
     return path;
   }
 
-  private resolveSymlinkTarget(path: string, target: string): string {
-    if (target.startsWith('/')) {
-      return normalizeFsPath(target).path;
-    }
-    const base = parentPath(path);
-    const joined = base === '/' ? `/${target}` : `${base}/${target}`;
-    return normalizeFsPath(joined).path;
-  }
-
+  /**
+   * The one path walk every filesystem call goes through. Takes the
+   * {@link normalizeFsPath} form and returns the canonical path: symlinks
+   * followed (the final one only if asked), `.` and `..` resolved against the
+   * directories actually reached, as POSIX does.
+   *
+   * - `.` and `..` need an existing directory to stand on: after a missing
+   *   name they fail with ENOENT, after a file with ENOTDIR.
+   * - `..` moves to the parent of the directory reached, so after a symlink it
+   *   is the parent of the link's target. At the root it stays at the root.
+   * - A symlink's target is walked the same way, relative targets from the
+   *   link's directory. More than MAX_SYMLINK_DEPTH links fail with ELOOP.
+   * - Every directory the walk passes through must be searchable (EACCES),
+   *   including ones a symlink or `..` leads through that are not part of the
+   *   returned path.
+   * - A name that does not exist is kept, and so are the names after it:
+   *   callers that create entries, or report ENOENT, need the path they asked
+   *   for. The result then names nothing.
+   */
   private resolveInodePath(path: string, followFinalSymlink: boolean): string {
     // Every path operation resolves here. After close nothing would persist.
     if (this.closed) throw createVfsError('EBADF', path, 'Volume is closed');
-    let currentPath = path;
-    let depth = 0;
+    // Components still to walk, next one last.
+    const pending = path.split('/').filter(Boolean).reverse();
+    let current = '/';
+    let inode = this.getInodeByPath('/');
+    let links = 0;
 
-    while (true) {
-      const parts = currentPath.split('/').filter(Boolean);
-      if (parts.length === 0) return '/';
-
-      let substituted = false;
-      let currentDirPath = '/';
-      const rootInode = this.getInodeByPath('/');
-      if (rootInode?.isDir) {
-        this.assertDirectoryExecutable('/', rootInode);
+    while (pending.length > 0) {
+      const name = pending.pop()!;
+      if (!inode) {
+        if (name === '.' || name === '..') throw createVfsError('ENOENT', current);
+        current = current === '/' ? `/${name}` : `${current}/${name}`;
+        continue;
+      }
+      if (!inode.isDir) throw createVfsError('ENOTDIR', current);
+      this.assertDirectoryExecutable(current, inode);
+      if (name === '.') continue;
+      if (name === '..') {
+        current = parentPath(current);
+        inode = this.getInodeByPath(current);
+        continue;
       }
 
-      for (let i = 0; i < parts.length; i++) {
-        const parentInode = this.getInodeByPath(currentDirPath);
-        const { path: candidatePath, inode } = parentInode?.isDir
-          ? this.lookupChild(currentDirPath, parentInode, parts[i])
-          : { path: currentDirPath, inode: undefined };
-        const isFinal = i === parts.length - 1;
-        if (!inode) {
-          currentDirPath =
-            candidatePath === currentDirPath
-              ? currentDirPath === '/'
-                ? `/${parts[i]}`
-                : `${currentDirPath}/${parts[i]}`
-              : candidatePath;
-          continue;
+      const child = this.lookupChild(current, inode, name);
+      if (child.inode && isSymlinkInode(child.inode) && (followFinalSymlink || pending.length > 0)) {
+        if (++links > MAX_SYMLINK_DEPTH) throw createVfsError('ELOOP', child.path);
+        const target = child.inode.symlinkTarget ?? '';
+        if (target.startsWith('/')) {
+          current = '/';
+          inode = this.getInodeByPath('/');
         }
-        if (isSymlinkInode(inode) && (followFinalSymlink || !isFinal)) {
-          if (++depth > MAX_SYMLINK_DEPTH) {
-            throw createVfsError('ELOOP', candidatePath);
-          }
-          const targetPath = this.resolveSymlinkTarget(candidatePath, inode.symlinkTarget ?? '');
-          const remaining = parts.slice(i + 1).join('/');
-          currentPath = remaining ? `${targetPath === '/' ? '' : targetPath}/${remaining}` : targetPath;
-          substituted = true;
-          break;
-        }
-
-        if (!isFinal) {
-          if (!inode.isDir) {
-            throw createVfsError('ENOTDIR', candidatePath);
-          }
-          this.assertDirectoryExecutable(candidatePath, inode);
-          currentDirPath = candidatePath;
-        }
+        const parts = target.split('/').filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) pending.push(parts[i]!);
+        continue;
       }
-
-      if (!substituted) return currentPath;
+      current = child.path;
+      inode = child.inode;
     }
+    return current;
   }
 
   mkdirSync(rawPath: string, modeOrOptions: number | MkdirOptions = DEFAULT_DIR_MODE) {
@@ -3058,8 +3055,19 @@ export class OpfsVfs implements FileChangeSource {
     return this.withLogicalOperation(() => this.rmdirSyncImpl(rawPath));
   }
 
+  /**
+   * POSIX: removing or renaming `.` or `..` is EINVAL. The resolver would walk
+   * them to the directory they name, which could be a symlink's target. The
+   * normalized path has no trailing slash, so `/a/./` is covered too.
+   */
+  private assertNotDotEntry(normalizedPath: string) {
+    const last = baseName(normalizedPath);
+    if (last === '.' || last === '..') throw createVfsError('EINVAL', normalizedPath);
+  }
+
   private rmdirSyncImpl(rawPath: string): void {
     const normalized = normalizeFsPath(rawPath);
+    this.assertNotDotEntry(normalized.path);
     const path = this.resolveInodePath(normalized.path, false);
     const { requiresDirectory } = normalized;
     if (path === '/') throw createVfsError('EPERM', path);
@@ -3092,6 +3100,7 @@ export class OpfsVfs implements FileChangeSource {
 
   private removeSyncImpl(path: string): void {
     const normalized = normalizeFsPath(path);
+    this.assertNotDotEntry(normalized.path);
     const normalizedPath = this.resolveInodePath(normalized.path, false);
     const inode = this.getInodeByPath(normalizedPath);
     if (!inode) throw createVfsError('ENOENT', normalizedPath);
@@ -3126,6 +3135,8 @@ export class OpfsVfs implements FileChangeSource {
   private renameSyncImpl(rawOldPath: string, rawNewPath: string): void {
     const oldNormalized = normalizeFsPath(rawOldPath);
     const newNormalized = normalizeFsPath(rawNewPath);
+    this.assertNotDotEntry(oldNormalized.path);
+    this.assertNotDotEntry(newNormalized.path);
     const oldPath = this.resolveInodePath(oldNormalized.path, false);
     const newPath = this.resolveInodePath(newNormalized.path, false);
     const inode = this.getInodeByPath(oldPath);
@@ -3365,7 +3376,7 @@ export class OpfsVfs implements FileChangeSource {
       path = this.resolveInodePath(normalized.path, true);
     } catch (error) {
       const code = (error as { code?: unknown }).code;
-      if (code === 'ENOTDIR' || code === 'ELOOP' || code === 'EACCES') return false;
+      if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP' || code === 'EACCES') return false;
       throw error;
     }
     const { requiresDirectory } = normalized;
@@ -4445,7 +4456,9 @@ export class OpfsVfs implements FileChangeSource {
     ) {
       throw createVfsError('EINVAL', undefined, 'Invalid subscription target');
     }
-    const normalized = normalizeFsPath(target.path);
+    // A target is a pattern matched against event paths, not a file lookup: the
+    // textual form is the one the subscription plugin matches with.
+    const normalized = lexicalFsPath(target.path);
     if (normalized.requiresDirectory && target.scope !== 'directory')
       throw createVfsError('EINVAL', normalized.path, 'Trailing slash requires directory scope');
     let path = '/';

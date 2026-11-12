@@ -153,6 +153,22 @@ it('maps PGlite open flags into POSIX-style VFS flags', () => {
   expect(openSync).toHaveBeenNthCalledWith(3, '/read.txt', OpenFlags.O_RDONLY);
 });
 
+it('hands dot components to the volume instead of collapsing them', () => {
+  const statSync = vi.fn(() => makeStat());
+  const openSync = vi.fn(() => 9);
+  const renameSync = vi.fn();
+  const adapter = new OpfsVfsPGliteAdapter(makeStubVfs({ statSync, openSync, renameSync }));
+
+  // Only the volume knows what `..` names behind a symlink.
+  adapter.lstat('//link/../x');
+  adapter.open('/link/./../x', 'r');
+  adapter.rename('/link/../x', '/missing/../y');
+
+  expect(statSync).toHaveBeenCalledWith('/link/../x');
+  expect(openSync).toHaveBeenCalledWith('/link/./../x', OpenFlags.O_RDONLY);
+  expect(renameSync).toHaveBeenCalledWith('/link/../x', '/missing/../y');
+});
+
 it('readdir propagates ENOTDIR/ENOENT instead of returning [] (COR-7)', () => {
   const adapter = new OpfsVfsPGliteAdapter(
     makeStubVfs({

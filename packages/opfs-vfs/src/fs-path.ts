@@ -5,30 +5,42 @@ export interface NormalizedPath {
   requiresDirectory: boolean;
 }
 
-export function normalizeFsPath(rawPath: string): NormalizedPath {
+function components(rawPath: string): string[] {
   if (rawPath.includes('\0')) {
     throw createVfsError('EINVAL', rawPath, 'Path contains NUL byte');
   }
+  return rawPath.split('/').filter((part) => part !== '');
+}
 
-  let input = rawPath;
-  const requiresDirectory = input.length > 1 && input.endsWith('/');
-  if (input === '' || input === '.' || input === './') {
-    input = '/';
-  }
-  const parts = input.split('/');
+/**
+ * The form every filesystem call hands to the resolver: absolute from the mount
+ * root, without empty components. `.` and `..` are KEPT: what they name depends
+ * on the directories and symlinks before them, so only the resolver's walk can
+ * decide it. A trailing slash, or a final `.` or `..`, requires a directory.
+ */
+export function normalizeFsPath(rawPath: string): NormalizedPath {
+  const parts = components(rawPath);
+  const last = parts[parts.length - 1];
+  return {
+    path: `/${parts.join('/')}`,
+    requiresDirectory: (rawPath.length > 1 && rawPath.endsWith('/')) || last === '.' || last === '..',
+  };
+}
+
+/**
+ * A purely textual normal form: `.` is dropped and `..` removes the component
+ * before it, whatever that component is on disk. For keys, patterns and a
+ * shell's logical paths only. It must never decide which file a filesystem
+ * call reaches: behind a symlink it names a different one than the resolver.
+ */
+export function lexicalFsPath(rawPath: string): NormalizedPath {
   const stack: string[] = [];
-
-  for (const part of parts) {
-    if (part === '' || part === '.') continue;
-    if (part === '..') {
-      stack.pop();
-      continue;
-    }
-    stack.push(part);
+  for (const part of components(rawPath)) {
+    if (part === '.') continue;
+    if (part === '..') stack.pop();
+    else stack.push(part);
   }
-
-  const path = stack.length === 0 ? '/' : `/${stack.join('/')}`;
-  return { path, requiresDirectory };
+  return { path: `/${stack.join('/')}`, requiresDirectory: rawPath.length > 1 && rawPath.endsWith('/') };
 }
 
 export function parentPath(path: string): string {

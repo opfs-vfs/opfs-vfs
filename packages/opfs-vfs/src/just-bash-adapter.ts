@@ -1,4 +1,4 @@
-import { normalizeFsPath, parentPath } from './fs-path';
+import { lexicalFsPath, normalizeFsPath, parentPath } from './fs-path';
 import type { OpfsVfsWorker } from './index_internal';
 import type { OpfsVfs } from './opfs-vfs';
 import { OpenFlags, type VfsDirEntry, type MkdirOptions as VfsMkdirOptions, type VfsStat } from './opfs-vfs';
@@ -664,13 +664,19 @@ export class OpfsVfsJustBashAdapter {
     }
   }
 
+  /**
+   * The shell's logical path arithmetic (`cd ..` from `/a/b` is `/a`, whatever
+   * `/a/b` is on disk), as just-bash's own filesystems do it. Paths passed to
+   * the file methods of this adapter are not collapsed here: the volume
+   * resolves `.` and `..` against the directories and symlinks it reaches.
+   */
   resolvePath(base: string, path: string): string {
     if (path.startsWith('/')) {
-      return normalizeFsPath(path).path;
+      return lexicalFsPath(path).path;
     }
-    const normalizedBase = normalizeFsPath(base).path;
+    const normalizedBase = lexicalFsPath(base).path;
     const combined = normalizedBase === '/' ? `/${path}` : `${normalizedBase}/${path}`;
-    return normalizeFsPath(combined).path;
+    return lexicalFsPath(combined).path;
   }
 
   async getAllPaths(): Promise<string[]> {
