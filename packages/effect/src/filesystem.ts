@@ -356,6 +356,27 @@ const ownerChanged = () =>
     'refused',
   );
 
+/** Matches NodeFileSystem, whose non-recursive `fs.rm` rejects every directory with ERR_FS_EISDIR. */
+const removeDirectoryError = (state: Coordinator, path: string) => {
+  const details = { message: 'Path is a directory', code: 'ERR_FS_EISDIR', errno: 21 };
+  return PlatformError.systemError({
+    _tag: 'Unknown',
+    module: moduleName,
+    method: 'remove',
+    pathOrDescriptor: path,
+    syscall: 'rm',
+    cause: new VolumeError({
+      kind: 'filesystem',
+      fileName: state.fileName,
+      operation: 'remove',
+      path,
+      code: details.code,
+      outcome: 'not-applied',
+      details,
+    }),
+  });
+};
+
 const staleHandle = (state: Coordinator, method: string) =>
   PlatformError.systemError({
     _tag: 'BadResource',
@@ -825,7 +846,10 @@ const parentPath = (path: string) => {
   const slash = trimmed.lastIndexOf('/');
   return slash <= 0 ? '/' : trimmed.slice(0, slash);
 };
-const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+const baseName = (path: string) => {
+  const trimmed = path.replace(/\/$/, '');
+  return trimmed.slice(trimmed.lastIndexOf('/') + 1);
+};
 const isSymlink = (value: Stat) => (value.mode & 0o170000) === 0o120000;
 const pinned = <A>(
   state: Coordinator,
@@ -891,6 +915,10 @@ const pinnedLookup = (state: Coordinator, generation: string, path: string, budg
     ),
   );
 
+const isDotSegment = (name: string) => name === '.' || name === '..';
+const missingCopyPath = (state: Coordinator, path: string) =>
+  platform(Object.assign(new Error('No such file or directory'), { code: 'ENOENT' }), 'copy', path, state.fileName);
+
 const resolveCopyParent = (state: Coordinator, generation: string, path: string, budget: { remaining: number }) =>
   Effect.gen(function* () {
     let cursor = path;
@@ -904,7 +932,10 @@ const resolveCopyParent = (state: Coordinator, generation: string, path: string,
         return { realPath, missing: missing.reverse() };
       }
       if (cursor === '/') return yield* Effect.fail(badArgument('copy', 'destination parent does not exist'));
-      missing.push(baseName(cursor));
+      const name = baseName(cursor);
+      // The volume resolves `.` and `..` after lookup, so they cannot follow a missing component.
+      if (isDotSegment(name)) return yield* Effect.fail(missingCopyPath(state, path));
+      missing.push(name);
       cursor = parentPath(cursor);
     }
   });
@@ -977,6 +1008,8 @@ const copyPinned = (
       : joinPath(yield* pinnedRealPath(state, generation, parentPath(fromPath), budget), baseName(fromPath));
     const destinationParent = yield* resolveCopyParent(state, generation, parentPath(toPath), budget);
     const existingDestination = yield* pinnedLookup(state, generation, toPath, budget);
+    if (Option.isNone(existingDestination) && isDotSegment(baseName(toPath)))
+      return yield* Effect.fail(missingCopyPath(state, toPath));
     const destinationReal =
       Option.isSome(existingDestination) && existingDestination.value.is_dir && !isSymlink(existingDestination.value)
         ? yield* pinnedRealPath(state, generation, toPath, budget)
@@ -2147,15 +2180,9 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
               Effect.catch((error) => (force && isMissing(error) ? Effect.succeed(undefined) : Effect.fail(error))),
             );
             if (!found) return;
-            const removeEntry = () => {
-              if (found.is_dir)
-                return 'forGeneration' in backend
-                  ? backend.forGeneration(generation).rmdir(path)
-                  : backend.rmdirSync(path);
-              return 'forGeneration' in backend
-                ? backend.forGeneration(generation).unlink(path)
-                : backend.unlinkSync(path);
-            };
+            if (found.is_dir) return yield* Effect.fail(removeDirectoryError(state, path));
+            const removeEntry = () =>
+              'forGeneration' in backend ? backend.forGeneration(generation).unlink(path) : backend.unlinkSync(path);
             yield* execute(state, 'remove', path, removeEntry, true, false, generation).pipe(
               Effect.catchTag('PlatformError', (error) =>
                 force && error.reason._tag === 'NotFound' ? Effect.void : Effect.fail(error),

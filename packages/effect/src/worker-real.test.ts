@@ -275,6 +275,89 @@ it('copies trees without following symlinks and cleans only scoped temporary roo
   expect(result.unscopedExists).toBe(true);
 });
 
+it('resolves dot segments in copy destinations the way the volume does', async () => {
+  const result = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const volume = yield* Volume.make({ fileName: fileName(), transport: 'auto', worker });
+        const fs = OpfsFileSystem.make(volume);
+        yield* fs.makeDirectory('/dots-source', { recursive: true });
+        yield* fs.writeFileString('/dots-source/file', 'source');
+        yield* fs.makeDirectory('/dots-out/a/b', { recursive: true });
+        yield* fs.symlink('/dots-out/a/b', '/dots-link');
+        // A missing component before `..` makes the volume fail the lookup with ENOENT.
+        const directWrite = yield* Effect.result(fs.writeFileString('/dots-new/../dots-out/direct', 'x'));
+        const intoSelf = yield* Effect.result(fs.copy('/dots-source', '/dots-missing/../dots-source/inner'));
+        const missingParent = yield* Effect.result(fs.copy('/dots-source/file', '/dots-new/../dots-out/file'));
+        const trailingDots = yield* Effect.result(fs.copy('/dots-source/file', '/dots-out/missing/..'));
+        // `..` after a symlink leaves the symlink target, not the link's parent.
+        yield* fs.copy('/dots-source/file', '/dots-link/../linked');
+        const linkedSelf = yield* Effect.result(fs.copy('/dots-out/a', '/dots-link/../inner'));
+        return {
+          directWrite: directWrite._tag === 'Failure' ? directWrite.failure.reason._tag : 'Success',
+          intoSelf: intoSelf._tag === 'Failure' ? intoSelf.failure.reason._tag : 'Success',
+          missingParent: missingParent._tag === 'Failure' ? missingParent.failure.reason._tag : 'Success',
+          trailingDots: trailingDots._tag === 'Failure' ? trailingDots.failure.reason._tag : 'Success',
+          createdTrailingParent: yield* fs.exists('/dots-out/missing'),
+          linkedSelf: linkedSelf._tag === 'Failure' ? linkedSelf.failure.reason._tag : 'Success',
+          createdMissing: yield* fs.exists('/dots-missing'),
+          createdNew: yield* fs.exists('/dots-new'),
+          createdInner: yield* fs.exists('/dots-source/inner'),
+          copiedOut: yield* fs.exists('/dots-out/file'),
+          linked: yield* fs.readFileString('/dots-out/a/linked'),
+          linkedInner: yield* fs.exists('/dots-out/a/inner'),
+        };
+      }),
+    ),
+  );
+  expect(result).toEqual({
+    directWrite: 'NotFound',
+    intoSelf: 'NotFound',
+    missingParent: 'NotFound',
+    trailingDots: 'NotFound',
+    createdTrailingParent: false,
+    linkedSelf: 'BadArgument',
+    createdMissing: false,
+    createdNew: false,
+    createdInner: false,
+    copiedOut: false,
+    linked: 'source',
+    linkedInner: false,
+  });
+});
+
+it('fails copy destinations with a trailing slash after a dot segment', async () => {
+  const result = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const volume = yield* Volume.make({ fileName: fileName(), transport: 'auto', worker });
+        const fs = OpfsFileSystem.make(volume);
+        yield* fs.makeDirectory('/src');
+        yield* fs.writeFileString('/src/file', 'new');
+        yield* fs.writeFileString('/file', 'old');
+        const tag = (result: { _tag: string; failure?: { reason: { _tag: string } } }) =>
+          result._tag === 'Failure' ? result.failure!.reason._tag : 'Success';
+        const parent = tag(yield* Effect.result(fs.copy('/src', '/missing/../', { overwrite: true })));
+        const current = tag(yield* Effect.result(fs.copy('/src', '/missing/./', { overwrite: true })));
+        return {
+          parent,
+          current,
+          created: yield* fs.exists('/missing'),
+          overwritten: yield* fs.readFileString('/file'),
+          root: (yield* fs.readDirectory('/')).sort(),
+        };
+      }),
+    ),
+  );
+  expect(result).toEqual({
+    parent: 'NotFound',
+    current: 'NotFound',
+    created: false,
+    overwritten: 'old',
+    root: ['file', 'src'],
+  });
+});
+
 it('replaces regular destinations and owns temporary roots through their physical parent', async () => {
   const result = await Effect.runPromise(
     Effect.scoped(

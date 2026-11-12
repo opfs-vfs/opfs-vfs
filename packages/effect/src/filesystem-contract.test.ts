@@ -63,6 +63,17 @@ const assertContract = (result: Record<string, unknown>) => {
     missing: 'NotFound',
     forcedMissing: 'Success',
     forcedRecursiveMissing: 'Success',
+    directories: {
+      empty: { result: 'Unknown', syscall: 'rm', code: 'ERR_FS_EISDIR', errno: 21, exists: true },
+      full: { result: 'Unknown', syscall: 'rm', code: 'ERR_FS_EISDIR', errno: 21, exists: true },
+      forcedEmpty: { result: 'Unknown', syscall: 'rm', code: 'ERR_FS_EISDIR', errno: 21, exists: true },
+    },
+  });
+  expect(result.dots).toEqual({
+    copiedThroughParent: true,
+    existingUntouched: true,
+    selfCopyRejected: true,
+    selfCopyCreated: false,
   });
   expect(['baseAB', 'baseBA']).toContain(result.concurrentAppend);
   expect(result.largeAppend).toEqual({

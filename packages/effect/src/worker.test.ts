@@ -1328,19 +1328,44 @@ describe('Volume worker acquisition and sessions', () => {
       is_dir: true,
       is_file: false,
     });
+    removal.pathStats.set('/file', {
+      mode: 0o100644,
+      size: 0,
+      ino: 3,
+      nlink: 1,
+      blksize: 4096,
+      blocks: 0,
+      is_dir: false,
+      is_file: true,
+    });
     workerMocks.open.mockResolvedValue(clientAsCore(removal));
-    await Effect.runPromise(
+    const directoryRemoval = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
           const volume = yield* Volume.make(mount());
-          yield* OpfsFileSystem.make(volume).remove('/dir');
+          const fs = OpfsFileSystem.make(volume);
+          yield* fs.remove('/file');
+          return yield* Effect.result(fs.remove('/dir'));
         }),
       ),
     );
     expect(removal.namespaceCalls.map(({ generation, method }) => [generation, method])).toEqual([
       ['generation-1', 'lstat'],
-      ['generation-1', 'rmdir'],
+      ['generation-1', 'unlink'],
+      ['generation-1', 'lstat'],
     ]);
+    expect(directoryRemoval).toMatchObject({
+      _tag: 'Failure',
+      failure: {
+        reason: {
+          _tag: 'Unknown',
+          method: 'remove',
+          pathOrDescriptor: '/dir',
+          syscall: 'rm',
+          cause: { _tag: 'VolumeError', code: 'ERR_FS_EISDIR', outcome: 'not-applied', details: { errno: 21 } },
+        },
+      },
+    });
   });
 
   it('interrupts a recursive listing before a late directory reply can dispatch its child', async () => {
