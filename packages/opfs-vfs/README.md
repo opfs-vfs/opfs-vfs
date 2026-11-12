@@ -31,6 +31,17 @@ await fs.closeVfs();
 
 `openOpfsVfsWorker()` selects a compatible bundled `SharedWorker` when the complete browser capability gate passes, and otherwise opens the bundled dedicated worker in four cases only: the page has no `SharedWorker` API, the shared scope reports that it cannot open sync access handles, an application worker or plugin request comes without a `sharedWorker` factory, or a compatible dedicated owner already holds the volume. A SharedWorker that cannot be created or reached, a probe timeout, and every attach or mount failure are errors, not fallbacks. The client's status exposes the selected `transport` and any `fallbackReason`. Pass `transport: 'dedicated'` or `'shared-worker'` to override that choice; forced shared transport reports an unsupported/error state instead of falling back. `new OpfsVfsWorker()` remains dedicated by default.
 
+If the SharedWorker script cannot be loaded, the open rejects with `VFS_WORKER_FAILED` and a message that names the usual causes; it does not fall back. Under Vite 7's dev server this affects the default `openOpfsVfsWorker()`: dependency pre-bundling moves the package, so the bundled SharedWorker script URL returns 404. Exclude the packages from pre-bundling:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  optimizeDeps: { exclude: ['@opfs-vfs/opfs-vfs', '@opfs-vfs/react', '@opfs-vfs/plugin-subscriptions'] },
+});
+```
+
+Vite 8 needs no setting. Other bundlers and dev servers have not been tested. A Content-Security-Policy that blocks the worker script produces the same error. You can also pass an application `sharedWorker` factory or `{ transport: 'dedicated' }`.
+
 An application worker or plugin request needs an application-owned factory. Auto selection then uses dedicated transport unless that application also provides a stable `sharedWorker` factory. Keep a shared factory at module scope, use one fixed worker URL and name per volume, and return a fresh `SharedWorker` on every call.
 
 Serve over HTTPS or localhost with cross-origin isolation: `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`. Every worker client allocates the SharedArrayBuffer bridge that synchronous calls use, so a page needs isolation even when it only calls the asynchronous API, including shared-transport followers. Without it, `openOpfsVfsWorker()` and `new OpfsVfsWorker()` fail with `VFS_UNSUPPORTED`. Direct `OpfsVfs` mounts use synchronous OPFS handles and belong in a dedicated worker. See [API](https://github.com/opfs-vfs/opfs-vfs/blob/main/docs/API.md) and [development](https://github.com/opfs-vfs/opfs-vfs/blob/main/docs/DEVELOPMENT.md).

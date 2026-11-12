@@ -321,6 +321,30 @@ const probeSyncAccessHandle = async () => {
   }
 };
 
+// Appended when a SharedWorker cannot be created or its script cannot be loaded. The failure itself carries no
+// detail in the browser, so name the causes seen in practice and what resolves them.
+const SCRIPT_LOAD_HINT =
+  "Usual causes: a dev server's dependency pre-bundling moved this package, so the relative worker script URL " +
+  'returns 404, or a Content-Security-Policy blocks the worker script. Exclude the @opfs-vfs packages from ' +
+  'dependency optimization (Vite: optimizeDeps.exclude), pass an application `sharedWorker` factory, or select ' +
+  "`transport: 'dedicated'`.";
+
+/** Keep the thrown value, its class and its code; only its message gains the explanation. */
+function explainFactoryFailure(error: unknown) {
+  if (typeof error !== 'object' || error === null) return;
+  try {
+    const original = (error as { message?: unknown }).message;
+    const detail = typeof original === 'string' && original ? `: ${original.replace(/[.\s]+$/, '')}` : '';
+    Object.defineProperty(error, 'message', {
+      value: `The SharedWorker could not be created${detail}. ${SCRIPT_LOAD_HINT}`,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    // A frozen or exotic error keeps its own message.
+  }
+}
+
 /** Probe a fresh SharedWorker port without mounting a named volume. */
 export function probeSharedWorker(
   fileName: string,
@@ -329,7 +353,13 @@ export function probeSharedWorker(
   timeout = 15_000,
 ): Promise<boolean> {
   if (signal?.aborted) return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
-  const shared = worker(fileName);
+  let shared: SharedWorkerEndpoint;
+  try {
+    shared = worker(fileName);
+  } catch (error) {
+    explainFactoryFailure(error);
+    throw error;
+  }
   const port = shared.port;
   const id = crypto.randomUUID();
   port.start();
@@ -360,8 +390,14 @@ export function probeSharedWorker(
     if (signal?.aborted) return abort();
     port.onmessageerror = () =>
       finish(undefined, Object.assign(new Error('SharedWorker probe failed'), { code: 'VFS_WORKER_FAILED' }));
+    // The only thing a SharedWorker reports on itself is that its script did not load or start.
     shared.onerror = () =>
-      finish(undefined, Object.assign(new Error('SharedWorker probe failed'), { code: 'VFS_WORKER_FAILED' }));
+      finish(
+        undefined,
+        Object.assign(new Error(`The SharedWorker script could not be loaded. ${SCRIPT_LOAD_HINT}`), {
+          code: 'VFS_WORKER_FAILED',
+        }),
+      );
     port.onmessage = ({ data }) => {
       if (!record(data) || data.id !== id) return;
       if (data.type === 'PROBE_RESULT' && typeof data.supported === 'boolean') finish(data.supported);
