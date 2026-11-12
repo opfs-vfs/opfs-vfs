@@ -54,8 +54,8 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@opfs-vfs/opfs-vfs": "workspace:^",
-    "@opfs-vfs/plugin-subscriptions": "workspace:^",
+    "@opfs-vfs/opfs-vfs": "workspace:*",
+    "@opfs-vfs/plugin-subscriptions": "workspace:*",
     "effect": "^4.1.0"
   },
   "engines": {
