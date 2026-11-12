@@ -4,8 +4,8 @@
  * extension mounts them. A compatible header does not guarantee a successful mount.
  */
 
-import { CURRENT_BINARY_VERSION } from './binary-metadata';
-import { findVolumeFile, isNotFound, volumeFileNames } from './volume-files';
+import { CURRENT_BINARY_VERSION } from './binary-metadata.js';
+import { findVolumeFile, isNotFound, volumeFileNames } from './volume-files.js';
 
 // Snapshot/metadata magics aren't part of the public crypto format module, so we
 // keep local copies for parsing. A mismatch just yields `undefined`/`unknown`

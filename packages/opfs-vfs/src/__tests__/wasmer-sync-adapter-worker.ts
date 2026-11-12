@@ -1,6 +1,6 @@
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
-import { createWasmerFileSystem, type WasmerSyncOpenOptions } from '../wasmer-sync-adapter';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
+import { createWasmerFileSystem, type WasmerSyncOpenOptions } from '../wasmer-sync-adapter.js';
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {

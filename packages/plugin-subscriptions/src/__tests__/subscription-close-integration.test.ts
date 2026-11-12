@@ -2,8 +2,8 @@ import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import type { ChangeReply, WireSubscribeOptions } from '@opfs-vfs/opfs-vfs/changes';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { subscribe, type SubscribeOptions } from '../client';
-import { subscriptionsRequest } from '../config';
+import { subscribe, type SubscribeOptions } from '../client.js';
+import { subscriptionsRequest } from '../config.js';
 
 const options: SubscribeOptions = {
   path: '/',

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
-import { deleteVolume, OpenFlags } from '../index';
-import { OpfsVfsWorker } from '../index_internal';
+import { deleteVolume, OpenFlags } from '../index.js';
+import { OpfsVfsWorker } from '../index_internal.js';
 
 it.each([
   { options: {}, expected: { bufferMode: 'disk', localDurabilityMode: 'balanced' } },

@@ -11,7 +11,7 @@ import {
   usePersistentStorage,
   useVolume,
   useVolumeClient,
-} from '../index';
+} from '../index.js';
 
 const worker = () => new Worker(new URL('./volume-worker.ts', import.meta.url), { type: 'module' });
 const bytes = new Uint8Array();

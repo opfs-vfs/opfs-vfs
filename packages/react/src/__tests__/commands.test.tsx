@@ -2,8 +2,8 @@ import { act, startTransition, useActionState, useRef } from 'react';
 import { GENERATION_METHODS, OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
 import { describe, expect, it, vi } from 'vitest';
-import { VolumeError, VolumeProvider, useVolume, useVolumeClient } from '../index';
-import { closeManaged, cleanup, countingWorker, mount, volumeName, waitFor, worker } from './harness';
+import { VolumeError, VolumeProvider, useVolume, useVolumeClient } from '../index.js';
+import { closeManaged, cleanup, countingWorker, mount, volumeName, waitFor, worker } from './harness.js';
 
 const descriptorMethods = ['open', 'read', 'write', 'seek', 'close', 'fstat', 'fsync', 'ftruncate'] as const;
 

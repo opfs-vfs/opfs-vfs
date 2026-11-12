@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SAB_SIZE, Status, SyncMessenger } from '../sync-messenger';
+import { SAB_SIZE, Status, SyncMessenger } from '../sync-messenger.js';
 
 const STATUS_SLOT = 0;
 const CALL_ID_SLOT = 3;

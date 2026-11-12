@@ -5,9 +5,9 @@ import { act, StrictMode, useLayoutEffect } from 'react';
 import * as React from 'react';
 import { flushSync } from 'react-dom';
 import { describe, expect, it } from 'vitest';
-import { VolumeError, VolumeProvider, useVolumeClient } from '../index';
-import { useVolumeBinding, VolumeBinding, type VolumeResult } from '../volume';
-import { persistenceFaultRequest } from '../../../opfs-vfs/src/__tests__/persistence-fault-plugin';
+import { VolumeError, VolumeProvider, useVolumeClient } from '../index.js';
+import { useVolumeBinding, VolumeBinding, type VolumeResult } from '../volume.js';
+import { persistenceFaultRequest } from '../../../opfs-vfs/src/__tests__/persistence-fault-plugin.js';
 import {
   closeManaged,
   ErrorBoundary,
@@ -18,8 +18,8 @@ import {
   volumeName,
   waitFor,
   worker,
-} from './harness';
-import { testLockRequest } from './test-lock-plugin';
+} from './harness.js';
+import { testLockRequest } from './test-lock-plugin.js';
 
 const Activity = (
   React as { Activity?: React.ComponentType<{ mode: 'visible' | 'hidden'; children?: React.ReactNode }> }

@@ -1,4 +1,4 @@
-import { parseRemoteError, reviveRemoteError, serializeRemoteError } from './remote-error';
+import { parseRemoteError, reviveRemoteError, serializeRemoteError } from './remote-error.js';
 
 /**
  * Default size of the SAB payload region (the binary area after the 64-byte

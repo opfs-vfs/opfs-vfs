@@ -1,6 +1,6 @@
-import { OpfsVfsWorker } from '../index_internal';
-import { OpenFlags } from '../opfs-vfs';
-import { changesTransportRequest } from './changes-transport-plugin';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpenFlags } from '../opfs-vfs.js';
+import { changesTransportRequest } from './changes-transport-plugin.js';
 
 const factory = () => new Worker(new URL('./changes-transport-worker.ts', import.meta.url), { type: 'module' });
 let vfs: OpfsVfsWorker | undefined;

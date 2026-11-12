@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
-import { DevtoolsSession } from './runtime';
-import { DebugPanel } from './DebugPanel';
+import { DevtoolsSession } from './runtime.ts';
+import { DebugPanel } from './DebugPanel.tsx';
 
 const encode = (value: string) => new TextEncoder().encode(value);
 

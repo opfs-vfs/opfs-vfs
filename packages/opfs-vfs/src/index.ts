@@ -1,12 +1,12 @@
-export { CURRENT_BINARY_VERSION, MetaSnapshotCorruptionError } from './binary-metadata';
-export { DataWalCorruptionError } from './data-wal';
+export { CURRENT_BINARY_VERSION, MetaSnapshotCorruptionError } from './binary-metadata.js';
+export { DataWalCorruptionError } from './data-wal.js';
 export {
   isVfsCorruptionError,
   isVfsError,
   type VfsCorruptionCategory,
   VfsCorruptionError,
   VfsError,
-} from './fs-errors';
+} from './fs-errors.js';
 export {
   OpfsVfs,
   OpenFlags,
@@ -18,7 +18,7 @@ export {
   type LocalPersistenceState,
   type LocalPersistenceStatus,
   type WriteFileBufferOptions,
-} from './opfs-vfs';
-export { deleteVolume, VolumeImportingError } from './volume-files';
-export { peekVolume, type VolumePeek } from './peek-volume';
-export type { FileChangeSource } from './changes';
+} from './opfs-vfs.js';
+export { deleteVolume, VolumeImportingError } from './volume-files.js';
+export { peekVolume, type VolumePeek } from './peek-volume.js';
+export type { FileChangeSource } from './changes.js';

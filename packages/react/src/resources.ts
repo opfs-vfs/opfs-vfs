@@ -1,7 +1,7 @@
 import type { GenerationClient, OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
 import type { VfsDirEntry } from '@opfs-vfs/opfs-vfs';
 import { subscribe, type FileChange, type Subscription } from '@opfs-vfs/plugin-subscriptions/client';
-import { toVolumeError, type VolumeError } from './errors';
+import { toVolumeError, type VolumeError } from './errors.js';
 
 export type FileInfo = Readonly<{
   ino: number;

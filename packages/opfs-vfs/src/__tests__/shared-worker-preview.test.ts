@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest';
-import { createSharedWorkerFollower, probeSharedWorker, startVfsSharedWorker } from '../shared-worker';
-import { OpfsVfsWorker, openOpfsVfsWorker } from '../index_internal';
-import { deleteVolume } from '../volume-files';
-import { OpfsVfsWorkerClient } from '../worker-client';
-import { changesTransportRequest } from './changes-transport-plugin';
+import { createSharedWorkerFollower, probeSharedWorker, startVfsSharedWorker } from '../shared-worker.js';
+import { OpfsVfsWorker, openOpfsVfsWorker } from '../index_internal.js';
+import { deleteVolume } from '../volume-files.js';
+import { OpfsVfsWorkerClient } from '../worker-client.js';
+import { changesTransportRequest } from './changes-transport-plugin.js';
 import {
   announcedSharedProfile,
   announcesOwnerLiveness,
@@ -13,7 +13,7 @@ import {
   OWNER_LIVENESS_CAPABILITY,
   sharedMountProfileMismatch,
   type SharedMountProfile,
-} from '../worker-plugins';
+} from '../worker-plugins.js';
 
 class FakePort {
   onmessage: ((event: MessageEvent) => unknown) | null = null;

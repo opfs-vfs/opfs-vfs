@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { DebugPanel } from './DebugPanel';
+import { DebugPanel } from './DebugPanel.tsx';
 
 test('terminal scrolls to new output even after scrolling up', async () => {
   await page.viewport(1000, 800);

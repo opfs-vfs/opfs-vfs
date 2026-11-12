@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { validateConfiguredPlugins } from '../plugin-config';
-import type { ConfiguredVfsPlugin } from '../plugins';
+import { validateConfiguredPlugins } from '../plugin-config.js';
+import type { ConfiguredVfsPlugin } from '../plugins.js';
 
 it('provides the S1 direct logical-change contribution seam', async () => {
   const worker = new Worker(new URL('./changes-contribution-worker.ts', import.meta.url), { type: 'module' });

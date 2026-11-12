@@ -13,8 +13,8 @@ import {
   useFileContent,
   useFolder,
   useVolumeClient,
-} from '../index';
-import { closeManaged, mount, volumeName, waitFor, worker } from './harness';
+} from '../index.js';
+import { closeManaged, mount, volumeName, waitFor, worker } from './harness.js';
 
 async function waitForReact(check: () => boolean, label: string) {
   const deadline = performance.now() + 4_000;

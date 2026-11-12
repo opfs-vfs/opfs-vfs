@@ -4,8 +4,8 @@ import type {
   LogicalChangeSession,
   LogicalRecord,
   WireSubscribeOptions,
-} from '../changes';
-import type { ConfiguredVfsPlugin, VfsPluginFactory, VfsPluginRequest } from '../plugins';
+} from '../changes.js';
+import type { ConfiguredVfsPlugin, VfsPluginFactory, VfsPluginRequest } from '../plugins.js';
 
 type Subscription = {
   readonly client: ChangeClient;

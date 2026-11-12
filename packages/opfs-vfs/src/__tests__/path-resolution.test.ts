@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { Section } from './path-resolution-worker';
+import type { Section } from './path-resolution-worker.js';
 
 const titles = [
   'dot-dot after a symlink to a directory is the parent of its target',

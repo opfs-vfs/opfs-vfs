@@ -2,9 +2,9 @@ import { act, StrictMode } from 'react';
 import { renderToString } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
 import type { ClientStatus, OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
-import { VolumeProvider, usePersistentStorage, type PersistentStorageResult } from '../index';
-import { requestPersistentStorageOnMount } from '../persistence';
-import { mount, waitFor } from './harness';
+import { VolumeProvider, usePersistentStorage, type PersistentStorageResult } from '../index.js';
+import { requestPersistentStorageOnMount } from '../persistence.js';
+import { mount, waitFor } from './harness.js';
 
 function storage(value: Pick<StorageManager, 'persisted' | 'persist'>) {
   const previous = Object.getOwnPropertyDescriptor(navigator, 'storage');

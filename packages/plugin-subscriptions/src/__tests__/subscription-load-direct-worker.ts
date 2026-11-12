@@ -1,6 +1,6 @@
 import { deleteVolume, OpfsVfs } from '@opfs-vfs/opfs-vfs';
-import { subscribe, type Subscription } from '../client';
-import { subscriptions } from '../index';
+import { subscribe, type Subscription } from '../client.js';
+import { subscriptions } from '../index.js';
 
 self.onmessage = async () => {
   const name = `subscriptions-load-direct-${crypto.randomUUID()}.bin`;

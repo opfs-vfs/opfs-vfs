@@ -18,9 +18,9 @@ import VfsSharedWorker from './vfs.shared-worker?sharedworker';
 import type { OpfsVfsWorkerClient } from '@opfs-vfs/opfs-vfs/worker-client';
 import type { VfsPluginRequest } from '@opfs-vfs/opfs-vfs/plugins';
 import { SUBSCRIPTIONS_COMPATIBILITY_KEY, subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
-import { configurationError, lifecycleError, toVolumeError, VolumeError } from './errors';
-import { clientStore, type ClientStore } from './resources';
-import { requestPersistentStorageOnMount } from './persistence';
+import { configurationError, lifecycleError, toVolumeError, VolumeError } from './errors.js';
+import { clientStore, type ClientStore } from './resources.js';
+import { requestPersistentStorageOnMount } from './persistence.js';
 
 export const DEFAULT_VOLUME: unique symbol = Symbol('opfs-vfs.default-volume');
 export type VolumeName = string | typeof DEFAULT_VOLUME;

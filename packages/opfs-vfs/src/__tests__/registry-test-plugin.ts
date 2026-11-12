@@ -1,5 +1,5 @@
-import type { ConfiguredVfsPlugin, VfsPluginFactory, VfsPluginRequest } from '../plugins';
-import { VfsCorruptionError } from '../fs-errors';
+import type { ConfiguredVfsPlugin, VfsPluginFactory, VfsPluginRequest } from '../plugins.js';
+import { VfsCorruptionError } from '../fs-errors.js';
 
 export interface RegistryTestOptions {
   variant?: 'a' | 'b';

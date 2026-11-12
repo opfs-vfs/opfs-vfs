@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
+import { OpfsVfsWorker } from '../index_internal.js';
 
 function runPersistenceWorkerScenario(type: string, timeoutMs = 60000) {
   return new Promise<{ check: string; pass: boolean; detail?: string }[]>((resolve, reject) => {

@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
+import { deleteVolume } from '../volume-files.js';
 
 const workers: Worker[] = [];
 const names: string[] = [];

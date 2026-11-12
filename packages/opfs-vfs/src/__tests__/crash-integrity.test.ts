@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
-import type { Scenario } from './crash-integrity-worker';
+import { deleteVolume } from '../volume-files.js';
+import type { Scenario } from './crash-integrity-worker.js';
 
 /** Run one step in a fresh worker, then terminate it natively (no close unless the step closes). */
 async function step(name: string, scenario: Scenario, index: number) {

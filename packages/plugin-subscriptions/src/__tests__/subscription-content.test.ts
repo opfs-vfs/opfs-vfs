@@ -1,8 +1,8 @@
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { describe, expect, it } from 'vitest';
-import { subscribe, type Subscription } from '../client';
-import { subscriptionsRequest } from '../config';
+import { subscribe, type Subscription } from '../client.js';
+import { subscriptionsRequest } from '../config.js';
 
 const content = { maxBytes: 16 * 1024 * 1024 };
 const worker = () => new Worker(new URL('./subscription-content-worker.ts', import.meta.url), { type: 'module' });

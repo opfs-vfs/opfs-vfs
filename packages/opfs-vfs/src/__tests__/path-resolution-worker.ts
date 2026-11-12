@@ -1,5 +1,5 @@
-import { deleteVolume } from '../index';
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
+import { deleteVolume } from '../index.js';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
 
 export type Section = { name: string; failures: string[] };
 

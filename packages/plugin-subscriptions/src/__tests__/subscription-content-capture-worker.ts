@@ -1,8 +1,8 @@
 import { deleteVolume, OpenFlags, OpfsVfs } from '@opfs-vfs/opfs-vfs';
 import type { CompletedLogicalOperation } from '@opfs-vfs/opfs-vfs/changes';
 import type { ConfiguredVfsPlugin } from '@opfs-vfs/opfs-vfs/plugins';
-import { subscribe } from '../client';
-import { subscriptions } from '../index';
+import { subscribe } from '../client.js';
+import { subscriptions } from '../index.js';
 
 type Result = { reads: number; allowed: string[]; denied: string[] } | { error: string };
 

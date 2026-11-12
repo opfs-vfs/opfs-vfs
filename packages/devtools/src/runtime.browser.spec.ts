@@ -1,8 +1,8 @@
 import { expect, test, vi, type MockInstance } from 'vitest';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
-import { DevtoolsSession } from './runtime';
-import { importArchive } from './archive';
+import { DevtoolsSession } from './runtime.ts';
+import { importArchive } from './archive.ts';
 import JSZip from 'jszip';
 const encode = (text: string) => new TextEncoder().encode(text);
 

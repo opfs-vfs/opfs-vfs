@@ -1,6 +1,6 @@
-import { testPlugin } from './test-plugin';
-import { OpfsVfs } from '../opfs-vfs';
-import { acquireVolumeLock, closeVolume, deleteVolume, mountImportVolume, removeVolumeFiles } from '../storage';
+import { testPlugin } from './test-plugin.js';
+import { OpfsVfs } from '../opfs-vfs.js';
+import { acquireVolumeLock, closeVolume, deleteVolume, mountImportVolume, removeVolumeFiles } from '../storage.js';
 
 function check(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message);

@@ -1,11 +1,11 @@
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
 import { describe, expect, it, vi } from 'vitest';
-import { VolumeError, VolumeProvider, useVolumeClient } from '../index';
-import { useVolumeBinding } from '../volume';
-import { persistenceFaultRequest } from '../../../opfs-vfs/src/__tests__/persistence-fault-plugin';
-import { cleanup, mount, volumeName, waitFor, worker } from './harness';
-import { testLockRequest } from './test-lock-plugin';
+import { VolumeError, VolumeProvider, useVolumeClient } from '../index.js';
+import { useVolumeBinding } from '../volume.js';
+import { persistenceFaultRequest } from '../../../opfs-vfs/src/__tests__/persistence-fault-plugin.js';
+import { cleanup, mount, volumeName, waitFor, worker } from './harness.js';
+import { testLockRequest } from './test-lock-plugin.js';
 
 function Handle({ into }: { into: unknown[] }) {
   into.push(useVolumeClient());

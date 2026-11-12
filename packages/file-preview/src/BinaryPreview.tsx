@@ -1,4 +1,4 @@
-import type { PreviewProps } from './FilePreview';
+import type { PreviewProps } from './FilePreview.tsx';
 
 // Adapted from frachter-app/opfs-vfs bash-console/plugins/binary-raw.tsx, with a bounded hex view.
 export default function BinaryPreview({ file }: PreviewProps) {

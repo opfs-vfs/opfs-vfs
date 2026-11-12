@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DATA_WAL_VERSION, decodeDataWalRecords, encodeDataWalRecord, replayDataWalRecords } from '../data-wal';
+import { DATA_WAL_VERSION, decodeDataWalRecords, encodeDataWalRecord, replayDataWalRecords } from '../data-wal.js';
 
 const FRAME_HEADER_BYTES = 8;
 const WRITE_OFFSET_PAYLOAD_OFFSET = 10;

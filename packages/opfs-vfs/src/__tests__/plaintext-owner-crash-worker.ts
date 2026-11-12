@@ -1,5 +1,5 @@
-import { OpfsVfsWorker } from '../index_internal';
-import { OpenFlags } from '../opfs-vfs';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { OpenFlags } from '../opfs-vfs.js';
 
 type Request =
   | { type: 'MOUNT'; fileName: string; baseline: Uint8Array; latest?: Uint8Array }

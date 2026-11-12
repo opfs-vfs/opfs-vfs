@@ -1,6 +1,6 @@
-import { deleteVolume } from '../index';
-import { persistenceSources } from '../mount-context';
-import { OpenFlags, OpfsVfs, type SyncAccessHandleTag } from '../opfs-vfs';
+import { deleteVolume } from '../index.js';
+import { persistenceSources } from '../mount-context.js';
+import { OpenFlags, OpfsVfs, type SyncAccessHandleTag } from '../opfs-vfs.js';
 
 type Case = 'strict-data-wal' | 'data-wal-write' | 'strict-meta-log' | 'snapshot' | 'checkpoint-retry';
 const setup: Record<Case, { tags: SyncAccessHandleTag[]; durability: 'strict' | 'balanced' }> = {

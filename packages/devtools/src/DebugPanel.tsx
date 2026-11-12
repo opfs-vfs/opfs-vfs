@@ -1,4 +1,4 @@
-import type { DevtoolsSession } from './runtime';
+import type { DevtoolsSession } from './runtime.ts';
 import { Select } from '@base-ui/react/select';
 import { Tabs } from '@base-ui/react/tabs';
 import {
@@ -39,11 +39,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { canDelete, clampRect, connect, filterFiles, type Dock, type MockVolume, type Rect } from './mock-state';
+import { canDelete, clampRect, connect, filterFiles, type Dock, type MockVolume, type Rect } from './mock-state.ts';
 import { FilePreview, TextEditor, canEdit, fileSize, type PreviewExtension } from '@opfs-vfs/file-preview';
 import '@opfs-vfs/file-preview/styles.css';
-import { FileActions, type FileAction } from './FileActions';
-import { FileOperationDialog, type FileRequest } from './FileOperationDialog';
+import { FileActions, type FileAction } from './FileActions.tsx';
+import { FileOperationDialog, type FileRequest } from './FileOperationDialog.tsx';
 import {
   applyFileOperation,
   captureClipboard,
@@ -51,8 +51,8 @@ import {
   within,
   type FileClipboard,
   type FileOperation,
-} from './mock-files';
-import type { MockFile } from './mock-state';
+} from './mock-files.ts';
+import type { MockFile } from './mock-state.ts';
 import './debug-panel.css';
 
 // Website brand mark from apps/website/src/layouts/SiteLayout.astro.

@@ -6,18 +6,18 @@ export const workerChangeOpeners = new WeakMap<
     open(
       clientId: string,
       route: 'local' | 'follower-relay',
-      receive: (frame: import('./changes').ChangeFrame) => void,
+      receive: (frame: import('./changes.js').ChangeFrame) => void,
       interrupted: (code: 'SUBSCRIPTION_INTERRUPTED' | 'SUBSCRIPTION_RESYNC_REQUIRED') => void,
       closed: () => void,
       channelId: string,
-    ): Promise<import('./changes').FileChangeChannel>;
+    ): Promise<import('./changes.js').FileChangeChannel>;
   }
 >();
 export interface PersistenceSource {
-  readonly state: import('./opfs-vfs').LocalPersistenceState;
+  readonly state: import('./opfs-vfs.js').LocalPersistenceState;
   readonly failure: unknown;
   readonly failureRevision: number;
-  readonly salvage: import('./opfs-vfs').DataWalSalvageEvent | undefined;
+  readonly salvage: import('./opfs-vfs.js').DataWalSalvageEvent | undefined;
 }
 export const persistenceSources = new WeakMap<
   object,

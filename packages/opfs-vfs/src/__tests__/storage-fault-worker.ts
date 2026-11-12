@@ -1,7 +1,7 @@
-import { testPlugin } from './test-plugin';
-import { deleteVolume } from '../index';
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
-import type { VolumeStorageFactory } from '../storage-contract';
+import { testPlugin } from './test-plugin.js';
+import { deleteVolume } from '../index.js';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
+import type { VolumeStorageFactory } from '../storage-contract.js';
 
 type Phase = 'payload' | 'padding' | 'metadata' | 'checkpoint';
 const create = OpenFlags.O_CREAT | OpenFlags.O_RDWR;

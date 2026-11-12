@@ -1,7 +1,7 @@
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VOLUME, type VolumeResult, VolumeError, VolumeProvider, useVolume } from '../index';
-import { closeManaged, ErrorBoundary, mount, volumeName, waitFor, worker } from './harness';
+import { DEFAULT_VOLUME, type VolumeResult, VolumeError, VolumeProvider, useVolume } from '../index.js';
+import { closeManaged, ErrorBoundary, mount, volumeName, waitFor, worker } from './harness.js';
 
 function Read({
   name,

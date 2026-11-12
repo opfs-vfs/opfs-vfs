@@ -1,6 +1,6 @@
-import { parseRemoteError, reviveRemoteError, serializeRemoteError } from './remote-error';
-import { OpfsVfsWorkerClient, type OpfsVfsWorkerClientOptions, type VfsWorkerEndpoint } from './worker-client';
-import { startVfsWorker } from './worker-runtime';
+import { parseRemoteError, reviveRemoteError, serializeRemoteError } from './remote-error.js';
+import { OpfsVfsWorkerClient, type OpfsVfsWorkerClientOptions, type VfsWorkerEndpoint } from './worker-client.js';
+import { startVfsWorker } from './worker-runtime.js';
 import {
   announcedSharedProfile,
   announcesOwnerLiveness,
@@ -8,8 +8,8 @@ import {
   preparePluginRequests,
   sharedMountProfileMismatch,
   type SharedMountProfile,
-} from './worker-plugins';
-import type { VfsPluginRegistration, VfsPluginRequest } from './plugins';
+} from './worker-plugins.js';
+import type { VfsPluginRegistration, VfsPluginRequest } from './plugins.js';
 
 type Attach = {
   readonly type: 'ATTACH';

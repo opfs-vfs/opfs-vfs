@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { lexicalFsPath, normalizeFsPath } from '../fs-path';
+import { lexicalFsPath, normalizeFsPath } from '../fs-path.js';
 
 function expectErrorCode(fn: () => unknown, code: string) {
   try {

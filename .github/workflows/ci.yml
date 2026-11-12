@@ -83,6 +83,13 @@ jobs:
                 (path) => !packed.has(path),
               );
               if (missing.length) throw new Error(`${name} tarball is missing ${missing.join(", ")}`);
+              // Declarations must resolve under node16/nodenext, which needs an extension on every relative import.
+              const bare = [...packed].filter((path) => path.endsWith(".d.ts")).flatMap((path) =>
+                [...readFileSync(dir + path, "utf8").matchAll(/(?:from|import\()\s*["\x27](\.{1,2}\/[^"\x27]+)["\x27]/g)]
+                  .filter((match) => !/\.[a-z]+$/.test(match[1]))
+                  .map((match) => `${path}: ${match[1]}`),
+              );
+              if (bare.length) throw new Error(`${name} declarations import without a file extension:\n${bare.join("\n")}`);
               console.log(`${name}: ${packed.size} files, all exports packed`);
             ' "$dir"
           done

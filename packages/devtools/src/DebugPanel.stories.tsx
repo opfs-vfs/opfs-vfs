@@ -1,7 +1,7 @@
-import { LiveDemo } from './LiveDemo';
-import { fixtures } from './mock-fixtures';
+import { LiveDemo } from './LiveDemo.tsx';
+import { fixtures } from './mock-fixtures.ts';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { DebugPanel } from './DebugPanel';
+import { DebugPanel } from './DebugPanel.tsx';
 
 const meta = {
   title: 'Developer tools/OPFS VFS Volume Explorer',
@@ -42,7 +42,7 @@ export const CustomPreview: Story = {
       {
         id: 'palette',
         matches: (path) => path.endsWith('.palette'),
-        load: () => import('./PalettePreview.example'),
+        load: () => import('./PalettePreview.example.tsx'),
       },
     ],
   },

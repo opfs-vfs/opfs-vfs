@@ -1,4 +1,4 @@
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs.js';
 
 type World = Map<string, { bytes: Uint8Array }>;
 export type SequenceState = { world: World; trace: string[] };

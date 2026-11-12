@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
-import { DebugPanel, type LauncherPosition } from './DebugPanel';
-export type { LauncherPosition } from './DebugPanel';
-import { DevtoolsSession } from './runtime';
+import { DebugPanel, type LauncherPosition } from './DebugPanel.tsx';
+export type { LauncherPosition } from './DebugPanel.tsx';
+import { DevtoolsSession } from './runtime.ts';
 import type { PreviewExtension } from '@opfs-vfs/file-preview';
 export type { PreviewExtension, PreviewProps } from '@opfs-vfs/file-preview';
 export type DevtoolsOptions = {

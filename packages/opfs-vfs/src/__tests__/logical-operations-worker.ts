@@ -1,13 +1,13 @@
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs.js';
 import type {
   ChangeImpact,
   CompletedLogicalOperation,
   FileChangeChannel,
   LogicalChangeContribution,
   LogicalRecord,
-} from '../changes';
-import type { ConfiguredVfsPlugin } from '../plugins';
-import { deleteVolume } from '../volume-files';
+} from '../changes.js';
+import type { ConfiguredVfsPlugin } from '../plugins.js';
+import { deleteVolume } from '../volume-files.js';
 
 type Record = Pick<LogicalRecord, 'type' | 'path' | 'kind' | 'cursor'>;
 type Result = { mode: 'memory' | 'disk'; checks: { name: string; actual: unknown; expected: unknown }[] };

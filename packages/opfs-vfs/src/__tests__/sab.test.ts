@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertSabPayloadFits, SAB_SIZE } from '../sync-messenger';
+import { assertSabPayloadFits, SAB_SIZE } from '../sync-messenger.js';
 
 describe('SyncMessenger', () => {
   it('should have SharedArrayBuffer', () => {

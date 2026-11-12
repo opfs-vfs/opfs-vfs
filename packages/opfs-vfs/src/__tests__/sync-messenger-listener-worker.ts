@@ -1,4 +1,4 @@
-import { SyncMessenger } from '../sync-messenger';
+import { SyncMessenger } from '../sync-messenger.js';
 
 self.onmessage = ({ data }) => {
   const messenger = new SyncMessenger(data.sab);

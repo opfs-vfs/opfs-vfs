@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { OpfsVfsWorker } from '../index_internal';
-import { peekVolume } from '../peek-volume';
-import { inspectWorker, OpfsVfsWorkerClient } from '../worker-client';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { peekVolume } from '../peek-volume.js';
+import { inspectWorker, OpfsVfsWorkerClient } from '../worker-client.js';
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);

@@ -1,8 +1,8 @@
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import type { ChangeFrame, FileChangeChannel, FileChangeSource } from '@opfs-vfs/opfs-vfs/changes';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
-import { subscribe, type Subscription } from '../client';
-import { subscriptionsRequest } from '../config';
+import { subscribe, type Subscription } from '../client.js';
+import { subscriptionsRequest } from '../config.js';
 
 declare global {
   interface Window {

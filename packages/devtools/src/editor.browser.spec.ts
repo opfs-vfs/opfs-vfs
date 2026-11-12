@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { DebugPanel } from './DebugPanel';
+import { DebugPanel } from './DebugPanel.tsx';
 
 test('editor tabs, dirty save control, clean file actions and lazy highlighting', async () => {
   await page.viewport(1200, 900);

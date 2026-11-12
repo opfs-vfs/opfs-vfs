@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import type { VfsPluginFactory, VfsPluginRegistration, VfsPluginRequest } from '../plugins';
-import { testPlugin } from './test-plugin';
+import type { VfsPluginFactory, VfsPluginRegistration, VfsPluginRequest } from '../plugins.js';
+import { testPlugin } from './test-plugin.js';
 
 it('keeps direct factory options typed while registrations validate unknown inputs', () => {
   function configure(options: unknown) {

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
-import { DevtoolsSession } from './runtime';
-import { DebugPanel } from './DebugPanel';
-import { fixtures } from './mock-fixtures';
+import { DevtoolsSession } from './runtime.ts';
+import { DebugPanel } from './DebugPanel.tsx';
+import { fixtures } from './mock-fixtures.ts';
 
 /** Disposable real-storage harness. The application owns its clients independently of devtools. */
 export function LiveDemo() {

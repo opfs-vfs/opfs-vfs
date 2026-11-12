@@ -1,6 +1,6 @@
-import { OpenFlags } from '../opfs-vfs';
-import { OpfsVfsWorker } from '../index_internal';
-import { persistenceFaultRequest } from './persistence-fault-plugin';
+import { OpenFlags } from '../opfs-vfs.js';
+import { OpfsVfsWorker } from '../index_internal.js';
+import { persistenceFaultRequest } from './persistence-fault-plugin.js';
 
 async function until(predicate: () => boolean) {
   const deadline = Date.now() + 5_000;

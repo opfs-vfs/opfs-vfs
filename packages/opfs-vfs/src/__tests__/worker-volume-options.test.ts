@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DATA_WAL_VERSION, encodeDataWalRecord } from '../data-wal';
-import { OpfsVfsWorker, type OpfsVfsWorkerOptions } from '../index_internal';
+import { DATA_WAL_VERSION, encodeDataWalRecord } from '../data-wal.js';
+import { OpfsVfsWorker, type OpfsVfsWorkerOptions } from '../index_internal.js';
 
 const uniqueFileName = (label: string): string => `${label}-${crypto.randomUUID()}.bin`;
 

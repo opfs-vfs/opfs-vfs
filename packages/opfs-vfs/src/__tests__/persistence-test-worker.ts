@@ -1,5 +1,5 @@
-import { DATA_WAL_VERSION, encodeDataWalRecord } from '../data-wal';
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
+import { DATA_WAL_VERSION, encodeDataWalRecord } from '../data-wal.js';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
 
 /** Open a raw SyncAccessHandle on a sidecar file (e.g. `.data.log`). */
 async function openRawSidecar(fileName: string, suffix: string) {

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
+import { deleteVolume } from '../volume-files.js';
 
 it('runs the public live adapter with the downloadable host, preserving data across fresh runtimes', async () => {
   const name = `edgejs-live-${crypto.randomUUID()}.bin`;

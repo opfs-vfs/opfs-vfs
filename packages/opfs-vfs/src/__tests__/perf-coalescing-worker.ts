@@ -6,7 +6,7 @@
  * durability-fixes-worker.ts).
  */
 
-import { OpenFlags, OpfsVfs, type SyncAccessHandleTag } from '../opfs-vfs';
+import { OpenFlags, OpfsVfs, type SyncAccessHandleTag } from '../opfs-vfs.js';
 
 type Check = { check: string; pass: boolean; detail?: string };
 

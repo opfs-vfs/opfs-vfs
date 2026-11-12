@@ -2,8 +2,8 @@ import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { subscriptionsRequest } from '@opfs-vfs/plugin-subscriptions/config';
 import { describe, expect, it, vi } from 'vitest';
-import { clientStore, sameBytes, type FileInfo } from '../resources';
-import { volumeName, waitFor, worker } from './harness';
+import { clientStore, sameBytes, type FileInfo } from '../resources.js';
+import { volumeName, waitFor, worker } from './harness.js';
 
 const terminalControls = vi.hoisted(() => new WeakMap<object, any>());
 

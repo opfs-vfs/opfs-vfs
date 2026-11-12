@@ -1,5 +1,5 @@
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs';
-import { testPlugin } from './test-plugin';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs.js';
+import { testPlugin } from './test-plugin.js';
 
 export type Expected = {
   files: [string, Uint8Array][];

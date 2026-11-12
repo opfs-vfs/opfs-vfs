@@ -1,6 +1,6 @@
 import { deleteVolume, OpenFlags, OpfsVfs } from '@opfs-vfs/opfs-vfs';
-import { subscribe } from '../client';
-import { subscriptions } from '../index';
+import { subscribe } from '../client.js';
+import { subscriptions } from '../index.js';
 
 type Result =
   | { first: number[][]; second: number[][]; firstHeld: number[]; secondHeld: number[]; current: number[] }

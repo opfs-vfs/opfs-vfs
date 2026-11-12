@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
-import { OpfsVfsPGliteAdapter } from '../adapter';
-import { OpfsVfs } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
+import { OpfsVfsPGliteAdapter } from '../adapter.js';
+import { OpfsVfs } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
 
 // Intercept console.log/warn/error in this worker to forward to main thread
 // This captures PGlite's createEmscriptenFS debug logs

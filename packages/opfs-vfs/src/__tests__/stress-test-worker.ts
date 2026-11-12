@@ -1,4 +1,4 @@
-import { OpenFlags, OpfsVfs } from '../opfs-vfs';
+import { OpenFlags, OpfsVfs } from '../opfs-vfs.js';
 
 self.onmessage = async (event: MessageEvent) => {
   const { type } = event.data;

@@ -6,8 +6,8 @@
  * crash-consistency-worker.ts).
  */
 
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions, type SyncAccessHandleTag } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
 
 type Check = { check: string; pass: boolean; detail?: string };
 

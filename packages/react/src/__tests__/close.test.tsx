@@ -1,9 +1,9 @@
 import { act, useLayoutEffect, useRef } from 'react';
 import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { VolumeError, VolumeProvider, useVolumeClient } from '../index';
-import { useVolumeBinding, VolumeBinding } from '../volume';
-import { bounded, closeManaged, cleanup, countingWorker, mount, volumeName, waitFor } from './harness';
+import { VolumeError, VolumeProvider, useVolumeClient } from '../index.js';
+import { useVolumeBinding, VolumeBinding } from '../volume.js';
+import { bounded, closeManaged, cleanup, countingWorker, mount, volumeName, waitFor } from './harness.js';
 
 const Activity = (
   React as { Activity?: React.ComponentType<{ mode: 'visible' | 'hidden'; children?: React.ReactNode }> }

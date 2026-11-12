@@ -1,8 +1,8 @@
-import { RecordRole, type RecordCodec } from './storage-contract';
-import { crc32 } from './data-wal';
-import { VfsCorruptionError } from './fs-errors';
-import { baseName, parentPath } from './fs-path';
-import type { Inode } from './opfs-vfs';
+import { RecordRole, type RecordCodec } from './storage-contract.js';
+import { crc32 } from './data-wal.js';
+import { VfsCorruptionError } from './fs-errors.js';
+import { baseName, parentPath } from './fs-path.js';
+import type { Inode } from './opfs-vfs.js';
 
 // Binary format constants
 const BINARY_MAGIC = 0x42564653; // 'BVFS' in little-endian

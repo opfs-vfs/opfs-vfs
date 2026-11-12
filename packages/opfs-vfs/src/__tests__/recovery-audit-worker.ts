@@ -1,6 +1,6 @@
-import { deserializeBinaryMeta, parseMetaSnapshot, replayLog } from '../binary-metadata';
-import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs';
-import { deleteVolume } from '../volume-files';
+import { deserializeBinaryMeta, parseMetaSnapshot, replayLog } from '../binary-metadata.js';
+import { OpenFlags, OpfsVfs, type OpfsVfsOptions } from '../opfs-vfs.js';
+import { deleteVolume } from '../volume-files.js';
 
 const volumes: string[] = [];
 const unique = () => {

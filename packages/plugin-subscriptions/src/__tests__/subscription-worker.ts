@@ -1,6 +1,6 @@
 import { deleteVolume, OpfsVfs } from '@opfs-vfs/opfs-vfs';
-import { subscribe } from '../client';
-import { subscriptions } from '../index';
+import { subscribe } from '../client.js';
+import { subscriptions } from '../index.js';
 
 self.onmessage = async () => {
   const name = `subscriptions-${crypto.randomUUID()}.bin`;

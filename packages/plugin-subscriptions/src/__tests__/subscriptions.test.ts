@@ -1,7 +1,7 @@
 import type { ChangeCommand, ChangeFrame, ChangeReply } from '@opfs-vfs/opfs-vfs/changes';
 import { describe, expect, it } from 'vitest';
-import { subscriptionsRequest } from '../config';
-import { subscribe } from '../client';
+import { subscriptionsRequest } from '../config.js';
+import { subscribe } from '../client.js';
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const state = <T>(promise: Promise<T>) => Promise.race([promise, flush().then(() => 'pending' as const)]);

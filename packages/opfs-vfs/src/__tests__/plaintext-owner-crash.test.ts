@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
+import { deleteVolume } from '../volume-files.js';
 
 type Response = {
   type: 'MOUNTED' | 'VERIFIED' | 'ERROR';

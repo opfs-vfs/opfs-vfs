@@ -2,8 +2,8 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
-import { DebugPanel } from './DebugPanel';
-import { FileActions, type FileAction } from './FileActions';
+import { DebugPanel } from './DebugPanel.tsx';
+import { FileActions, type FileAction } from './FileActions.tsx';
 
 test('file action menus portal into the panel and support disabled actions, Escape, and selection', async () => {
   await page.viewport(800, 500);

@@ -10,9 +10,9 @@ import type {
 import { deleteVolume } from '@opfs-vfs/opfs-vfs';
 import { OpfsVfsWorker } from '@opfs-vfs/opfs-vfs/worker';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { subscribe, type SubscribeOptions, type Subscription, type SubscriptionRetirement } from '../client';
-import { subscriptionsRequest } from '../config';
-import { subscriptions } from '../owner';
+import { subscribe, type SubscribeOptions, type Subscription, type SubscriptionRetirement } from '../client.js';
+import { subscriptionsRequest } from '../config.js';
+import { subscriptions } from '../owner.js';
 
 const wire: WireSubscribeOptions = {
   path: '/',
@@ -490,7 +490,7 @@ describe('acknowledged subscription retirement', () => {
   it('releases a preparing setup locally when registration aborts or its hook throws', async () => {
     const source = harness.source('client');
     const controller = new AbortController();
-    let abortedSetup!: import('../types').SubscriptionSetup;
+    let abortedSetup!: import('../types.js').SubscriptionSetup;
     const aborting = subscribe(source, { ...options, signal: controller.signal }, () => {}, {
       registering(setup) {
         abortedSetup = setup;
@@ -502,7 +502,7 @@ describe('acknowledged subscription retirement', () => {
     expect(source.commands).toEqual([]);
 
     const hookFailure = new Error('registration hook failed');
-    let failedSetup!: import('../types').SubscriptionSetup;
+    let failedSetup!: import('../types.js').SubscriptionSetup;
     await expect(
       subscribe(source, options, () => {}, {
         registering(setup) {
@@ -538,7 +538,7 @@ describe('acknowledged subscription retirement', () => {
     const source = harness.source('client');
     const failure = new Error('synchronous request failure');
     source.throwSynchronously('register', failure);
-    let setup!: import('../types').SubscriptionSetup;
+    let setup!: import('../types.js').SubscriptionSetup;
     await expect(subscribe(source, options, () => {}, { registering: (value) => (setup = value) })).rejects.toBe(
       failure,
     );
@@ -608,7 +608,7 @@ describe('acknowledged subscription retirement', () => {
     const source = harness.source('client');
     const controller = new AbortController();
     source.reject('register', coded('EACCES'));
-    let setup!: import('../types').SubscriptionSetup;
+    let setup!: import('../types.js').SubscriptionSetup;
     await expect(
       subscribe(source, { ...options, signal: controller.signal }, () => {}, {
         registering(value) {
@@ -627,7 +627,7 @@ describe('acknowledged subscription retirement', () => {
     const source = harness.source('client');
     const controller = new AbortController();
     const veto = new Error('veto');
-    let setup!: import('../types').SubscriptionSetup;
+    let setup!: import('../types.js').SubscriptionSetup;
     await expect(
       subscribe(source, { ...options, signal: controller.signal }, () => {}, {
         registering(value) {

@@ -1,5 +1,5 @@
 import type { WireSubscribeOptions } from '@opfs-vfs/opfs-vfs/changes';
-import type { SubscribeOptions } from './types';
+import type { SubscribeOptions } from './types.js';
 
 const events = new Set(['create', 'update', 'delete']);
 const optionKeys = new Set(['path', 'scope', 'recursive', 'events', 'match', 'content', 'signal', 'onError']);

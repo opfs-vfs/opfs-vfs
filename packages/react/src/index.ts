@@ -1,6 +1,6 @@
-export { DEFAULT_VOLUME, VolumeProvider, useVolume, useVolumeClient } from './volume';
-export { usePersistentStorage } from './persistence';
-export type { PersistentStorageResult, PersistentStorageStatus } from './persistence';
+export { DEFAULT_VOLUME, VolumeProvider, useVolume, useVolumeClient } from './volume.js';
+export { usePersistentStorage } from './persistence.js';
+export type { PersistentStorageResult, PersistentStorageStatus } from './persistence.js';
 export type {
   BorrowedVolumeProviderProps,
   BorrowedVolumeResult,
@@ -12,9 +12,9 @@ export type {
   VolumeProviderProps,
   VolumeResult,
   VolumeStatus,
-} from './volume';
-export { VolumeError } from './errors';
-export type { VolumeErrorKind, VolumeErrorOutcome } from './errors';
-export { File, FileContent, Folder, useFile, useFileContent, useFolder } from './reads';
-export type { FileContentOptions, FileContentProps, FileProps, FolderProps, ReadOptions } from './reads';
-export type { FileContentResult, FileInfo, FileResult, FolderResult, ResourceResult } from './resources';
+} from './volume.js';
+export { VolumeError } from './errors.js';
+export type { VolumeErrorKind, VolumeErrorOutcome } from './errors.js';
+export { File, FileContent, Folder, useFile, useFileContent, useFolder } from './reads.js';
+export type { FileContentOptions, FileContentProps, FileProps, FolderProps, ReadOptions } from './reads.js';
+export type { FileContentResult, FileInfo, FileResult, FolderResult, ResourceResult } from './resources.js';

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
-import { deleteVolume } from '../volume-files';
-import type { SequenceState } from './storage-lifecycle-worker';
+import { deleteVolume } from '../volume-files.js';
+import type { SequenceState } from './storage-lifecycle-worker.js';
 
 async function released(name: string) {
   // terminate() returns before the browser releases its worker's Web Lock.
