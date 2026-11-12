@@ -19,6 +19,8 @@ const runContract = (mode: 'direct' | 'worker') => {
 
 const assertContract = (result: Record<string, unknown>) => {
   expect(result.directoryListing).toContain('nested/payload.bin');
+  expect(result.globListing).toEqual(['nested', 'nested/payload.bin', 'relative-link']);
+  expect(result.linkType).toBe('SymbolicLink');
   expect(result.directLinkTarget).toBe('nested/payload.bin');
   expect(result.realPathMatches).toBe(true);
   expect(result.copiedFileMatches).toBe(true);
@@ -52,6 +54,15 @@ const assertContract = (result: Record<string, unknown>) => {
     bytesWritten: 1,
     contents: [10, 20, 99, 40],
     size: 4n,
+  });
+  expect(result.remove).toEqual({
+    fileRemoved: true,
+    linkRemoved: true,
+    linkTargetKept: true,
+    treeRemoved: true,
+    missing: 'NotFound',
+    forcedMissing: 'Success',
+    forcedRecursiveMissing: 'Success',
   });
   expect(['baseAB', 'baseBA']).toContain(result.concurrentAppend);
   expect(result.largeAppend).toEqual({

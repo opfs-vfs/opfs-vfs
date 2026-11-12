@@ -192,7 +192,11 @@ const execute = <A>(
   state: Coordinator,
   method: string,
   path: string,
-  run: (backend: Backend, generation: string) => A | Promise<A> | Effect.Effect<A, unknown>,
+  run: (
+    backend: Backend,
+    generation: string,
+    normalize: (error: unknown) => PlatformError.PlatformError,
+  ) => A | Promise<A> | Effect.Effect<A, unknown>,
   mutate = false,
   recapture = true,
   expectedGeneration?: string,
@@ -201,6 +205,18 @@ const execute = <A>(
 ): Effect.Effect<A, PlatformError.PlatformError> => {
   const pathFailure = invalidPath(method, path);
   if (pathFailure) return Effect.fail(pathFailure);
+  // Effect turns a typed failure into a defect when a finalizer also fails, so scoped runs normalize
+  // their own failures before their scope closes. A PlatformError passes through unchanged below.
+  const normalize = (error: unknown) => {
+    const terminal = error instanceof VfsCommandError ? state.terminal() : undefined;
+    return platform(
+      terminal ? terminalCommandError(terminal, state.fileName, method, commandOutcome(error, mutate)) : error,
+      method,
+      path,
+      state.fileName,
+      mutate,
+    );
+  };
   return Effect.gen(function* () {
     const budget = readinessBudget ?? { remaining: state.readinessTimeout };
     let recaptures = 0;
@@ -268,7 +284,7 @@ const execute = <A>(
             }
             const command = Effect.suspend(() => {
               try {
-                const result = run(state.backend, generation);
+                const result = run(state.backend, generation, normalize);
                 return Effect.isEffect(result)
                   ? result
                   : Effect.tryPromise({ try: () => Promise.resolve(result), catch: (error) => error });
@@ -312,18 +328,7 @@ const execute = <A>(
           differentGeneration = generation;
           continue;
         }
-        return yield* Effect.failCause(
-          Cause.map(exit.cause, (error) => {
-            const terminal = error instanceof VfsCommandError ? state.terminal() : undefined;
-            return platform(
-              terminal ? terminalCommandError(terminal, state.fileName, method, commandOutcome(error, mutate)) : error,
-              method,
-              path,
-              state.fileName,
-              mutate,
-            );
-          }),
-        );
+        return yield* Effect.failCause(Cause.map(exit.cause, normalize));
       }
       const result = exit.value;
       if (result.retry) {
@@ -1551,7 +1556,13 @@ const tempFileResource = (
   });
 };
 
-const readFileDescriptor = (state: Coordinator, backend: Backend, generation: string, path: string) =>
+const readFileDescriptor = (
+  state: Coordinator,
+  backend: Backend,
+  generation: string,
+  path: string,
+  normalize: (error: unknown) => PlatformError.PlatformError,
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const fd = yield* Effect.acquireRelease(
@@ -1618,7 +1629,7 @@ const readFileDescriptor = (state: Coordinator, backend: Backend, generation: st
         offset += result.read;
       }
       return bytes;
-    }),
+    }).pipe(Effect.mapError(normalize)),
   );
 
 const openFlags: Record<FileSystem.OpenFlag, number> = {
@@ -1672,6 +1683,15 @@ interface FileHandle {
 const badArgument = (method: string, description: string) =>
   PlatformError.badArgument({ module: moduleName, method, description });
 
+const fileType = (value: { mode: number; is_file: boolean; is_dir: boolean }): FileSystem.File.Type =>
+  value.is_file
+    ? 'File'
+    : value.is_dir
+      ? 'Directory'
+      : (value.mode & 0o170000) === 0o120000
+        ? 'SymbolicLink'
+        : 'Unknown';
+
 const fileInfo = (value: VfsStat): FileSystem.File.Info => {
   if (!validMode(value.mode) || !Number.isSafeInteger(value.size) || value.size < 0)
     throw badArgument('stat', 'file metadata is outside the supported range');
@@ -1681,22 +1701,22 @@ const fileInfo = (value: VfsStat): FileSystem.File.Info => {
     const value = number === undefined ? undefined : new Date(number);
     return value && Number.isFinite(value.getTime()) ? Option.some(value) : Option.none();
   };
-  const kind = value.mode & 0o170000;
+  const count = (number: number | undefined) => optionalNumber(number).pipe(Option.map(BigInt));
   return {
-    type: value.is_file ? 'File' : value.is_dir ? 'Directory' : kind === 0o120000 ? 'SymbolicLink' : 'Unknown',
+    type: fileType(value),
     mtime: date(value.mtimeMs ?? value.timestampMs),
     atime: date(value.atimeMs ?? value.timestampMs),
     birthtime: Option.none(),
-    dev: 0,
-    ino: optionalNumber(value.ino),
+    dev: 0n,
+    ino: count(value.ino),
     mode: value.mode,
-    nlink: optionalNumber(value.nlink),
+    nlink: count(value.nlink),
     uid: Option.none(),
     gid: Option.none(),
     rdev: Option.none(),
     size: ByteSize.bytes(BigInt(value.size)),
     blksize: optionalNumber(value.blksize).pipe(Option.map(ByteSize.bytes)),
-    blocks: optionalNumber(value.blocks),
+    blocks: count(value.blocks),
   };
 };
 
@@ -1791,6 +1811,7 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         ).pipe(
           Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, (error) => watchFailure(state, path, error)))),
         );
+        options?.onReady?.();
         return subscription.changes.pipe(
           Stream.catchCause((cause) => Stream.failCause(Cause.map(cause, (error) => watchFailure(state, path, error)))),
           Stream.map((change): FileSystem.WatchEvent => {
@@ -1842,10 +1863,6 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
             true,
           ),
     chown: (path) => Effect.fail(invalidPath('chown', path) ?? unsupported('chown', path, state.fileName)),
-    glob: (pattern, options) => {
-      const rootFailure = options?.root === undefined ? undefined : invalidPath('glob', options.root);
-      return Effect.fail(rootFailure ?? unsupported('glob', pattern, state.fileName));
-    },
     link: (existingPath, newPath) => {
       const existingFailure = invalidPath('link', existingPath);
       const newFailure = invalidPath('link', newPath);
@@ -1910,8 +1927,8 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         state,
         'readFile',
         path,
-        (backend, generation) => {
-          const fallback = () => readFileDescriptor(state, backend, generation, path);
+        (backend, generation, normalize) => {
+          const fallback = () => readFileDescriptor(state, backend, generation, path, normalize);
           if (!('forGeneration' in backend)) return fallback();
           return Effect.tryPromise({
             try: () => backend.forGeneration(generation).readFileBuffer(path, maxWholeFileBytes),
@@ -2018,7 +2035,10 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         );
       });
     },
-    open: (path, options) => file(state, path, options?.flag ?? 'r', options?.mode),
+    open: (path, options) =>
+      options?.noFollow
+        ? Effect.fail(badArgument('open', 'noFollow is not supported'))
+        : file(state, path, options?.flag ?? 'r', options?.mode),
     readDirectory: (path, options) => {
       if (options?.recursive !== undefined && typeof options.recursive !== 'boolean')
         return Effect.fail(badArgument('readDirectory', 'recursive must be a boolean'));
@@ -2072,6 +2092,18 @@ const make = (volume: VolumeService): FileSystem.FileSystem => {
         );
       });
     },
+    lstat: (path) =>
+      execute(state, 'lstat', path, (backend, generation) =>
+        'forGeneration' in backend
+          ? backend.forGeneration(generation).lstat(path).then(fileInfo)
+          : fileInfo(backend.lstatSync(path)),
+      ),
+    readDirectoryEntries: (path) =>
+      execute(state, 'readDirectoryEntries', path, (backend, generation) =>
+        'forGeneration' in backend
+          ? backend.forGeneration(generation).readdirEntries(path)
+          : backend.readdirEntriesSync(path),
+      ).pipe(Effect.map((entries) => entries.map((entry) => ({ name: entry.name, type: fileType(entry) })))),
     readLink: (path) =>
       execute(state, 'readLink', path, (backend, generation) =>
         'forGeneration' in backend ? backend.forGeneration(generation).readlink(path) : backend.readlinkSync(path),

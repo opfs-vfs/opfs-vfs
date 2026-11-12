@@ -5,10 +5,10 @@ description: Use scoped OPFS VFS volumes, Effect FileSystem layers, and change s
 
 `@opfs-vfs/effect` adapts OPFS VFS to Effect v4. It owns volume resources in an Effect scope, provides the standard `FileSystem` service, and exposes file changes as streams.
 
-Use stable Effect v4 with this adapter. The supported range is `>=4.0.0 <5.0.0`, excluding prereleases. Install it with the core filesystem and subscriptions packages:
+Use stable Effect v4 with this adapter. The supported range is `>=4.1.0 <5.0.0`, excluding prereleases. Install it with the core filesystem and subscriptions packages:
 
 ```sh
-npm install @opfs-vfs/effect @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions effect@^4.0.0
+npm install @opfs-vfs/effect @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions effect@^4.1.0
 ```
 
 ## Start one managed session
@@ -79,7 +79,7 @@ The [worker session example](https://github.com/opfs-vfs/opfs-vfs/blob/main/pack
 
 Filesystem operands must be absolute volume paths. They are not host filesystem paths. Relative symlink targets are preserved.
 
-The adapter supports scoped descriptor I/O, metadata, permissions, links, directories, rename, removal, recursive copy, and volume-local temporary paths. `chown` and `glob` fail with typed `ENOTSUP` errors. Recursive copy does not follow symlinks, is not atomic, and does not preserve hard-link topology.
+The adapter supports scoped descriptor I/O, metadata, permissions, links, directories, rename, removal, recursive copy, and volume-local temporary paths. `glob` needs an absolute `root` or pattern. `chown` fails with a typed `ENOTSUP` error. Recursive copy does not follow symlinks, is not atomic, and does not preserve hard-link topology.
 
 Whole-file worker helpers use a fast path up to 16 MiB. Larger files and other open flags use descriptor I/O, but `readFile` still allocates the whole result. Use `fs.stream` and `fs.sink` to copy without loading the entire file into memory. The [streaming example](https://github.com/opfs-vfs/opfs-vfs/blob/main/packages/effect/examples/filesystem-stream.ts) copies a file in 64 KiB chunks and synchronizes afterward.
 

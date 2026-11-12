@@ -1196,13 +1196,13 @@ describe('Volume worker acquisition and sessions', () => {
     expect(result).toMatchObject({
       info: {
         type: 'File',
-        dev: 0,
+        dev: 0n,
         mode: 0o100640,
         size: ByteSize.bytes(12n),
-        ino: EffectOption.some(7),
-        nlink: EffectOption.some(2),
+        ino: EffectOption.some(7n),
+        nlink: EffectOption.some(2n),
         blksize: EffectOption.some(ByteSize.bytes(4096n)),
-        blocks: EffectOption.some(1),
+        blocks: EffectOption.some(1n),
         atime: EffectOption.some(new Date(2000)),
         mtime: EffectOption.some(new Date(1000)),
         uid: EffectOption.none(),
@@ -1270,13 +1270,8 @@ describe('Volume worker acquisition and sessions', () => {
             const result = yield* Effect.result(operation);
             expect(result._tag).toBe('Failure');
           }
-          const unsupportedGlob = yield* Effect.result(fs.glob('**/*.txt'));
-          expect(unsupportedGlob).toMatchObject({
-            _tag: 'Failure',
-            failure: {
-              reason: { _tag: 'Unknown', cause: { _tag: 'VolumeError', kind: 'unsupported', code: 'ENOTSUP' } },
-            },
-          });
+          const rootlessGlob = yield* Effect.result(fs.glob('**/*.txt'));
+          expect(rootlessGlob).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
           const unsupportedChown = yield* Effect.result(fs.chown('/file', 1, 1));
           expect(unsupportedChown).toMatchObject({
             _tag: 'Failure',
@@ -2174,7 +2169,7 @@ describe('Volume worker acquisition and sessions', () => {
     );
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ _tag: 'Fail', error: original }));
+      expect(exit.cause.reasons).toContainEqual(expect.objectContaining({ _tag: 'Die', defect: original }));
       expect(
         exit.cause.reasons.filter(
           (reason) =>
@@ -2686,7 +2681,7 @@ describe('Volume worker acquisition and sessions', () => {
       expect(
         acquireExit.cause.reasons.filter(
           (reason) =>
-            reason._tag === 'Fail' && reason.error instanceof VolumeError && reason.error.operation === 'acquire',
+            reason._tag === 'Die' && reason.defect instanceof VolumeError && reason.defect.operation === 'acquire',
         ),
       ).toHaveLength(1);
       expect(
@@ -2828,8 +2823,8 @@ describe('Volume worker acquisition and sessions', () => {
       if (Exit.isFailure(exit)) {
         expect(exit.cause.reasons).toContainEqual(
           expect.objectContaining({
-            _tag: 'Fail',
-            error: expect.objectContaining({ details: { message: readyFailure.message } }),
+            _tag: 'Die',
+            defect: expect.objectContaining({ details: { message: readyFailure.message } }),
           }),
         );
         expect(

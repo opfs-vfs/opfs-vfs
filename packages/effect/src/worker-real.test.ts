@@ -117,7 +117,7 @@ it('runs the Effect session through an application-owned worker under auto trans
     danglingLink: 'missing',
     realLink: '/namespace/tree/sub/note',
     listing: ['jump', 'link', 'sub', 'sub/note'],
-    metadata: { nlink: { _tag: 'Some', value: 2 } },
+    metadata: { nlink: { _tag: 'Some', value: 2n } },
     times: { atime: { value: new Date(1250) }, mtime: { value: new Date(2500) } },
     denied: { _tag: 'Failure', failure: { reason: { _tag: 'PermissionDenied' } } },
     readDenied: { _tag: 'Failure', failure: { reason: { _tag: 'PermissionDenied' } } },

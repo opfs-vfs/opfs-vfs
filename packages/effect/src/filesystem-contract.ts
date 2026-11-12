@@ -8,6 +8,8 @@ export interface FileSystemContractFixture {
 
 export interface FileSystemContractResult {
   readonly directoryListing: ReadonlyArray<string>;
+  readonly globListing: ReadonlyArray<string>;
+  readonly linkType: string;
   readonly directLinkTarget: string;
   readonly copiedLinkTarget: string;
   readonly realPathMatches: boolean;
@@ -42,6 +44,15 @@ export interface FileSystemContractResult {
     readonly contents: ReadonlyArray<number>;
     readonly size: bigint;
   };
+  readonly remove: {
+    readonly fileRemoved: boolean;
+    readonly linkRemoved: boolean;
+    readonly linkTargetKept: boolean;
+    readonly treeRemoved: boolean;
+    readonly missing: string;
+    readonly forcedMissing: string;
+    readonly forcedRecursiveMissing: string;
+  };
   readonly concurrentAppend: string;
   readonly largeAppend: {
     readonly size: bigint;
@@ -73,6 +84,8 @@ export const runFilesystemContract = (
     const realPayload = yield* fs.realPath(source);
     const realLink = yield* fs.realPath(path('tree', 'relative-link'));
     const listing = yield* fs.readDirectory(path('tree'), { recursive: true });
+    const globListing = yield* fs.glob('**/*', { root: path('tree') });
+    const linkType = (yield* fs.lstat(path('tree', 'relative-link'))).type;
 
     yield* fs.copyFile(source, path('copy-file.bin'));
     const copiedFile = yield* fs.readFile(path('copy-file.bin'));
@@ -166,6 +179,32 @@ export const runFilesystemContract = (
     const largeAppendInfo = yield* fs.stat(largeAppendPath);
     const largeContents = yield* fs.readFile(largeAppendPath);
 
+    const removeFile = path('remove', 'file.bin');
+    const removeTarget = path('remove', 'target.bin');
+    const removeLink = path('remove', 'link');
+    const removeTree = path('remove', 'tree');
+    const removeMissing = path('remove', 'missing');
+    yield* fs.makeDirectory(path('remove', 'tree', 'nested'), { recursive: true });
+    yield* fs.writeFile(removeFile, payload);
+    yield* fs.writeFile(removeTarget, payload);
+    yield* fs.writeFile(path('remove', 'tree', 'nested', 'leaf.bin'), payload);
+    yield* fs.symlink('target.bin', removeLink);
+    yield* fs.remove(removeFile);
+    yield* fs.remove(removeLink);
+    yield* fs.remove(removeTree, { recursive: true });
+    const missingRemoval = yield* Effect.result(fs.remove(removeMissing));
+    const forcedMissing = yield* Effect.result(fs.remove(removeMissing, { force: true }));
+    const forcedRecursiveMissing = yield* Effect.result(fs.remove(removeMissing, { recursive: true, force: true }));
+    const remove = {
+      fileRemoved: !(yield* fs.exists(removeFile)),
+      linkRemoved: (yield* Effect.result(fs.readLink(removeLink)))._tag === 'Failure',
+      linkTargetKept: sameBytes(yield* fs.readFile(removeTarget), payload),
+      treeRemoved: !(yield* fs.exists(removeTree)),
+      missing: missingRemoval._tag === 'Failure' ? missingRemoval.failure.reason._tag : 'Success',
+      forcedMissing: forcedMissing._tag,
+      forcedRecursiveMissing: forcedRecursiveMissing._tag,
+    };
+
     const streamBytes = Uint8Array.from({ length: 256 * 1024 }, (_, index) => index % 251);
     const streamSource = path('stream-source.bin');
     const streamDestination = path('stream-destination.bin');
@@ -175,6 +214,8 @@ export const runFilesystemContract = (
 
     return {
       directoryListing: listing,
+      globListing,
+      linkType,
       directLinkTarget,
       copiedLinkTarget,
       realPathMatches: realPayload === expectedRealTarget && realLink === expectedRealTarget,
@@ -215,6 +256,7 @@ export const runFilesystemContract = (
         contents: Array.from(cursorContents),
         size: cursorSize,
       },
+      remove,
       concurrentAppend: new TextDecoder().decode(concurrentBytes),
       largeAppend: {
         size: ByteSize.toBigInt(largeAppendInfo.size),
