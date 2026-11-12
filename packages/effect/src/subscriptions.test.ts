@@ -865,13 +865,14 @@ describe('Effect subscriptions', () => {
       registered = resolve;
     });
     source.onRegister = registered;
+    let watcherReady = 0;
     const result = await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const watching = yield* Stream.take(fs.watch('/tree', { recursive: true }), 3).pipe(
-            Stream.runCollect,
-            Effect.forkChild,
-          );
+          const watching = yield* Stream.take(
+            fs.watch('/tree', { recursive: true, onReady: () => watcherReady++ }),
+            3,
+          ).pipe(Stream.runCollect, Effect.forkChild);
           yield* Effect.promise(() => ready);
           yield* Effect.yieldNow;
           source.emit('create', 1, '/tree/new.txt');
@@ -886,6 +887,7 @@ describe('Effect subscriptions', () => {
       { _tag: 'Update', path: '/tree/current.txt' },
       { _tag: 'Remove', path: '/tree/old.txt' },
     ]);
+    expect(watcherReady).toBe(1);
     expect(source.commands.find((command) => command.type === 'register')).toMatchObject({
       options: { path: '/tree', scope: 'directory', recursive: true },
     });
@@ -1109,7 +1111,7 @@ describe('Effect subscriptions', () => {
       _tag: 'Failure',
       cause: {
         reasons: expect.arrayContaining([
-          expect.objectContaining({ _tag: 'Fail', error: notification }),
+          expect.objectContaining({ _tag: 'Die', defect: notification }),
           expect.objectContaining({ _tag: 'Die', defect: cleanup }),
         ]),
       },
@@ -1162,7 +1164,7 @@ describe('Effect subscriptions', () => {
       _tag: 'Failure',
       cause: {
         reasons: expect.arrayContaining([
-          expect.objectContaining({ _tag: 'Fail', error: interrupted }),
+          expect.objectContaining({ _tag: 'Die', defect: interrupted }),
           expect.objectContaining({ _tag: 'Die', defect: cleanup }),
         ]),
       },

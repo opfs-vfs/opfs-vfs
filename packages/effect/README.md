@@ -1,6 +1,6 @@
 # @opfs-vfs/effect
 
-Effect v4 adapter for worker-backed OPFS volumes and direct mounts. Requires stable Effect v4, starting at `4.0.0` and excluding v5 and prereleases.
+Effect v4 adapter for worker-backed OPFS volumes and direct mounts. Requires stable Effect v4, starting at `4.1.0` and excluding v5 and prereleases.
 
 ```ts
 import { Effect } from 'effect';
@@ -64,9 +64,9 @@ listing, removal, rename, recursive copy and volume-local temporary paths.
 Unlike Node's filesystem, operands must be absolute volume paths; relative
 symlink targets are preserved. Recursive copy does not follow symlinks, keeps
 copied relative link targets as written (Node's default copy resolves them to
-the source), is not atomic, and does not preserve hard-link topology. `chown`
-and `glob` remain intentionally unsupported in v1 and return typed `ENOTSUP`
-errors. Scoped temporary paths remove only their private directory
+the source), is not atomic, and does not preserve hard-link topology. `glob`
+needs an absolute `root` or pattern. `chown` remains intentionally unsupported
+in v1 and returns a typed `ENOTSUP` error. Scoped temporary paths remove only their private directory
 when the scope closes; the default parent is `/tmp` inside the volume. A temporary
 path uses its resolved physical parent, so retargeting the caller-supplied parent
 symlink does not redirect cleanup. Ownership covers the created root pathname and

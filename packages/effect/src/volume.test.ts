@@ -416,18 +416,23 @@ describe('Volume direct acquisition', () => {
     expect(Exit.isFailure(exit)).toBe(true);
     expect(closed).toBe(true);
     if (Exit.isFailure(exit)) {
-      const failure = exit.cause.reasons.find((reason) => reason._tag === 'Fail');
-      expect(failure).toBeDefined();
-      if (failure?._tag === 'Fail')
-        expect(
-          (failure.error as { reason: { cause: { details: { message: string } } } }).reason.cause.details.message,
-        ).toBe(read.message);
-      const cleanup = exit.cause.reasons.find((reason) => reason._tag === 'Die');
-      expect(cleanup).toBeDefined();
-      if (cleanup?._tag === 'Die')
-        expect((cleanup.defect as { operation: string; details: { message: string } }).details.message).toBe(
-          close.message,
-        );
+      // Effect makes both reasons defects when cleanup fails; the read failure must still be normalized.
+      expect(exit.cause.reasons).toMatchObject([
+        {
+          _tag: 'Die',
+          defect: {
+            _tag: 'PlatformError',
+            reason: {
+              _tag: 'Unknown',
+              module: 'FileSystem',
+              method: 'readFile',
+              pathOrDescriptor: '/note.txt',
+              cause: { _tag: 'VolumeError', operation: 'readFile', details: { message: read.message, code: 'EIO' } },
+            },
+          },
+        },
+        { _tag: 'Die', defect: { details: { message: close.message } } },
+      ]);
     }
   });
 
@@ -511,13 +516,13 @@ describe('Volume direct acquisition', () => {
     expect(result).toMatchObject({
       info: {
         type: 'File',
-        dev: 0,
+        dev: 0n,
         mode: 0o100640,
         size: ByteSize.bytes(12n),
-        ino: EffectOption.some(7),
-        nlink: EffectOption.some(2),
+        ino: EffectOption.some(7n),
+        nlink: EffectOption.some(2n),
         blksize: EffectOption.some(ByteSize.bytes(4096n)),
-        blocks: EffectOption.some(1),
+        blocks: EffectOption.some(1n),
         atime: EffectOption.some(new Date(2000)),
         mtime: EffectOption.some(new Date(1000)),
         uid: EffectOption.none(),
@@ -693,7 +698,9 @@ describe('Volume direct acquisition', () => {
           const badPath = yield* Effect.result(fs.readFile('relative.txt'));
           expect(badPath._tag).toBe('Failure');
           if (badPath._tag === 'Failure') expect(badPath.failure).toMatchObject({ reason: { _tag: 'BadArgument' } });
-          const unavailable = yield* Effect.result(fs.glob('/**/*.txt'));
+          const noFollow = yield* Effect.result(fs.open('/file', { noFollow: true }));
+          expect(noFollow).toMatchObject({ _tag: 'Failure', failure: { reason: { _tag: 'BadArgument' } } });
+          const unavailable = yield* Effect.result(fs.chown('/file', 1, 1));
           expect(unavailable._tag).toBe('Failure');
           if (unavailable._tag === 'Failure')
             expect(unavailable.failure).toMatchObject({
@@ -727,8 +734,10 @@ describe('Volume direct acquisition', () => {
     expect(Exit.isFailure(exit)).toBe(true);
     expect(state.closeCalls).toBe(1);
     if (Exit.isFailure(exit)) {
-      expect(exit.cause.reasons.some((reason) => reason._tag === 'Fail')).toBe(true);
-      expect(exit.cause.reasons.some((reason) => reason._tag === 'Die')).toBe(true);
+      expect(exit.cause.reasons).toMatchObject([
+        { _tag: 'Die', defect: { details: { message: 'init failed' } } },
+        { _tag: 'Die', defect: { details: { message: 'close failed' } } },
+      ]);
     }
   });
 
@@ -799,8 +808,10 @@ describe('Volume direct acquisition', () => {
     );
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      expect(exit.cause.reasons.some((reason) => reason._tag === 'Fail' && reason.error === useFailure)).toBe(true);
-      expect(exit.cause.reasons.some((reason) => reason._tag === 'Die')).toBe(true);
+      expect(exit.cause.reasons).toMatchObject([
+        { _tag: 'Die', defect: useFailure },
+        { _tag: 'Die', defect: { details: { message: 'close failed' } } },
+      ]);
     }
   });
 
@@ -968,8 +979,8 @@ describe('Volume direct acquisition', () => {
       if (Exit.isFailure(exit)) {
         expect(exit.cause.reasons).toContainEqual(
           expect.objectContaining({
-            _tag: 'Fail',
-            error: expect.objectContaining({ details: { message: readyFailure.message } }),
+            _tag: 'Die',
+            defect: expect.objectContaining({ details: { message: readyFailure.message } }),
           }),
         );
         expect(

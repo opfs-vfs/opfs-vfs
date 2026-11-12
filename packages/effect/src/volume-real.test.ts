@@ -26,7 +26,7 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
           danglingLink: string;
           realLink: string;
           listing: ReadonlyArray<string>;
-          metadata: { size: string; nlink: number | null };
+          metadata: { size: string; nlink: bigint | null };
           times: { atimeMs: number | null; mtimeMs: number | null };
           denied: boolean;
           readDenied: boolean;
@@ -77,7 +77,7 @@ it('inspects, writes, syncs and reopens a real direct volume in a worker', async
         danglingLink: 'missing',
         realLink: '/namespace/tree/sub/note',
         listing: ['jump', 'link', 'sub', 'sub/note'],
-        metadata: { size: '3', nlink: 2 },
+        metadata: { size: '3', nlink: 2n },
         times: { atimeMs: 1250, mtimeMs: 2500 },
         denied: true,
         readDenied: true,
