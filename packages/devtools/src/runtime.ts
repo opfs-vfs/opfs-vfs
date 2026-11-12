@@ -46,8 +46,33 @@ class InspectorFilesystem extends OpfsVfsJustBashAdapter {
       { append: true },
     );
   }
+  // Every other mutation the shell can reach is refused the same way while the connection is read-only.
+  // `cp` needs no gate of its own: everything it does goes through the gated operations.
+  override async mkdir(...args: Parameters<OpfsVfsJustBashAdapter['mkdir']>) {
+    this.permit();
+    await super.mkdir(...args);
+  }
+  override async rm(...args: Parameters<OpfsVfsJustBashAdapter['rm']>) {
+    this.permit();
+    await super.rm(...args);
+  }
+  override async chmod(...args: Parameters<OpfsVfsJustBashAdapter['chmod']>) {
+    this.permit();
+    await super.chmod(...args);
+  }
+  override async symlink(...args: Parameters<OpfsVfsJustBashAdapter['symlink']>) {
+    this.permit();
+    await super.symlink(...args);
+  }
+  override async link(...args: Parameters<OpfsVfsJustBashAdapter['link']>) {
+    this.permit();
+    await super.link(...args);
+  }
+  override async utimes(...args: Parameters<OpfsVfsJustBashAdapter['utimes']>) {
+    this.permit();
+    await super.utimes(...args);
+  }
 }
-const mutations = new Set(['writeFile', 'appendFile', 'mkdir', 'rm', 'cp', 'mv', 'chmod', 'symlink', 'link', 'utimes']);
 export class DevtoolsSession {
   private connections = new Map<string, Connection>();
   private lost = new Set<string>();
@@ -403,21 +428,10 @@ export class DevtoolsSession {
   async run(name: string, command: string) {
     const c = this.connection(name);
     const { Bash } = await import('just-bash');
-    const fs = new Proxy(c.fs, {
-      get: (target, key, receiver) => {
-        if (key === 'getAllPaths')
-          return () => this.volumes.find((v) => v.name === name)?.files.map((f) => f.path) ?? [];
-        const value = Reflect.get(target, key, receiver);
-        return typeof value === 'function'
-          ? (...args: unknown[]) => {
-              if (mutations.has(String(key))) this.requireWrites(name);
-              return value.apply(target, args);
-            }
-          : value;
-      },
-    });
+    // The annotation is the compile-time check that the wrapper still satisfies just-bash's contract.
+    const fs: IFileSystem = c.fs.forJustBash();
     const bash = new Bash({
-      fs: fs as unknown as IFileSystem,
+      fs,
       cwd: this.cwd(name),
       env: c.shellEnv,
       executionLimits: { maxCommandCount: 1000, maxLoopIterations: 1000, maxCallDepth: 50 },
