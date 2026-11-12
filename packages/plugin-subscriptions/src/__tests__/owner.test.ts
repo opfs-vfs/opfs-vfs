@@ -68,7 +68,7 @@ describe('subscription owner', () => {
     const { sent, session, register } = fixture();
     const target = client();
     register(target, 'sub', {
-      path: 'watched/./',
+      path: 'watched//',
       recursive: false,
       events: ['create', 'create'],
       match: { source: '.*file$', flags: 'gy' },
@@ -97,6 +97,15 @@ describe('subscription owner', () => {
         .filter((item) => item.frame.type === 'event')
         .map((item) => (item.frame as Extract<ChangeFrame, { type: 'event' }>).change.cursor.sequence),
     ).toEqual([1, 2]);
+  });
+
+  it('rejects a target with a . or .. component and accepts names that merely contain dots', () => {
+    const { register } = fixture();
+    const target = client();
+    for (const path of ['/a/./b', '/a/../b', '/..', '/a/.', '/a/..'])
+      expect(codeOf(() => register(target, `bad${path}`, { path }))).toBe('EINVAL');
+    for (const [index, path] of ['/a/.b', '/a/b..', '/a/...', '/not/yet'].entries())
+      expect(register(target, `ok${index}`, { path })).toMatchObject({ type: 'registered' });
   });
 
   it('keeps retiring registrations in the 32-client and 128-mount limits until terminal acknowledgement', () => {

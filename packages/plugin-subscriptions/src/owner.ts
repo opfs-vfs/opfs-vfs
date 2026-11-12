@@ -10,7 +10,7 @@ import type {
 } from '@opfs-vfs/opfs-vfs/changes';
 import type { ConfiguredVfsPlugin } from '@opfs-vfs/opfs-vfs/plugins';
 import { SUBSCRIPTIONS_COMPATIBILITY_KEY } from './config.js';
-import { error, normalizePath } from './validation.js';
+import { error, hasDotComponent, normalizePath } from './validation.js';
 
 const MAX_PENDING = 4096;
 const MAX_MOUNT_PENDING = 16384;
@@ -74,6 +74,7 @@ function validateWire(input: unknown): WireSubscribeOptions {
   )
     throw error('EINVAL', 'Invalid subscription options');
   if (typeof value.path !== 'string' || value.path.includes('\0')) throw error('EINVAL', 'Invalid path');
+  if (hasDotComponent(value.path)) throw error('EINVAL', 'Subscription target must not contain . or .. components');
   if ((value.scope !== 'file' && value.scope !== 'directory') || typeof value.recursive !== 'boolean')
     throw error('EINVAL', 'Invalid scope');
   if (value.scope === 'file' && value.recursive) throw error('EINVAL', 'File subscriptions cannot be recursive');

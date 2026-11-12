@@ -45,7 +45,7 @@ import type {
   LogicalRecord,
   WireSubscribeOptions,
 } from './changes.js';
-import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path.js';
+import { baseName, normalizeFsPath, parentPath } from './fs-path.js';
 import { isChangeReply, snapshotChangeCommand, snapshotChangeFrame, utf8Charge } from './change-protocol.js';
 import { isMountReplacement, mountGenerations, persistenceSources, workerChangeOpeners } from './mount-context.js';
 import { claimConfiguredPlugins, validateConfiguredPlugins, validatedPluginOptions } from './plugin-config.js';
@@ -4462,9 +4462,11 @@ export class OpfsVfs implements FileChangeSource {
     ) {
       throw createVfsError('EINVAL', undefined, 'Invalid subscription target');
     }
-    // A target is a pattern matched against event paths, not a file lookup: the
-    // textual form is the one the subscription plugin matches with.
-    const normalized = lexicalFsPath(target.path);
+    // A target is a pattern matched against canonical event paths, not a file
+    // lookup, so a `.` or `..` component is rejected rather than resolved or collapsed.
+    if (target.path.split('/').some((part) => part === '.' || part === '..'))
+      throw createVfsError('EINVAL', target.path, 'Subscription target must not contain . or .. components');
+    const normalized = normalizeFsPath(target.path);
     if (normalized.requiresDirectory && target.scope !== 'directory')
       throw createVfsError('EINVAL', normalized.path, 'Trailing slash requires directory scope');
     let path = '/';

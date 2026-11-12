@@ -73,6 +73,8 @@ const subscription = await subscribe(
 
 ## Renames
 
+A subscription `path` is a canonical-form target: a `.` or `..` component is rejected with `EINVAL` (it is no longer collapsed textually), so pass a resolved path, for example `realpath` of the directory plus the name. Repeated and trailing slashes keep their meaning, and names such as `.git` or `a..b` are fine.
+
 A rename emits `delete` at every old path, then `create` at every new path, each subtree entry with its own `kind`. Renaming a directory therefore reports every descendant, not just the directory: deletes run deepest first (`/a/sub/y.txt`, `/a/sub`, `/a/x.txt`, `/a`), creates run parent first (`/b`, `/b/sub`, `/b/x.txt`, `/b/sub/y.txt`). Each subscriber receives only the events its `path`, `scope`, `recursive`, `events`, and `match` select:
 
 - A recursive subscription on the old directory sees only the deletes; one on the new parent sees only the creates; a recursive subscription on `/` sees both.

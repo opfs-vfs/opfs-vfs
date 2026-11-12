@@ -36,6 +36,7 @@ export function validateOptions(input: SubscribeOptions): ValidatedOptions {
   const signal = input.signal;
   const onError = input.onError;
   if (typeof path !== 'string' || path.includes('\0')) throw error('EINVAL', 'Invalid path');
+  if (hasDotComponent(path)) throw error('EINVAL', 'Subscription target must not contain . or .. components');
   if (scope !== 'file' && scope !== 'directory') throw error('EINVAL', 'Invalid scope');
   if (path.endsWith('/') && path !== '/' && scope !== 'directory')
     throw error('EINVAL', 'Trailing slash requires directory scope');
@@ -78,6 +79,11 @@ export function validateOptions(input: SubscribeOptions): ValidatedOptions {
     signal,
     onError,
   };
+}
+
+/** A target is a canonical-form pattern: `.` and `..` components are rejected, never collapsed. */
+export function hasDotComponent(path: string): boolean {
+  return path.split('/').some((part) => part === '.' || part === '..');
 }
 
 export function normalizePath(path: string): string {
