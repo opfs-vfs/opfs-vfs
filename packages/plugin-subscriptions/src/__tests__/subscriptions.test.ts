@@ -76,6 +76,24 @@ describe('subscriptions', () => {
     expect(opened).toBe(0);
   });
 
+  it('rejects a dotted target before opening a channel and accepts dotted names', async () => {
+    let opened = 0;
+    const source = {
+      openFileChangeChannel: async () => {
+        opened++;
+        throw new Error('stop');
+      },
+    };
+    for (const path of ['/a/./b', '/a/../b', '/..', '/a/.'])
+      await expect(subscribe(source, { path, scope: 'directory', onError() {} }, () => {})).rejects.toMatchObject({
+        code: 'EINVAL',
+      });
+    expect(opened).toBe(0);
+    for (const path of ['/a/.b', '/a/b..', '/a/...'])
+      await expect(subscribe(source, { path, scope: 'directory', onError() {} }, () => {})).rejects.toThrow('stop');
+    expect(opened).toBe(3);
+  });
+
   it('reads subscription option getters once', async () => {
     const reads = { path: 0, maxBytes: 0, onError: 0, signal: 0 };
     const controller = new AbortController();

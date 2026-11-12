@@ -14,7 +14,7 @@ const titles = [
   'removing or renaming . or .. is EINVAL and changes nothing',
   'a directory cannot be moved into its own subtree through .. or a symlink',
   'a chain of 40 symlinks resolves and 41 fails with ELOOP',
-  'subscription targets are textual patterns, not file lookups',
+  'subscription targets reject . and .. components, and are not file lookups',
   'recorded paths are canonical, also after a reopen',
 ];
 

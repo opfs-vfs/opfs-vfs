@@ -224,16 +224,21 @@ async function run(bufferMode: 'disk' | 'memory'): Promise<Section[]> {
       for (let i = 1; i <= 41; i++) vfs.unlinkSync(`/c${i}`);
     });
 
-    section('subscription targets are textual patterns, not file lookups', () => {
+    section('subscription targets reject . and .. components, and are not file lookups', () => {
       const validate = (path: string, scope: 'file' | 'directory') => {
         (
           vfs as unknown as { validateChangeTarget(target: { path: string; scope: string; recursive: boolean }): void }
         ).validateChangeTarget({ path, scope, recursive: false });
         return 'accepted';
       };
-      // Textually /link/../x is /x, a file at the root; resolved it would be /a/x behind the symlink.
-      expect('file target /link/../x', () => validate('/link/../x', 'file'), 'accepted');
-      expect('directory target /link/../x', () => validate('/link/../x', 'directory'), 'EINVAL');
+      // A `.` or `..` component is rejected, so a target never silently names a different path than a file call.
+      for (const path of ['/link/../x', '/a/./b', '/a/../b', '/..', '/.', '/a/b/.', '/a/b/..', 'a/./b'])
+        for (const scope of ['file', 'directory'] as const)
+          expect(`${scope} target ${path} is rejected`, () => validate(path, scope), 'EINVAL');
+      // Only whole components count; dotted names and not-yet-existing targets are fine.
+      for (const path of ['/a/.b', '/a/b..', '/a/...', '/a/..b', '/not/yet/created'])
+        expect(`file target ${path}`, () => validate(path, 'file'), 'accepted');
+      expect('directory target with trailing slash', () => validate('/a//b/', 'directory'), 'accepted');
       expect('a target through a symlink is still refused', () => validate('/link/f', 'file'), 'EINVAL');
     });
 
