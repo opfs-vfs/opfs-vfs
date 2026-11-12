@@ -307,7 +307,8 @@ function decodeRecordPayload(payload: Uint8Array, offset: number): DataWalRecord
  *   `hadPartialTail` false, `corruptionOffset` undefined).
  * - partial trailing record: a torn final frame whose payload is incomplete —
  *   tolerated and NOT corruption (`hadPartialTail` true). The torn tail is the
- *   normal crash-during-append window.
+ *   normal crash-during-append window. A tail of only zero bytes is the same
+ *   window seen after the file length was extended but before the bytes landed.
  * - corruption: a complete frame whose checksum or payload fails to validate
  *   (`corruptionOffset` set to that frame's boundary). Decoding STOPS there;
  *   frames after a corrupt frame are discarded even if they would individually
@@ -354,6 +355,12 @@ export function decodeDataWalRecords(
     const payloadLen = decodeU32(header, 0);
     const expectedChecksum = decodeU32(header, 4);
     cursor += WAL_FRAME_HEADER_BYTES;
+
+    // An all-zero header would pass the checksum as an empty payload, which the
+    // encoder never writes. With nothing but zeros after it, no record is lost.
+    if (payloadLen === 0 && expectedChecksum === 0 && logBytes.subarray(cursor).every((byte) => byte === 0)) {
+      return { records, frameEnds, parsedBytes: frameOffset, hadPartialTail: true };
+    }
 
     if (cursor + payloadLen > logBytes.length) {
       return { records, frameEnds, parsedBytes: frameOffset, hadPartialTail: true };

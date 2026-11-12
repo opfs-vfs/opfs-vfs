@@ -213,6 +213,7 @@ function makeBareVfs(overrides: Record<string, unknown> = {}) {
     attrDirtyInodes: new Set<string>(),
     deletedInodes: new Set<string>(),
     dirtyPages: new Map<ReturnType<typeof makeInode>, Set<number>>(),
+    persistedSize: new WeakMap<object, number>(),
     fileData: new Map<string, Uint8Array>(),
     pendingDeletedInodes: new Set(),
     pendingFree: new Set<number>(),
