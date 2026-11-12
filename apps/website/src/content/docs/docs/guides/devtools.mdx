@@ -3,6 +3,8 @@ title: Volume Explorer guide
 description: Inspect browser volumes with file previews, an editor, a shell, and ZIP import and export.
 ---
 
+import DevtoolsEmbed from '../../../../components/docs/DevtoolsEmbed.astro';
+
 The **OPFS VFS Volume Explorer** is available as the separate `@opfs-vfs/devtools` package. It discovers volumes on the current origin without receiving application instances or a list of volumes. [Try it with real browser storage](/demos/devtools/).
 
 Browse and edit files, preview documents, run a just-bash terminal, and import or export volumes as ZIP archives. It also works as a debugging tool while your application runs.
@@ -11,12 +13,7 @@ Browse and edit files, preview documents, run a just-bash terminal, and import o
 
 This is the real Volume Explorer, running inside the guide. Start with **Create demo volume**, then **Load Volume Explorer**. Select the volume named `docs-volume-explorer-…` and connect to it. Open `README.md` for a preview, or enable writes to edit the sample files and try the terminal.
 
-<iframe
-  src="/demos/devtools/embed/"
-  title="Volume Explorer live example with a docs sample volume"
-  loading="lazy"
-  style="display:block;width:100%;height:800px;border:1px solid var(--sl-color-hairline);border-radius:4px;"
-/>
+<DevtoolsEmbed />
 
 The example starts docked at the bottom; on small screens it fills the frame. You can move it, resize it, or change its docking position. [Open the example in a full page](/demos/devtools/embed/) for more room.
 

@@ -19,6 +19,7 @@ await preview({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "frame-ancestors 'self'",
     },
   },
 });

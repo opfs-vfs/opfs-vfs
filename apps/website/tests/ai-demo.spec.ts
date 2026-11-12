@@ -168,6 +168,10 @@ test('persists full file operations, stops repeated failures and isolates volume
     await expect(page.getByText('Working locally…')).toHaveCount(0);
   };
   await expect(page.getByRole('treeitem', { name: 'notes.txt', exact: true })).toBeVisible();
+  // Deletions ask first. Playwright dismisses the first prompt; later ones are accepted.
+  await send('delete notes.txt', [{ tool: 'rm', path: 'notes.txt' }], 'Kept notes.txt.');
+  await expect(page.getByRole('treeitem', { name: 'notes.txt', exact: true })).toBeVisible();
+  page.on('dialog', (dialog) => void dialog.accept());
   await page.evaluate(() => {
     (window as unknown as { __aiResponses: string[] }).__aiResponses = [
       '```json\n{"tool":"rm","path":"notes.txt"}\n```',

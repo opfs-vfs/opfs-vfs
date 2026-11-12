@@ -24,9 +24,24 @@ void test('contact messages are validated and safely rendered for email', () => 
     ['name over limit', { ...valid, name: 'a'.repeat(121) }],
     ['company over limit', { ...valid, company: 'a'.repeat(121) }],
     ['message over limit', { ...valid, message: 'a'.repeat(10_001) }],
+    ['filled honeypot', { ...valid, website: 'https://spam.example' }],
+    ['non-string honeypot', { ...valid, website: 1 }],
+    ['email address list', { ...valid, email: 'ada@example.com,eve@example.com' }],
+    ['email with angle brackets', { ...valid, email: 'Ada <ada@example.com>' }],
+    ['name of control characters only', { ...valid, name: '\u0001\r\n' }],
   ]) {
     assert.equal(parseContactMessage(value), null, label);
   }
+  assert.ok(parseContactMessage({ ...valid, website: '' }), 'empty honeypot is accepted');
+});
+
+void test('contact names cannot inject header lines into the subject', () => {
+  const message = parseContactMessage({
+    email: 'ada@example.com',
+    name: 'Ada\r\nBcc: eve@example.com\u0000',
+    message: 'Hello',
+  });
+  assert.equal(message?.name, 'Ada Bcc: eve@example.com');
 });
 
 void test('contact email has the requested recipient, subject, and reply-to', async () => {

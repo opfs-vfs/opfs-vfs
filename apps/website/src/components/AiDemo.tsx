@@ -29,7 +29,7 @@ import { downloadModel, installedModel, modelCapability, removeModel } from '../
 import { createGemmaRuntimeClient } from '../lib/ai/gemma-runtime';
 import { buildGemmaChatPrompt, type GemmaChatPromptMessage } from '../lib/ai/gemma-chat-prompt';
 import { sanitizeGemmaChatOutput } from '../lib/ai/gemma-chat-output';
-import { parseAiTools, createAiShell, executeAiTool, systemInstructions } from '../lib/ai/tools';
+import { parseAiTools, createAiShell, destructiveToolPrompt, executeAiTool, systemInstructions } from '../lib/ai/tools';
 import './AiDemo.css';
 
 type ChatMessage = { role: 'user' | 'assistant' | 'tool'; text: string };
@@ -43,6 +43,11 @@ const starters = [
   'Create /workspace/sites/lunar-garden/index.html: a one-page website for a moonlit botanical garden.',
 ];
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const declinedDeletion = {
+  ok: false,
+  observation: 'The user declined this deletion. Nothing was changed. Do not retry it unless the user asks again.',
+  selectedPath: undefined,
+};
 
 function AiChat({
   api,
@@ -182,23 +187,28 @@ function AiChat({
           toolCalls++;
           let observation: string;
           let ok = false;
+          // File contents can steer the model, so deletions need the visitor's explicit approval.
+          const question = destructiveToolPrompt(tool);
           try {
-            const result = await api.session.run(async () => {
-              if (token !== generation.current) throw new Error('Cancelled.');
-              try {
-                return await executeAiTool(
-                  toolBash,
-                  tool,
-                  AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
-                );
-              } catch (reason) {
-                return {
-                  ok: false,
-                  observation: `Tool error: ${errorText(reason)}. Inspect the affected files before retrying.`,
-                  selectedPath: undefined,
-                };
-              }
-            });
+            const result =
+              question && !window.confirm(question)
+                ? declinedDeletion
+                : await api.session.run(async () => {
+                    if (token !== generation.current) throw new Error('Cancelled.');
+                    try {
+                      return await executeAiTool(
+                        toolBash,
+                        tool,
+                        AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+                      );
+                    } catch (reason) {
+                      return {
+                        ok: false,
+                        observation: `Tool error: ${errorText(reason)}. Inspect the affected files before retrying.`,
+                        selectedPath: undefined,
+                      };
+                    }
+                  });
             observation = result.observation;
             ok = result.ok;
             if (result.selectedPath && token === generation.current) api.select(result.selectedPath);

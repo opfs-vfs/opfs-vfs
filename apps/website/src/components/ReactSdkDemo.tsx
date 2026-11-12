@@ -74,7 +74,22 @@ function ImageThumbnail({ name }: { name: string }) {
   const [url, setUrl] = useState('');
   useEffect(() => {
     if (!content.data) return;
-    const next = URL.createObjectURL(new Blob([content.data.slice()], { type: imageMime[extension(name)] }));
+    const type = imageMime[extension(name)];
+    const blob = new Blob([content.data.slice()], { type });
+    if (type === 'image/svg+xml') {
+      // A same-origin blob: SVG opened in a new tab would run its scripts on this origin; data: URLs never open top-level.
+      let live = true;
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (live) setUrl(reader.result as string);
+      };
+      reader.readAsDataURL(blob);
+      return () => {
+        live = false;
+        reader.abort();
+      };
+    }
+    const next = URL.createObjectURL(blob);
     setUrl(next);
     return () => URL.revokeObjectURL(next);
   }, [content.data]);

@@ -8,7 +8,8 @@ export const POST: APIRoute = async ({ request }) => {
   const message = parseContactMessage(await request.json().catch(() => null));
   if (!message) return Response.json({ error: 'Please complete the required fields.' }, { status: 400 });
 
-  const apiKey = process.env.RESEND_API_KEY || import.meta.env.RESEND_API_KEY;
+  // Runtime only: an `import.meta.env` fallback would inline the key into the server bundle at build time.
+  const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return Response.json({ error: 'Email is not configured.' }, { status: 503 });
 
   try {

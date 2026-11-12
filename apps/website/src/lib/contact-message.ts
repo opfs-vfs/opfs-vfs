@@ -9,7 +9,9 @@ const limit = (value: unknown, max: number) => typeof value === 'string' && valu
 
 export function parseContactMessage(value: unknown): ContactMessage | null {
   if (!value || typeof value !== 'object') return null;
-  const { email, name, company = '', message } = value as Record<string, unknown>;
+  const { email, name, company = '', message, website = '' } = value as Record<string, unknown>;
+  // `website` is a hidden honeypot field: people never see it, so any value marks an automated submission.
+  if (website !== '') return null;
   if (
     typeof email !== 'string' ||
     typeof name !== 'string' ||
@@ -17,17 +19,25 @@ export function parseContactMessage(value: unknown): ContactMessage | null {
     typeof message !== 'string'
   )
     return null;
+  // The name reaches the Subject header, so control characters (including CR/LF) become spaces.
+  const headerName = name.replace(/\p{Cc}+/gu, ' ').trim();
   if (
     !limit(email, 254) ||
-    !/^\S+@\S+\.\S+$/.test(email.trim()) ||
-    !limit(name, 120) ||
-    !name.trim() ||
+    // A single address for the Reply-To header: no whitespace, list separators, or angle brackets.
+    !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim()) ||
+    !limit(headerName, 120) ||
+    !headerName ||
     !limit(company, 120) ||
     !limit(message, 10_000) ||
     !message.trim()
   )
     return null;
-  return { email: email.trim(), name: name.trim(), company: company.trim(), message: message.trim() };
+  return {
+    email: email.trim(),
+    name: headerName,
+    company: company.trim(),
+    message: message.trim(),
+  };
 }
 
 export function contactEmailHtml({ email, name, company, message }: ContactMessage) {

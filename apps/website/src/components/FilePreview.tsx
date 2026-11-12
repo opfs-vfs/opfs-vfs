@@ -255,7 +255,8 @@ function Spreadsheet({ bytes }: { bytes: Uint8Array }) {
     let live = true;
     void import('xlsx')
       .then((xlsx) => {
-        const book = xlsx.read(bytes);
+        // Parse only the rows the preview shows; large sheets otherwise block the main thread.
+        const book = xlsx.read(bytes, { sheetRows: 200 });
         if (live) {
           setRows(
             xlsx.utils

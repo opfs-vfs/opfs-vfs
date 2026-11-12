@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { InMemoryFs } from 'just-bash/browser';
-import { createAiShell, executeAiTool, parseAiTool, parseAiTools, validateAiCommand } from '../src/lib/ai/tools.ts';
+import {
+  createAiShell,
+  destructiveToolPrompt,
+  executeAiTool,
+  parseAiTool,
+  parseAiTools,
+  validateAiCommand,
+} from '../src/lib/ai/tools.ts';
 
 void test('AI writes, overwrites, appends and copies literal files in its volume', async () => {
   const shell = createAiShell(new InMemoryFs());
@@ -138,4 +145,22 @@ void test('captured structured rm deletes literal paths and requires explicit re
   assert.equal(await shell.fs.exists('/workspace/folder'), false);
   await run('{"tool":"rm","command":"rm /workspace/keep.txt"}');
   assert.equal(await shell.fs.exists('/workspace/keep.txt'), false);
+});
+
+void test('deletions and recursive rm commands need confirmation; other tools do not', () => {
+  const ask = (raw: string) => destructiveToolPrompt(parseAiTool(raw)!);
+  assert.match(ask('{"tool":"delete_file","path":"notes.txt"}') ?? '', /delete notes\.txt\. Allow/);
+  assert.match(ask('{"tool":"rm","path":"folder","recursive":true}') ?? '', /everything inside it/);
+  for (const command of [
+    'rm -r /workspace',
+    'rm -rf /workspace/folder',
+    'rm -f -R folder',
+    'rm --recursive folder',
+    'ls; rm -fr folder',
+    'find . -name x -exec rm -r {} +',
+  ])
+    assert.ok(destructiveToolPrompt({ tool: 'bash', command }), command);
+  for (const command of ['rm notes.txt', 'rmdir empty', 'ls -r', 'grep -r rm .', 'cp -r a b'])
+    assert.equal(destructiveToolPrompt({ tool: 'bash', command }), null, command);
+  assert.equal(ask('{"tool":"write_file","path":"a.md","content":"x"}'), null);
 });
