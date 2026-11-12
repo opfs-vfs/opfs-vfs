@@ -52,6 +52,7 @@ function useResource<T extends ResourceValue>(
     held?.binding === binding &&
     held.store === store &&
     held.entry &&
+    held.entry.users > 0 &&
     enabled &&
     held.entry.kind === kind &&
     held.entry.path === path &&

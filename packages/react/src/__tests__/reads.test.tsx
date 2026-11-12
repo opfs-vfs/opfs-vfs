@@ -321,6 +321,42 @@ describe('live read hooks', () => {
     }
   });
 
+  it('never shows a released read as idle when the same read is re-enabled', async () => {
+    const fileName = volumeName();
+    const client = new OpfsVfsWorker(fileName, { worker, plugins: [subscriptionsRequest()] });
+    const seen: any[] = [];
+    let app: Awaited<ReturnType<typeof mount>> | undefined;
+    try {
+      await client.ready;
+      await client
+        .forGeneration(client.getStatus().ownerGeneration!)
+        .writeFileBuffer('/same', new TextEncoder().encode('same'));
+      function Reader({ enabled }: { enabled: boolean }) {
+        seen.push(useFileContent('/same', { enabled, format: 'text' }));
+        return null;
+      }
+      const render = (enabled: boolean) => (
+        <VolumeProvider client={client}>
+          <Reader enabled={enabled} />
+        </VolumeProvider>
+      );
+      app = await mount(render(true));
+      await waitForReact(() => seen.at(-1)?.status === 'success', 'first read');
+      await app.render(render(false));
+      await waitForReact(() => seen.at(-1)?.status === 'idle', 'disabled read');
+      const beforeEnabled = seen.length;
+      await app.render(render(true));
+      await waitForReact(() => seen.at(-1)?.status === 'success', 're-enabled read');
+      expect(seen[beforeEnabled]).toMatchObject({ status: 'pending', data: undefined });
+      for (const snapshot of seen.slice(beforeEnabled)) expect(snapshot.status).not.toBe('idle');
+    } finally {
+      if (app) await app.unmount();
+      await client.closeVfs().catch(() => {});
+      client.dispose();
+      await deleteVolume(fileName).catch(() => {});
+    }
+  });
+
   it('does not detach bytes shared by a content resource when a command writes them', async () => {
     const fileName = volumeName();
     const client = new OpfsVfsWorker(fileName, { worker, plugins: [subscriptionsRequest()] });

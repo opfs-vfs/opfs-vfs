@@ -157,7 +157,8 @@ export class ClientStore {
         generation,
         ownerGeneration,
         listeners: new Set(),
-        snapshot: idle<T>(refresh) as ResourceResult<ResourceValue>,
+        // Acquisition always enqueues a read, so a new entry is pending, never idle.
+        snapshot: pending<T>(refresh) as ResourceResult<ResourceValue>,
         users: 0,
         queued: false,
         inFlight: false,
