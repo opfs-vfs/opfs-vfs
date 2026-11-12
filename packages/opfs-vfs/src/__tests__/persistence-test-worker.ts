@@ -710,8 +710,8 @@ self.onmessage = async (event) => {
       badLogHandle.close();
 
       // INT-5: a checksum mismatch on the only WAL frame must NOT brick init.
-      // The corrupt frame (at byte 0) is discarded, the WAL is truncated, and
-      // the mount succeeds with the salvage surfaced via the persistence status.
+      // No valid frame follows it, so it is a torn append: the frame (at byte 0)
+      // is dropped, the WAL is truncated, and the mount reports no salvage.
       let salvageMountThrew = false;
       let salvageDetail = `log bytes: ${payload.length}`;
       let salvaged: OpfsVfs | undefined;
@@ -723,15 +723,15 @@ self.onmessage = async (event) => {
         salvageDetail = `${salvageDetail}; ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`;
       }
       results.push({
-        check: 'corrupt-checksum WAL mounts via salvage instead of bricking',
+        check: 'bad-checksum final WAL frame mounts instead of bricking',
         pass: !salvageMountThrew,
         detail: salvageDetail,
       });
       if (salvaged) {
         const status = salvaged.getLocalPersistenceStatusSync();
         results.push({
-          check: 'salvage event surfaced for checksum mismatch',
-          pass: status.lastSalvage?.reason === 'corrupt-frame',
+          check: 'bad-checksum final frame is a torn append, not a salvage event',
+          pass: status.lastSalvage === undefined,
           detail: `lastSalvage=${JSON.stringify(status.lastSalvage)}`,
         });
         // The namespace entry is persisted via the meta log (independent of the
@@ -744,7 +744,7 @@ self.onmessage = async (event) => {
           salvaged.closeSync(badFd);
         }
         results.push({
-          check: 'corrupt data-WAL record discarded (original bytes gone)',
+          check: 'torn data-WAL record discarded (original bytes gone)',
           pass: badContent !== 'bad',
           detail: `content="${badContent}"`,
         });
@@ -761,7 +761,7 @@ self.onmessage = async (event) => {
         const afterRead = reopenedAfterSalvage.readSync(afterFd, 16, 0);
         reopenedAfterSalvage.closeSync(afterFd);
         results.push({
-          check: 'writes after checksum salvage persist across reopen',
+          check: 'writes after the torn frame was dropped persist across reopen',
           pass: decoder.decode(afterRead.buffer) === 'healthy',
         });
         await reopenedAfterSalvage.closeVfs();

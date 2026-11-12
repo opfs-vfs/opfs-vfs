@@ -244,6 +244,7 @@ export function decodeDataWalCycleStamp(logBytes: Uint8Array): Uint8Array | null
  * the mixed epoch never collides with the raw epoch or another cycle's.
  */
 
+// The per-opcode length rules below are mirrored by plausiblePlaintextPayload.
 function decodeRecordPayload(payload: Uint8Array, offset: number): DataWalRecord {
   if (payload.length < 2) {
     throw new DataWalCorruptionError('Data WAL payload too small', offset);
@@ -307,9 +308,12 @@ function decodeRecordPayload(payload: Uint8Array, offset: number): DataWalRecord
  *   `hadPartialTail` false, `corruptionOffset` undefined).
  * - partial trailing record: a torn final frame whose payload is incomplete —
  *   tolerated and NOT corruption (`hadPartialTail` true). The torn tail is the
- *   normal crash-during-append window. A tail of only zero bytes is the same
- *   window seen after the file length was extended but before the bytes landed.
- * - corruption: a complete frame whose checksum or payload fails to validate
+ *   normal crash-during-append window. The same window, seen after the file
+ *   length was extended but before every byte landed, leaves a tail of zeros
+ *   or a final frame whose checksum fails with no valid frame after it; both
+ *   are torn appends too.
+ * - corruption: a checksum-failing frame that a valid frame follows, or a
+ *   checksum-valid frame whose payload fails to authenticate or decode
  *   (`corruptionOffset` set to that frame's boundary). Decoding STOPS there;
  *   frames after a corrupt frame are discarded even if they would individually
  *   checksum, because record ordering integrity is gone past that point.
@@ -363,12 +367,21 @@ export function decodeDataWalRecords(
     }
 
     if (cursor + payloadLen > logBytes.length) {
+      // A length past the end is a torn append only if nothing valid follows.
+      if (validFrameFollows(logBytes, frameOffset + 1, sealer)) {
+        return { records, frameEnds, parsedBytes: frameOffset, hadPartialTail: false, corruptionOffset: frameOffset };
+      }
       return { records, frameEnds, parsedBytes: frameOffset, hadPartialTail: true };
     }
 
     const onDiskPayload = logBytes.subarray(cursor, cursor + payloadLen);
     const actualChecksum = crc32(onDiskPayload);
     if (actualChecksum !== expectedChecksum) {
+      // Bytes that differ from what was appended, with nothing valid behind
+      // them, are an append that never fully landed: nothing durable is lost.
+      if (!validFrameFollows(logBytes, frameOffset + 1, sealer)) {
+        return { records, frameEnds, parsedBytes: frameOffset, hadPartialTail: true };
+      }
       return { records, frameEnds, parsedBytes: frameOffset, hadPartialTail: false, corruptionOffset: frameOffset };
     }
 
@@ -404,6 +417,68 @@ export function decodeDataWalRecords(
 
   const hadPartialTail = cursor !== logBytes.length;
   return { records, frameEnds, parsedBytes: cursor, hadPartialTail };
+}
+
+/** Smallest plaintext payload `decodeRecordPayload` accepts: a delete with an empty path. */
+const WAL_MIN_PAYLOAD_BYTES = 10;
+/** Most payload bytes a sealed-log scan may checksum before it gives up. */
+const WAL_SEALED_SCAN_BUDGET_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Cheap pre-check, before any CRC, that the `payloadLen` bytes at `at` have the
+ * layout of a plaintext record. Mirrors the per-opcode length rules of
+ * {@link decodeRecordPayload}; keep the two in step.
+ */
+function plausiblePlaintextPayload(logBytes: Uint8Array, at: number, payloadLen: number): boolean {
+  if (payloadLen < WAL_MIN_PAYLOAD_BYTES || logBytes[at] !== WAL_VERSION) return false;
+  const view = new DataView(logBytes.buffer, logBytes.byteOffset + at, payloadLen);
+  const op = logBytes[at + 1];
+  if (op === DataWalOpCode.Write)
+    return payloadLen >= 22 && payloadLen === 22 + decodeU32(view, 6) + decodeU32(view, 18);
+  if (op === DataWalOpCode.Truncate) return payloadLen >= 18 && payloadLen === 18 + decodeU32(view, 6);
+  if (op === DataWalOpCode.Delete) return payloadLen === 10 + decodeU32(view, 6);
+  return false;
+}
+
+/**
+ * Scan forward byte by byte from `from` and report whether any complete frame
+ * is checksum-valid, authentic and decodable. A valid frame behind a failing
+ * one proves the failing frame was once written in full. The failing frame's
+ * own length is not trusted (it may be the damaged field), so frame boundaries
+ * are not walked. Unsealed candidates are filtered by record layout before
+ * their CRC is computed; sealed payloads are ciphertext, so the scan there is
+ * bounded by a budget of checksummed bytes instead.
+ */
+function validFrameFollows(logBytes: Uint8Array, from: number, sealer?: RecordCodec): boolean {
+  let budget = WAL_SEALED_SCAN_BUDGET_BYTES;
+  const minSealed = sealer ? sealer.overheadBytes + WAL_MIN_PAYLOAD_BYTES : 0;
+  for (let frameOffset = from; frameOffset + WAL_FRAME_HEADER_BYTES <= logBytes.length; frameOffset++) {
+    const header = new DataView(logBytes.buffer, logBytes.byteOffset + frameOffset, WAL_FRAME_HEADER_BYTES);
+    const payloadLen = decodeU32(header, 0);
+    const payloadAt = frameOffset + WAL_FRAME_HEADER_BYTES;
+    const end = payloadAt + payloadLen;
+    if (end > logBytes.length) continue;
+    if (sealer) {
+      if (payloadLen < minSealed) continue;
+      // ponytail: sealed scan checksums at most 64 MiB, then calls the tail a torn append; an authenticated frame trailer or a recorded flushed length would lift it.
+      budget -= payloadLen;
+      if (budget < 0) return false;
+    } else if (!plausiblePlaintextPayload(logBytes, payloadAt, payloadLen)) {
+      continue;
+    }
+    const onDiskPayload = logBytes.subarray(payloadAt, end);
+    if (crc32(onDiskPayload) !== decodeU32(header, 4)) continue;
+    try {
+      decodeRecordPayload(
+        sealer ? sealer.open(onDiskPayload, RecordRole.dataWal, frameOffset) : onDiskPayload,
+        frameOffset,
+      );
+      return true;
+    } catch {
+      // Not a usable frame; keep scanning.
+    }
+  }
+  return false;
 }
 
 /**

@@ -2100,6 +2100,20 @@ describe('POSIX semantics hardening', () => {
     expectErrorCode(() => vfs.utimesSync('/file', Number.NaN, 0), 'EINVAL');
   });
 
+  it('rejects times the metadata format cannot store and accepts fractional milliseconds', () => {
+    const vfs = memory();
+    vfs.closeSync(vfs.openSync('/file', rdwr));
+    const limit = 2 ** 32 * 1000;
+    for (const time of [-1, -0.5, limit, limit + 1, Number.POSITIVE_INFINITY, Number.NaN]) {
+      expectErrorCode(() => vfs.utimesSync('/file', time, 1000), 'EINVAL');
+      expectErrorCode(() => vfs.utimesSync('/file', 1000, time), 'EINVAL');
+    }
+    vfs.utimesSync('/file', 0, limit - 0.5);
+    expect(vfs.statSync('/file')).toMatchObject({ atimeMs: 0, mtimeMs: limit - 0.5 });
+    vfs.utimesSync('/file', 1234.5, 5678.25);
+    expect(vfs.statSync('/file')).toMatchObject({ atimeMs: 1234.5, mtimeMs: 5678.25 });
+  });
+
   it('existsSync answers false below a regular file', () => {
     const vfs = memory();
     vfs.closeSync(vfs.openSync('/file', rdwr));

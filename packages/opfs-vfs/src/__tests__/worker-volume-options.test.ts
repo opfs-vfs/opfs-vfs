@@ -84,8 +84,13 @@ describe('OpfsVfsWorker volume options', () => {
       offset: 0,
       data: new Uint8Array([1, 2, 3]),
     });
+    const validFrame = corruptFrame.slice();
     corruptFrame[corruptFrame.length - 1] ^= 0xff;
-    await overwriteDataWal(fileName, corruptFrame);
+    // A failing frame alone would be a torn append; one followed by a valid frame is corruption.
+    const log = new Uint8Array(corruptFrame.length + validFrame.length);
+    log.set(corruptFrame, 0);
+    log.set(validFrame, corruptFrame.length);
+    await overwriteDataWal(fileName, log);
 
     const failStop = new OpfsVfsWorker(fileName, {
       forceLeader: true,

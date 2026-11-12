@@ -41,7 +41,13 @@ Both memory and disk buffering use OPFS. Select `bufferMode: 'memory'` to cache 
 
 When switching a volume from memory to disk buffering, a nonempty memory recovery log causes a disk mount to fail with `EBUSY`. Reopen that volume explicitly with `bufferMode: 'memory'`, await readiness and successfully close it with `closeVfs()`. It can then be reopened with the disk default. Do not delete recovery logs or reset the volume to work around this error. A cleanly closed volume can switch buffer modes directly.
 
-File times are stored in whole seconds. `stat()` and `utimes()` work in milliseconds while a volume is mounted, but after it is reopened `atimeMs`, `mtimeMs` and `ctimeMs` read back rounded down to the second. Do not compare a time read before a reopen with one read after it at millisecond precision. Times before 1970 or from 7 February 2106 onward cannot be stored.
+File times are stored in whole seconds. `stat()` and `utimes()` work in milliseconds while a volume is mounted, but after it is reopened `atimeMs`, `mtimeMs` and `ctimeMs` read back rounded down to the second. Do not compare a time read before a reopen with one read after it at millisecond precision. Times before 1970 or from 7 February 2106 onward cannot be stored; `utimes()` rejects them with `EINVAL` on direct mounts and worker clients alike. The stored value 0 means "unset", so a time within the first second of 1970 (0 to 999 ms) is accepted but reads back as the fallback time after the volume is reopened.
+
+In memory buffering with `balanced` or `relaxed` durability, a create, rename, unlink or similar namespace operation does not fail when its recovery-log write fails (for example on a full quota). The operation is applied, the persistence status records the error, and the next synchronization retries and reports a failure that persists. `strict` durability still throws from the operation.
+
+A recovery log that ends in an incomplete or checksum-failing record with no valid record after it is treated as an interrupted append: the record is dropped without a salvage event, also under `recoveryMode: 'fail-stop'`. A failing record that is followed by a valid one is still reported as corruption.
+
+Some damage is repaired at mount and reported through `lastError` of the persistence status for the life of that mount, even after the state returns to `clean`: a mount that fell back to an older metadata snapshot (`salvage` only; `fail-stop` refuses it), blocks claimed by two files, and entries an earlier release left without a parent directory. Those entries return at their old path, or under `/lost+found` (`/lost+found-2`, … if that name is taken) when a file has since taken their directory's name.
 
 ## Live EdgeJS files
 
