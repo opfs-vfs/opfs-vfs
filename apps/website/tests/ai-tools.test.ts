@@ -80,7 +80,7 @@ void test('structured copy preserves quoted names and read output is never silen
   await shell.fs.writeFile('/workspace/large', 'a'.repeat(9000));
   const overflow = await executeAiTool(shell, { tool: 'bash', command: 'cat /workspace/large' }, signal);
   assert.equal(overflow.ok, false);
-  assert.match(overflow.observation, /output size exceeded/);
+  assert.match(overflow.observation, /output size limit exceeded/);
 });
 
 void test('full volume file operations support rename, move, edit, search and deletion', async () => {
