@@ -16,7 +16,7 @@ self.onmessage = (event: MessageEvent) => {
     if (data.type === 'CALL') {
       if (!messenger) throw new Error('messenger not initialized');
       const payloadBytes: Uint8Array | undefined = data.data;
-      const result = messenger.call(data.cmd, data.payload, payloadBytes);
+      const result = messenger.call(data.cmd, data.payload, payloadBytes, data.options);
       self.postMessage({ type: 'CALL_RESULT', id: data.id, result });
       return;
     }

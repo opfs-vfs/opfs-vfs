@@ -2,6 +2,8 @@ import { parseRemoteError, reviveRemoteError, serializeRemoteError } from './rem
 import { OpfsVfsWorkerClient, type OpfsVfsWorkerClientOptions, type VfsWorkerEndpoint } from './worker-client';
 import { startVfsWorker } from './worker-runtime';
 import {
+  announcedSharedProfile,
+  announcesOwnerLiveness,
   createSharedMountProfile,
   preparePluginRequests,
   sharedMountProfileMismatch,
@@ -252,7 +254,8 @@ export function startVfsSharedWorker({ plugins = [] }: { plugins?: readonly VfsP
         const generation = status?.ownerGeneration;
         if (status?.state !== 'ready' || !generation || !profile)
           throw Object.assign(new Error('SharedWorker owner is unavailable'), { code: 'VFS_ATTACHMENT_LOST' });
-        port.postMessage({ type: 'READY', generation, profile });
+        // Later attaches are still checked against the required profile; the reply adds what this owner offers.
+        port.postMessage({ type: 'READY', generation, profile: announcedSharedProfile(profile) });
         const timer = reservationTimers.get(request.clientId);
         if (timer) clearTimeout(timer);
         reservationTimers.set(
@@ -398,7 +401,11 @@ export async function createSharedWorkerFollower(
     }
   };
   port.start();
-  const bootstrap = await new Promise<{ generation: string; profile: SharedMountProfile }>((resolve, reject) => {
+  const bootstrap = await new Promise<{
+    generation: string;
+    profile: SharedMountProfile;
+    ownerLiveness: boolean;
+  }>((resolve, reject) => {
     let settled = false;
     const cleanup = () => {
       clearTimeout(timeout);
@@ -447,7 +454,8 @@ export async function createSharedWorkerFollower(
         if (settled) return;
         settled = true;
         cleanup();
-        resolve({ generation: data.generation, profile });
+        // A host of an older build holds no liveness lock; only watch it when this host says it does.
+        resolve({ generation: data.generation, profile, ownerLiveness: announcesOwnerLiveness(data.profile) });
       }
     };
     try {

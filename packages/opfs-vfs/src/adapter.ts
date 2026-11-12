@@ -17,6 +17,8 @@ const EMFS_ERRNO_CODES: Record<string, number> = {
   ENAMETOOLONG: 37,
   ENOSPC: 51,
   ENOSYS: ENOSYS_ERRNO,
+  // A synchronous-bridge result too large for one frame, such as a huge directory listing.
+  EOVERFLOW: 61,
   EPERM: 63,
 };
 /** Errors this adapter already mapped; only their numeric code is an Emscripten errno. */
