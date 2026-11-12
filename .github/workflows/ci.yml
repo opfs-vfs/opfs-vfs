@@ -60,15 +60,32 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
       - run: pnpm build
         env:
-          GITHUB_TOKEN: ${{ github.ref == 'refs/heads/main' && github.token || '' }}
+          # The workflow token is read-only here; it only lifts the GitHub API quota for the changelog page.
+          GITHUB_TOKEN: ${{ github.token }}
           VERCEL_SKEW_PROTECTION_ENABLED: '1'
           VERCEL_DEPLOYMENT_ID: dpl_ci
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm fmt:check
       - run: pnpm deadcode
-      - run: npm pack --dry-run
-        working-directory: packages/opfs-vfs
+      - name: Check every package tarball contains its exports and license
+        shell: bash
+        run: |
+          for dir in packages/*/; do
+            (cd "$dir" && pnpm pack --dry-run --json) | node --input-type=module -e '
+              import { readFileSync } from "node:fs";
+              const dir = process.argv[1];
+              const { name, files } = JSON.parse(readFileSync(0, "utf8"));
+              const packed = new Set(files.map((file) => file.path));
+              const manifest = JSON.parse(readFileSync(`${dir}package.json`, "utf8"));
+              const targets = (value) => (typeof value === "string" ? [value] : Object.values(value ?? {}).flatMap(targets));
+              const missing = [...targets(manifest.exports).map((target) => target.replace(/^\.\//, "")), "LICENSE.md"].filter(
+                (path) => !packed.has(path),
+              );
+              if (missing.length) throw new Error(`${name} tarball is missing ${missing.join(", ")}`);
+              console.log(`${name}: ${packed.size} files, all exports packed`);
+            ' "$dir"
+          done
       - name: Check for pending changesets
         id: changesets
         shell: bash
@@ -108,7 +125,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build package and dependencies
         env:
-          GITHUB_TOKEN: ${{ github.ref == 'refs/heads/main' && github.token || '' }}
+          GITHUB_TOKEN: ${{ github.token }}
           VERCEL_SKEW_PROTECTION_ENABLED: '1'
           VERCEL_DEPLOYMENT_ID: dpl_ci
         run: pnpm --filter "$PACKAGE..." build
@@ -125,6 +142,9 @@ jobs:
       - name: Test installed subscriptions package
         if: matrix.package == '@opfs-vfs/plugin-subscriptions'
         run: pnpm --filter @opfs-vfs/plugin-subscriptions test:packed
+      - name: Test installed Effect package
+        if: matrix.package == '@opfs-vfs/effect'
+        run: pnpm --filter @opfs-vfs/effect test:packed
       - name: Upload test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

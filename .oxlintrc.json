@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "oxc"],
+  "plugins": ["typescript", "oxc", "react"],
   "jsPlugins": ["@shadcn/lint"],
   "categories": {
     "correctness": "error"
@@ -18,7 +18,16 @@
     "**/.packed/**"
   ],
   "rules": {
-    "typescript/no-floating-promises": "error"
+    "typescript/no-floating-promises": "error",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "off",
+    "react/immutability": "off",
+    "react/no-children-prop": "off",
+    "react/purity": "off",
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/static-components": "off",
+    "react/use-memo": "off"
   },
   "overrides": [
     {

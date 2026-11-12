@@ -89,7 +89,7 @@ export async function openVolume(
       });
     });
     await leaseReady;
-    const use = <T>(operation: () => Promise<T>) =>
+    const withVolumeLock = <T>(operation: () => Promise<T>) =>
       navigator.locks.request(lockName, async () => {
         if (closed) throw new Error('This volume session is closed.');
         return operation();
@@ -109,10 +109,10 @@ export async function openVolume(
       name,
       volumeFile,
       read<T>(operation: (filesystem: OpfsVfsJustBashAdapter) => Promise<T>) {
-        return use(() => operation(fs));
+        return withVolumeLock(() => operation(fs));
       },
       run<T>(operation: (filesystem: OpfsVfsJustBashAdapter) => Promise<T>) {
-        return use(async () => {
+        return withVolumeLock(async () => {
           const result = await operation(fs);
           await vfs.flushVfs();
           changes.postMessage('change');
@@ -120,7 +120,7 @@ export async function openVolume(
         });
       },
       exec(command: string) {
-        return use(async () => {
+        return withVolumeLock(async () => {
           const result = await bash.exec(command);
           await vfs.flushVfs();
           changes.postMessage('change');
@@ -128,7 +128,7 @@ export async function openVolume(
         });
       },
       flush() {
-        return use(() => vfs.flushVfs());
+        return withVolumeLock(() => vfs.flushVfs());
       },
       close() {
         return navigator.locks.request(lockName, closeUnlocked);
