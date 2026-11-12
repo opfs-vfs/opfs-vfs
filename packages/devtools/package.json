@@ -33,25 +33,25 @@
     "test:browser": "vitest run"
   },
   "dependencies": {
-    "@base-ui/react": "1.8.0",
+    "@base-ui/react": "1.9.0",
     "@opfs-vfs/file-preview": "workspace:*",
-    "jszip": "3.10.1",
+    "jszip": "3.10.2",
     "just-bash": "2.14.2",
-    "lucide-react": "1.47.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "lucide-react": "1.72.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@opfs-vfs/opfs-vfs": "workspace:*",
-    "@storybook/react-vite": "10.6.0",
+    "@storybook/react-vite": "10.6.7",
     "@types/node": "22.20.3",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@vitest/browser-playwright": "4.1.11",
-    "playwright": "1.59.1",
-    "storybook": "10.6.0",
+    "playwright": "1.65.0",
+    "storybook": "10.6.7",
     "typescript": "6.0.3",
-    "vite": "8.2.2",
+    "vite": "8.3.8",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
