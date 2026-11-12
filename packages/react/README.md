@@ -40,6 +40,17 @@ export function App() {
 
 Without a `worker` prop, the React SDK uses its built-in subscriptions worker. It defaults to `transport="auto"`: it selects a compatible built-in SharedWorker when possible, or a dedicated worker with an observable fallback reason. Inspect `useVolume().transport` and `fallbackReason` to show what opened. Set `transport="dedicated"` or `"shared-worker"` for an explicit choice; forced shared reports its lifecycle error instead of falling back.
 
+If the built-in SharedWorker script cannot be loaded, the volume reports a lifecycle error with code `VFS_WORKER_FAILED` and a message that names the usual causes; it does not fall back. Under Vite 7's dev server this affects the default `<VolumeProvider fileName>`: dependency pre-bundling moves the packages, so the built-in SharedWorker script URL returns 404. Exclude them from pre-bundling:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  optimizeDeps: { exclude: ['@opfs-vfs/opfs-vfs', '@opfs-vfs/react', '@opfs-vfs/plugin-subscriptions'] },
+});
+```
+
+Vite 8 needs no setting. Other bundlers and dev servers have not been tested. A Content-Security-Policy that blocks the worker script produces the same error. You can also pass a `sharedWorker` factory or set `transport="dedicated"`.
+
 A custom application worker must register the subscriptions plugin. `VolumeProvider` requests it automatically for managed volumes, so the page does not need `subscriptionsRequest()` or a `plugins` prop for subscriptions:
 
 ```ts

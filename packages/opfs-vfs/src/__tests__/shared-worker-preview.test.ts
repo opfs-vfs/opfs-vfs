@@ -132,6 +132,51 @@ it('reports a SharedWorker probe transport fault without treating it as unsuppor
   expect(port.closed).toBe(true);
 });
 
+it('explains a SharedWorker script that cannot be loaded and still rejects without falling back', async () => {
+  for (const transport of ['auto', 'shared-worker'] as const) {
+    const port = new FakePort(() => {});
+    const opening = openOpfsVfsWorker(`script-load-${crypto.randomUUID()}.bin`, {
+      transport,
+      sharedWorker: () => {
+        const endpoint = { port, onerror: null as ((event: ErrorEvent) => unknown) | null };
+        // What a browser reports when the worker script URL returns 404 or is blocked.
+        setTimeout(() => endpoint.onerror?.(new ErrorEvent('error')), 0);
+        return endpoint as unknown as SharedWorker;
+      },
+    });
+    const error = await opening.then(
+      () => undefined,
+      (reason: unknown) => reason as Error & { code?: string },
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(error?.code).toBe('VFS_WORKER_FAILED');
+    expect(error?.message).toMatch(/^The SharedWorker script could not be loaded\./);
+    expect(error?.message).toContain('pre-bundling');
+    expect(error?.message).toContain('Content-Security-Policy');
+    expect(error?.message).toContain('optimizeDeps.exclude');
+    expect(error?.message).toContain("`transport: 'dedicated'`");
+    expect(port.closed).toBe(true);
+  }
+});
+
+it('explains a SharedWorker that cannot be created while keeping the thrown error', async () => {
+  const refused = new DOMException('Refused to create a worker.', 'SecurityError');
+  const error = await openOpfsVfsWorker(`factory-throw-${crypto.randomUUID()}.bin`, {
+    sharedWorker: () => {
+      throw refused;
+    },
+  }).then(
+    () => undefined,
+    (reason: unknown) => reason,
+  );
+  // Same object, class and name; only the message gains the explanation.
+  expect(error).toBe(refused);
+  expect(refused).toBeInstanceOf(DOMException);
+  expect(refused.name).toBe('SecurityError');
+  expect(refused.message).toMatch(/^The SharedWorker could not be created: Refused to create a worker\. Usual causes:/);
+  expect(refused.message).toContain('optimizeDeps.exclude');
+});
+
 it('uses the requested initialization timeout for the SharedWorker probe', async () => {
   const port = new FakePort(() => {});
   await expect(
