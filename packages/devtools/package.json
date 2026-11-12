@@ -37,9 +37,7 @@
     "@opfs-vfs/file-preview": "workspace:*",
     "jszip": "3.10.2",
     "just-bash": "3.6.0",
-    "lucide-react": "1.72.0",
-    "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "lucide-react": "1.72.0"
   },
   "devDependencies": {
     "@opfs-vfs/opfs-vfs": "workspace:*",
@@ -49,12 +47,16 @@
     "@types/react-dom": "19.3.0",
     "@vitest/browser-playwright": "4.1.11",
     "playwright": "1.65.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "storybook": "10.6.7",
     "typescript": "7.0.2",
     "vite": "8.3.8",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@opfs-vfs/opfs-vfs": "workspace:^"
+    "@opfs-vfs/opfs-vfs": "workspace:^",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   }
 }

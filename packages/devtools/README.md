@@ -2,6 +2,14 @@
 
 Explore and manage real OPFS VFS volumes, with opt-in developer tools for debugging running applications. Automatic same-origin discovery, passive application attachments, independent workers for recognized closed volumes, file actions, a write-gated just-bash terminal, shared previews and a virtualized source editor.
 
+The panel renders with React 19. `react` and `react-dom` (`^19.0.0`) are peer dependencies, so the panel and your preview extensions share your application's React:
+
+```sh
+pnpm add -D @opfs-vfs/devtools react react-dom
+```
+
+Its dependencies (just-bash, JSZip, Base UI, Lucide and `@opfs-vfs/file-preview`) are imported, not compiled into the package, so your bundler and lockfile supply them. PDF previews start a module worker through `@opfs-vfs/file-preview`; on the Vite 7 development server follow that package's [bundler setup](https://github.com/opfs-vfs/opfs-vfs/tree/main/packages/file-preview#bundler-setup).
+
 ```ts
 if (import.meta.env.DEV) {
   await import('@opfs-vfs/devtools/styles.css');

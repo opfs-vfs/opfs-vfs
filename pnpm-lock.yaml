@@ -342,12 +342,6 @@ importers:
       lucide-react:
         specifier: 1.72.0
         version: 1.72.0(@types/react@19.3.0)(react@19.3.1)
-      react:
-        specifier: 19.3.1
-        version: 19.3.1
-      react-dom:
-        specifier: 19.3.1
-        version: 19.3.1(react@19.3.1)
     devDependencies:
       '@opfs-vfs/opfs-vfs':
         specifier: workspace:*
@@ -370,6 +364,12 @@ importers:
       playwright:
         specifier: 1.65.0
         version: 1.65.0
+      react:
+        specifier: 19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: 19.3.1
+        version: 19.3.1(react@19.3.1)
       storybook:
         specifier: 10.6.7
         version: 10.6.7(@types/react@19.3.0)(bufferutil@4.1.0)(prettier@3.9.8)(react@19.3.1)
@@ -419,25 +419,25 @@ importers:
   packages/file-preview:
     dependencies:
       '@codemirror/commands':
-        specifier: 6.11.1
+        specifier: ^6.11.1
         version: 6.11.1
       '@codemirror/language':
-        specifier: 6.13.1
+        specifier: ^6.13.1
         version: 6.13.1
       '@codemirror/language-data':
         specifier: ^6.5.2
         version: 6.5.2
       '@codemirror/search':
-        specifier: 6.7.2
+        specifier: ^6.7.2
         version: 6.7.2
       '@codemirror/state':
-        specifier: 6.7.6
+        specifier: ^6.7.6
         version: 6.7.6
       '@codemirror/view':
-        specifier: 6.43.15
+        specifier: ^6.43.15
         version: 6.43.15
       '@lezer/highlight':
-        specifier: 1.2.5
+        specifier: ^1.2.5
         version: 1.2.5
       pdfjs-dist:
         specifier: 6.5.438
