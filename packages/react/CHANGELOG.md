@@ -1,5 +1,29 @@
 # @opfs-vfs/react
 
+## 0.0.4
+
+### Patch Changes
+
+- cc26a55: Type declarations resolve under TypeScript's `node16` and `nodenext` module resolution. Relative imports now carry file extensions.
+- 6010a8b: `@opfs-vfs/react` and `@opfs-vfs/effect` require the exact `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions` versions they were built with, because their default workers include the storage engine. Upgrade the three together.
+
+  `@opfs-vfs/opfs-vfs` declares `"sideEffects": false`, and options marked internal no longer appear in its type declarations.
+
+- 5f7fca2: Read hooks no longer report `idle` for one render when a read is enabled, re-enabled, or newly started. They report `pending` until data arrives.
+- Updated dependencies [cc26a55]
+- Updated dependencies [6010a8b]
+- Updated dependencies [c775de1]
+- Updated dependencies [cf048fd]
+- Updated dependencies [452f840]
+- Updated dependencies [998ca7c]
+- Updated dependencies [cc37142]
+- Updated dependencies [a3eba3e]
+- Updated dependencies [19e80f5]
+- Updated dependencies [99ed87a]
+- Updated dependencies [3d32b9e]
+  - @opfs-vfs/opfs-vfs@2.2.0
+  - @opfs-vfs/plugin-subscriptions@1.3.0
+
 ## 0.0.3
 
 ### Patch Changes

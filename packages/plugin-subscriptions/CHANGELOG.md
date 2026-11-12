@@ -1,5 +1,27 @@
 # @opfs-vfs/plugin-subscriptions
 
+## 1.3.0
+
+### Minor Changes
+
+- cc37142: Breaking: a subscription target that contains a `.` or `..` path component is rejected with `EINVAL` at registration instead of being collapsed textually. Pass the canonical path, for example `realpath` of the directory plus the name. Names that merely contain dots are unaffected.
+
+### Patch Changes
+
+- cc26a55: Type declarations resolve under TypeScript's `node16` and `nodenext` module resolution. Relative imports now carry file extensions.
+- Updated dependencies [cc26a55]
+- Updated dependencies [6010a8b]
+- Updated dependencies [c775de1]
+- Updated dependencies [cf048fd]
+- Updated dependencies [452f840]
+- Updated dependencies [998ca7c]
+- Updated dependencies [cc37142]
+- Updated dependencies [a3eba3e]
+- Updated dependencies [19e80f5]
+- Updated dependencies [99ed87a]
+- Updated dependencies [3d32b9e]
+  - @opfs-vfs/opfs-vfs@2.2.0
+
 ## 1.2.0
 
 ### Minor Changes
