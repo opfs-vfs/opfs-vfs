@@ -14,7 +14,7 @@
     "duplicates": "fallow dupes",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only && oxfmt",
-    "release": "pnpm build && changeset publish",
+    "release": "pnpm --filter \"./packages/*\" build && changeset publish",
     "benchmark:collect": "pnpm --filter @opfs-vfs/website... build && pnpm --filter @opfs-vfs/website preview --host localhost"
   },
   "devDependencies": {
