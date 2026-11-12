@@ -163,7 +163,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@electric-sql/pglite-repl@0.4.4': bd2a58c293ea9e1bf8e4a9fe501bb92c073bec10aad1cf9d8346ebdf5f6181a7
+  '@electric-sql/pglite-repl@0.4.4': 03fa2ced813468510cd69403e68c64252b40aeb145cf7e18a2014216ca0715d4
   '@electric-sql/pglite@0.5.4': 5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7
 
 importers:
@@ -211,7 +211,7 @@ importers:
         version: 0.5.4(patch_hash=5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7)
       '@electric-sql/pglite-repl':
         specifier: 0.4.4
-        version: 0.4.4(patch_hash=bd2a58c293ea9e1bf8e4a9fe501bb92c073bec10aad1cf9d8346ebdf5f6181a7)(@babel/runtime@8.0.5)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/state@6.7.6)(@codemirror/theme-one-dark@6.1.3)(@electric-sql/pglite@0.5.4(patch_hash=5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7))(codemirror@6.0.2)
+        version: 0.4.4(patch_hash=03fa2ced813468510cd69403e68c64252b40aeb145cf7e18a2014216ca0715d4)(@babel/runtime@8.0.5)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/state@6.7.6)(@codemirror/theme-one-dark@6.1.3)(@electric-sql/pglite@0.5.4(patch_hash=5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7))(codemirror@6.0.2)
       '@mediapipe/tasks-genai':
         specifier: 0.10.30
         version: 0.10.30
@@ -6744,7 +6744,7 @@ snapshots:
       '@electric-sql/pglite': 0.5.4(patch_hash=5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7)
       react: 19.3.1
 
-  '@electric-sql/pglite-repl@0.4.4(patch_hash=bd2a58c293ea9e1bf8e4a9fe501bb92c073bec10aad1cf9d8346ebdf5f6181a7)(@babel/runtime@8.0.5)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/state@6.7.6)(@codemirror/theme-one-dark@6.1.3)(@electric-sql/pglite@0.5.4(patch_hash=5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7))(codemirror@6.0.2)':
+  '@electric-sql/pglite-repl@0.4.4(patch_hash=03fa2ced813468510cd69403e68c64252b40aeb145cf7e18a2014216ca0715d4)(@babel/runtime@8.0.5)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.2)(@codemirror/state@6.7.6)(@codemirror/theme-one-dark@6.1.3)(@electric-sql/pglite@0.5.4(patch_hash=5b5fd088967e310c25ee501e39972183e90b633824193d3230e9e51ebba9dce7))(codemirror@6.0.2)':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
       '@codemirror/commands': 6.11.1

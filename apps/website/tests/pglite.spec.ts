@@ -18,7 +18,10 @@ async function expectDatabaseReady(page: Page, expected: string | RegExp = /Lead
   await expect(page.getByRole('status')).toContainText(expected, { timeout: 65_000 });
 }
 
-test('leader handoff cancels pending debug metadata without an unhandled rejection', async ({ page, context }) => {
+test('leader handoff cancels pending metadata and schema requests without an unhandled rejection', async ({
+  page,
+  context,
+}) => {
   test.setTimeout(120_000);
   await page.goto('/demos/pglite/');
   await expectDatabaseReady(page, 'Leader');
@@ -28,12 +31,35 @@ test('leader handoff cancels pending debug metadata without an unhandled rejecti
   await follower.addInitScript(() => {
     // oxlint-disable-next-line typescript/unbound-method -- Called below with the original channel receiver.
     const postMessage = BroadcastChannel.prototype.postMessage;
+    const decoder = new TextDecoder();
     let requests = 0;
+    let afterFirstQuery = false;
+    // Calls made while no leader is connected are lost, which would leave the cancelled schema refresh hanging
+    // instead of failing. Deliver them once the new leader is connected.
+    let waiting: unknown[] | undefined;
     BroadcastChannel.prototype.postMessage = function (message) {
       if (message.type === 'rpc-call' && message.method === 'getDebugLevel') {
         document.documentElement.dataset.debugRequests = String(++requests);
         // Keep the first real metadata RPC pending until the leader closes.
         if (requests === 1) return;
+        // Later ones are sent when a leader has connected.
+        for (const call of waiting ?? []) postMessage.call(this, call);
+        waiting = undefined;
+      } else if (waiting && message.type === 'rpc-call') {
+        waiting.push(message);
+        return;
+      }
+      if (message.type === 'rpc-call' && message.method === 'execProtocolStream') {
+        const sql = decoder.decode(message.args[0]);
+        // The REPL refreshes its autocomplete schema after every query. Keep the refresh after the first query
+        // pending until the leader closes.
+        if (afterFirstQuery && sql.includes('information_schema.columns')) {
+          afterFirstQuery = false;
+          waiting = [];
+          document.documentElement.dataset.schemaRequest = 'pending';
+          return;
+        }
+        afterFirstQuery ||= sql.includes('before_handoff');
       }
       return postMessage.call(this, message);
     };
@@ -42,6 +68,7 @@ test('leader handoff cancels pending debug metadata without an unhandled rejecti
   await expectDatabaseReady(follower, 'Connected');
   await query(follower, 'SELECT 42 AS before_handoff');
   await expect(follower.locator('html')).toHaveAttribute('data-debug-requests', '1');
+  await expect(follower.locator('html')).toHaveAttribute('data-schema-request', 'pending');
   await page.close();
   await expect(follower.getByRole('status')).toContainText('Leader', { timeout: 20_000 });
   await expect(follower.locator('html')).toHaveAttribute('data-debug-requests', '2');

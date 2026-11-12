@@ -12,3 +12,11 @@ export async function continueDialog(page: Page) {
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
 }
+
+// `Locator.fill` selects the old text through the DOM. An editor transaction that lands before the browser
+// reports that selection, such as the language finishing loading, resets it, and the new text is inserted in front
+// of the old. The editor's own select-all keeps the selection in its state.
+export async function fillEditor(page: Page, label: string, text: string) {
+  await page.getByLabel(label).press('ControlOrMeta+a');
+  await page.keyboard.insertText(text);
+}

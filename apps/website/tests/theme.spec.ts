@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { choose } from './ui';
+import { choose, fillEditor } from './ui';
 
 test('select controls support keyboard choice and return focus when dismissed', async ({ page }) => {
   await page.goto('/demos/');
@@ -45,7 +45,7 @@ test('changing theme preserves workspace and unsaved editor content', async ({ p
   await page.goto('/demos/filesystem/');
   await expect(page.getByLabel('Shell command')).toBeVisible();
   await page.getByRole('button', { name: 'Source', exact: true }).click();
-  await page.getByLabel('Edit README.md').fill('# Still editing');
+  await fillEditor(page, 'Edit README.md', '# Still editing');
   await page.getByLabel('Shell command').fill('echo theme-safe');
   for (const theme of ['Dark', 'Light']) {
     await choose(page, 'Color theme', theme);
