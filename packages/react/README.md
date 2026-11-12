@@ -8,6 +8,8 @@ Install the preview package with its core and subscriptions peers:
 npm install @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions @opfs-vfs/react
 ```
 
+Use the exact core and subscriptions versions listed in the SDK's peer dependencies, and upgrade the three packages together. The bundled default workers contain a copy of the storage engine, so a different core version would run a different engine than the one you installed.
+
 ```tsx
 import { useState } from 'react';
 import { VolumeProvider, useFileContent, useVolumeClient } from '@opfs-vfs/react';

@@ -2,6 +2,11 @@
 
 Effect v4 adapter for worker-backed OPFS volumes and direct mounts. Requires stable Effect v4, starting at `4.1.0` and excluding v5 and prereleases.
 
+Install it with the exact `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions`
+versions listed in its peer dependencies, and upgrade the three packages
+together. The default worker contains a copy of the storage engine, so a
+different core version would run a different engine than the one you installed.
+
 ```ts
 import { Effect } from 'effect';
 import { Volume } from '@opfs-vfs/effect';

@@ -9,6 +9,8 @@ The React SDK is available as the preview `@opfs-vfs/react` package. Install it 
 npm install @opfs-vfs/react @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions
 ```
 
+Use the exact core and subscriptions versions listed in the SDK's peer dependencies, and upgrade the three packages together. The bundled default workers contain a copy of the storage engine, so a different core version would run a different engine than the one you installed.
+
 ## Start one managed volume
 
 The page and its worker must use the same OPFS VFS and subscriptions package versions. Serve the page with the [cross-origin isolation headers](/docs/guides/browser-setup/) required for `SharedArrayBuffer`.

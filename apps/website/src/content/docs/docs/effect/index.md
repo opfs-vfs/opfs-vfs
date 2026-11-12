@@ -11,6 +11,8 @@ Use stable Effect v4 with this adapter. The supported range is `>=4.1.0 <5.0.0`,
 npm install @opfs-vfs/effect @opfs-vfs/opfs-vfs @opfs-vfs/plugin-subscriptions effect@^4.1.0
 ```
 
+Use the exact `@opfs-vfs/opfs-vfs` and `@opfs-vfs/plugin-subscriptions` versions listed in the adapter's peer dependencies, and upgrade the three packages together. The default worker contains a copy of the storage engine, so a different core version would run a different engine than the one you installed.
+
 ## Start one managed session
 
 Run this in a browser application served over HTTPS or localhost with the [cross-origin isolation headers](/docs/guides/browser-setup/). Build one runtime for the session and reuse it for each save.
