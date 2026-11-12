@@ -60,7 +60,7 @@ function AiChat({
   runtime: RefObject<Runtime | null>;
   interruptRuntime: (message: string) => void;
 }) {
-  const toolBash = useMemo(() => createAiShell(api.session.fs as never), [api.session]);
+  const toolBash = useMemo(() => createAiShell(api.session.shellFs), [api.session]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState('');

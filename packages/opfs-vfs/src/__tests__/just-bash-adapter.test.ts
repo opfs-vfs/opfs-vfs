@@ -357,6 +357,128 @@ for (const backend of backends) {
       expect(await fs.exists('/tree/copy')).toBe(false);
     });
 
+    it('does not create a stray parent for a path with a dot-dot component', async () => {
+      const fs = await createAdapter();
+      await expect(fs.writeFile('/newdir/../w.txt', 'x')).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.appendFile('/newdir/../w.txt', 'x')).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await fs.getAllPaths()).toEqual(['/']);
+
+      // The volume resolves it once the directory exists.
+      await fs.mkdir('/newdir');
+      await fs.writeFile('/newdir/../w.txt', 'x');
+      expect(await fs.readFile('/w.txt')).toBe('x');
+    });
+
+    it('does not create a directory for a path that ends in a dot', async () => {
+      const fs = await createAdapter();
+      await expect(fs.writeFile('/q/.', 'x')).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await fs.exists('/q')).toBe(false);
+    });
+
+    it('copies a directory to a destination written through dot-dot', async () => {
+      const fs = await createAdapter();
+      await fs.writeFile('/src/f.txt', 'f');
+      await fs.cp('/src', '/src/../dst', { recursive: true });
+      expect(await fs.readFile('/dst/f.txt')).toBe('f');
+      // Into itself through dot-dot is still refused.
+      await expect(fs.cp('/src', '/dst/../src/inner', { recursive: true })).rejects.toMatchObject({ code: 'EINVAL' });
+      await expect(fs.cp('/src', '/src/sub/..', { recursive: true })).rejects.toMatchObject({ code: 'EINVAL' });
+    });
+
+    it('still creates parents and guards self-copies for dot-free paths', async () => {
+      const fs = await createAdapter();
+      await fs.writeFile('/a/b/c.txt', 'c');
+      expect((await fs.stat('/a/b')).isDirectory).toBe(true);
+      await expect(fs.cp('/a', '/a/b/deeper/copy', { recursive: true })).rejects.toMatchObject({ code: 'EINVAL' });
+      await expect(fs.cp('/a', '/a', { recursive: true })).rejects.toMatchObject({ code: 'EINVAL' });
+      expect(await fs.exists('/a/b/deeper')).toBe(false);
+    });
+
+    it('forJustBash lists paths synchronously and follows every path-changing call made through it', async () => {
+      const fs = await createAdapter();
+      await fs.writeFile('/before/existing.txt', 'x');
+      const shell = fs.forJustBash();
+      const listed = () => new Set(shell.getAllPaths());
+
+      // Any call through the wrapper waits for the listing taken at creation.
+      expect(await shell.exists('/before')).toBe(true);
+      expect(Array.isArray(shell.getAllPaths())).toBe(true);
+      expect(listed()).toEqual(new Set(['/', '/before', '/before/existing.txt']));
+
+      // No refresh between the call and the synchronous read: the call itself settles after its listing.
+      await shell.writeFile('/made/note.txt', 'note');
+      expect(listed()).toContain('/made/note.txt');
+      await shell.appendFile('/made/log.txt', 'line');
+      expect(listed()).toContain('/made/log.txt');
+      await shell.mkdir('/empty');
+      expect(listed()).toContain('/empty');
+      await shell.cp('/made', '/copy', { recursive: true });
+      expect(listed()).toContain('/copy/note.txt');
+      await shell.mv('/made/note.txt', '/made/renamed.txt');
+      expect(listed()).toContain('/made/renamed.txt');
+      expect(listed()).not.toContain('/made/note.txt');
+      await shell.symlink('/made/renamed.txt', '/soft');
+      await shell.link('/made/renamed.txt', '/hard');
+      expect(listed()).toContain('/soft');
+      expect(listed()).toContain('/hard');
+      await shell.rm('/copy', { recursive: true });
+      expect([...listed()].filter((path) => path.startsWith('/copy'))).toEqual([]);
+
+      // Callers cannot corrupt the cached list.
+      shell.getAllPaths().length = 0;
+      expect(listed().size).toBeGreaterThan(1);
+      expect(shell.resolvePath('/made', '../x')).toBe('/x');
+    });
+
+    it('forJustBash relists after a failed call that changed part of the tree', async () => {
+      context = await backend.create();
+      class Partial extends OpfsVfsJustBashAdapter {
+        override async rm(...args: Parameters<OpfsVfsJustBashAdapter['rm']>) {
+          await this.writeFile('/partial/created.txt', 'x');
+          throw new Error(`failed after changing the tree: ${args[0]}`);
+        }
+      }
+      const partial = new Partial((context.fs as unknown as { vfs: OpfsVfsWorker }).vfs);
+      const shell = partial.forJustBash();
+      await shell.refreshPaths();
+      expect(shell.getAllPaths()).toEqual(['/']);
+      await expect(shell.rm('/anything', { recursive: true })).rejects.toThrow('failed after changing the tree');
+      expect(new Set(shell.getAllPaths())).toEqual(new Set(['/', '/partial', '/partial/created.txt']));
+    });
+
+    it('forJustBash does not see changes made outside the wrapper until refreshPaths()', async () => {
+      const fs = await createAdapter();
+      const shell = fs.forJustBash();
+      await shell.refreshPaths();
+      expect(shell.getAllPaths()).toEqual(['/']);
+
+      // Another tab, another client, or the adapter used directly.
+      await fs.writeFile('/outside.txt', 'x');
+      expect(shell.getAllPaths()).toEqual(['/']);
+      // Reads through the wrapper do not relist either.
+      expect(await shell.readFile('/outside.txt')).toBe('x');
+      expect(shell.getAllPaths()).toEqual(['/']);
+
+      await shell.refreshPaths();
+      expect(new Set(shell.getAllPaths())).toEqual(new Set(['/', '/outside.txt']));
+    });
+
+    it('forJustBash runs a subclass override of a forwarded operation', async () => {
+      context = await backend.create();
+      const writes: string[] = [];
+      class Recording extends OpfsVfsJustBashAdapter {
+        override async writeFile(...args: Parameters<OpfsVfsJustBashAdapter['writeFile']>) {
+          writes.push(args[0]);
+          await super.writeFile(...args);
+        }
+      }
+      const recording = new Recording((context.fs as unknown as { vfs: OpfsVfsWorker }).vfs);
+      const shell = recording.forJustBash();
+      await shell.writeFile('/recorded.txt', 'x');
+      expect(writes).toEqual(['/recorded.txt']);
+      expect(shell.getAllPaths()).toContain('/recorded.txt');
+    });
+
     it('decodes ascii by masking the high bit', async () => {
       const fs = await createAdapter();
 

@@ -1,4 +1,4 @@
-import { lexicalFsPath, normalizeFsPath, parentPath } from './fs-path';
+import { baseName, lexicalFsPath, normalizeFsPath, parentPath } from './fs-path';
 import type { OpfsVfsWorker } from './index_internal';
 import type { OpfsVfs } from './opfs-vfs';
 import { OpenFlags, type VfsDirEntry, type MkdirOptions as VfsMkdirOptions, type VfsStat } from './opfs-vfs';
@@ -217,6 +217,10 @@ function isSymbolicLinkMode(mode: number): boolean {
   return (mode & 0o170000) === 0o120000;
 }
 
+function hasDotComponent(path: string): boolean {
+  return path.split('/').some((part) => part === '.' || part === '..');
+}
+
 function isSameOrDescendantPath(parent: string, child: string): boolean {
   if (parent === child) {
     return true;
@@ -323,6 +327,19 @@ function mapStat(stat: VfsStat): FsStat {
   };
 }
 
+type ForwardedMethod = Exclude<keyof OpfsVfsJustBashAdapter, 'resolvePath' | 'getAllPaths' | 'forJustBash'>;
+
+/**
+ * What {@link OpfsVfsJustBashAdapter.forJustBash} returns: the adapter's operations with the synchronous
+ * `getAllPaths()` of just-bash's `IFileSystem`, plus `refreshPaths()` to re-read the cached list on demand.
+ */
+export interface JustBashFileSystem extends Omit<OpfsVfsJustBashAdapter, 'getAllPaths' | 'forJustBash'> {
+  /** The paths as of the last listing; see {@link OpfsVfsJustBashAdapter.forJustBash} for when one is taken. */
+  getAllPaths(): string[];
+  /** Take a listing now. Resolves once `getAllPaths()` reflects it. */
+  refreshPaths(): Promise<void>;
+}
+
 export class OpfsVfsJustBashAdapter {
   private readonly vfs: VfsApi;
   private readonly readyPromise: Promise<void>;
@@ -379,6 +396,11 @@ export class OpfsVfsJustBashAdapter {
   }
 
   private async ensureParentDirectory(path: string) {
+    // What a dotted path's parent is depends on the volume's resolution, which a textual parent cannot know:
+    // hand the path over as it is and let the volume decide.
+    if (hasDotComponent(path)) {
+      return;
+    }
     const parent = parentPath(path);
     if (parent === '/') {
       return;
@@ -615,7 +637,12 @@ export class OpfsVfsJustBashAdapter {
       throwError(`EISDIR: is a directory, cp '${source.path}'`, 'EISDIR');
     }
 
-    if (isSameOrDescendantPath(source.path, target.path) || (await this.copiesIntoItself(source.path, target.path))) {
+    // Dotted paths have no textual prefix to compare: only the locations the volume reaches count.
+    const dotted = hasDotComponent(source.path) || hasDotComponent(target.path);
+    if (
+      (!dotted && isSameOrDescendantPath(source.path, target.path)) ||
+      (await this.copiesIntoItself(source.path, target.path))
+    ) {
       throwError(`EINVAL: cannot copy directory into itself, cp '${target.path}'`, 'EINVAL');
     }
 
@@ -634,16 +661,25 @@ export class OpfsVfsJustBashAdapter {
     await this.utimes(target.vfsPath, stat.mtime, stat.mtime);
   }
 
-  /** Lexical checks miss symlinked parents: compare the real locations. */
+  /** Lexical checks miss symlinked parents and dot components: compare the real locations. */
   private async copiesIntoItself(source: string, target: string): Promise<boolean> {
-    const slash = target.lastIndexOf('/');
-    let parent: string;
+    const last = baseName(target);
+    let realTarget: string;
     try {
-      parent = await this.realpath(slash <= 0 ? '/' : target.slice(0, slash));
+      if (last === '.' || last === '..') {
+        realTarget = await this.realpath(target);
+      } else {
+        const parent = await this.realpath(parentPath(target));
+        realTarget = parent === '/' ? `/${last}` : `${parent}/${last}`;
+      }
     } catch {
-      return false; // The parent does not exist yet, so it cannot be inside the source.
+      // The parent does not exist yet, so it cannot be inside the source. A dotted path that cannot be resolved
+      // has no real location to compare: refuse what is textually inside the source rather than risk a self-copy.
+      return (
+        (hasDotComponent(source) || hasDotComponent(target)) &&
+        isSameOrDescendantPath(lexicalFsPath(source).path, lexicalFsPath(target).path)
+      );
     }
-    const realTarget = parent === '/' ? target.slice(slash) : `${parent}${target.slice(slash)}`;
     return isSameOrDescendantPath(await this.realpath(source), realTarget);
   }
 
@@ -681,6 +717,81 @@ export class OpfsVfsJustBashAdapter {
 
   async getAllPaths(): Promise<string[]> {
     return await this.call<string[]>('listPaths', 'listPathsSync', 'scandir', '/', '/');
+  }
+
+  /**
+   * The filesystem to hand to just-bash: `new Bash({ fs: adapter.forJustBash() })`.
+   * It forwards every operation to this adapter and adds the synchronous
+   * `getAllPaths()` just-bash's `IFileSystem` requires, served from a cached list.
+   *
+   * What the cached list guarantees:
+   * - A listing is taken when the wrapper is created, and again after every call
+   *   through the wrapper that can add, remove or rename paths (`writeFile`,
+   *   `appendFile`, `mkdir`, `rm`, `cp`, `mv`, `symlink`, `link`). Such a call
+   *   settles only after its listing has finished, so the list already shows the
+   *   change when the shell moves on.
+   * - Every call through the wrapper waits for the first listing. Before any call
+   *   has settled, `getAllPaths()` may still return an empty list.
+   * - Changes made any other way are NOT seen until the next listing: another
+   *   tab or client, this adapter used directly, or a second wrapper. Await
+   *   `refreshPaths()` to take a listing on demand, for example before a command.
+   *
+   * A failed listing after a successful operation keeps the previous list and
+   * does not fail the operation; `refreshPaths()` itself rejects.
+   */
+  forJustBash(): JustBashFileSystem {
+    let paths: string[] = [];
+    let started = 0;
+    let applied = 0;
+    // ponytail: every path-changing call relists the whole volume, O(paths) each. Update the list from the
+    // operation instead if a shell loop over a very large volume ever makes this the bottleneck.
+    const refreshPaths = async () => {
+      const token = ++started;
+      const listed = await this.getAllPaths();
+      // The worker answers in order, but never let an older listing replace a newer one.
+      if (token > applied) {
+        applied = token;
+        paths = listed;
+      }
+    };
+    const firstListing = refreshPaths().catch(() => {});
+    const forward = <K extends ForwardedMethod>(name: K, changesPaths = false) =>
+      (async (...args: unknown[]) => {
+        await firstListing;
+        // Looked up per call so a subclass override of the operation is the one that runs.
+        const call = () => (this[name] as (...callArgs: unknown[]) => Promise<unknown>).apply(this, args);
+        if (!changesPaths) return await call();
+        try {
+          return await call();
+        } finally {
+          // Also after a failure: a recursive copy or removal may have changed part of the tree.
+          await refreshPaths().catch(() => {});
+        }
+      }) as OpfsVfsJustBashAdapter[K];
+    return {
+      readFile: forward('readFile'),
+      readFileBuffer: forward('readFileBuffer'),
+      writeFile: forward('writeFile', true),
+      appendFile: forward('appendFile', true),
+      exists: forward('exists'),
+      stat: forward('stat'),
+      mkdir: forward('mkdir', true),
+      readdir: forward('readdir'),
+      readdirWithFileTypes: forward('readdirWithFileTypes'),
+      rm: forward('rm', true),
+      cp: forward('cp', true),
+      mv: forward('mv', true),
+      resolvePath: (base, path) => this.resolvePath(base, path),
+      getAllPaths: () => paths.slice(),
+      refreshPaths,
+      chmod: forward('chmod'),
+      symlink: forward('symlink', true),
+      link: forward('link', true),
+      readlink: forward('readlink'),
+      lstat: forward('lstat'),
+      realpath: forward('realpath'),
+      utimes: forward('utimes'),
+    };
   }
 
   async chmod(path: string, mode: number): Promise<void> {

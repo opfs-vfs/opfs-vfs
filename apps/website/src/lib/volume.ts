@@ -73,7 +73,9 @@ export async function openVolume(
     await navigator.locks.request(lockName, async () => {
       if (!(await fs.exists('/workspace'))) await fs.mkdir('/workspace', { recursive: true });
     });
-    const bash = new Bash({ cwd: '/workspace', env: { HOME: '/workspace', USER: 'visitor' }, fs: fs as never });
+    // One shell filesystem per session: its synchronous path list follows the shells that share it.
+    const shellFs = fs.forJustBash();
+    const bash = new Bash({ cwd: '/workspace', env: { HOME: '/workspace', USER: 'visitor' }, fs: shellFs });
     if (registerOnOpen) await registerVolume(namespace, name);
     const changes = new BroadcastChannel(`opfs-vfs:website:${volumeFile}:changes`);
     let closed = false;
@@ -106,6 +108,7 @@ export async function openVolume(
       bash,
       changes,
       fs,
+      shellFs,
       name,
       volumeFile,
       read<T>(operation: (filesystem: OpfsVfsJustBashAdapter) => Promise<T>) {

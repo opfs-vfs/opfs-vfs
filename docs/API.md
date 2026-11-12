@@ -5,7 +5,7 @@
 | `@opfs-vfs/opfs-vfs`                | Direct `OpfsVfs`, `OpenFlags`, errors, `peekVolume`, `deleteVolume`, persistence types                                                     |
 | `@opfs-vfs/opfs-vfs/worker`         | `openOpfsVfsWorker`, `OpfsVfsWorker`, `getSupport`, `createSharedWorkerFollower`, `probeSharedWorker`, `startVfsSharedWorker`, and options |
 | `@opfs-vfs/opfs-vfs/pglite`         | `OpfsVfsPGliteAdapter` and its synchronous VFS interface                                                                                   |
-| `@opfs-vfs/opfs-vfs/just-bash`      | `OpfsVfsJustBashAdapter` and structural filesystem types                                                                                   |
+| `@opfs-vfs/opfs-vfs/just-bash`      | `OpfsVfsJustBashAdapter`, its `forJustBash()` filesystem, and structural filesystem types                                                  |
 | `@opfs-vfs/opfs-vfs/wasmer`         | `OpfsVfsWasmerAdapter` and `WasmerWorkspace` for explicit workspace copies                                                                 |
 | `@opfs-vfs/opfs-vfs/wasmer-sync`    | Experimental `createWasmerFileSystem` live synchronous filesystem provider                                                                 |
 | `@opfs-vfs/opfs-vfs/duckdb`         | Experimental `createDuckDBRuntime` synchronous DuckDB-Wasm filesystem adapter                                                              |
@@ -44,7 +44,7 @@ Every path is resolved from the volume root, one component at a time, as POSIX d
 
 Breaking change from earlier versions, which collapsed `..` textually before looking anything up: `/missing/../file` now fails with `ENOENT` instead of reaching `/file`, `/file/..` and `/file/.` fail with `ENOTDIR`, and `..` after a symbolic link leads to the parent of the link's target instead of the parent of the link.
 
-The `just-bash` adapter's `resolvePath()` remains the shell's textual path arithmetic (`cd ..` from `/a/b` is `/a`); its file methods pass paths through unchanged. The live Wasmer provider (`createWasmerFileSystem`) still rejects paths containing `.` or `..` with `EINVAL`. Subscription targets are textual patterns, not lookups: they are compared with event paths after textual normalization.
+The `just-bash` adapter's `resolvePath()` remains the shell's textual path arithmetic (`cd ..` from `/a/b` is `/a`); its file methods pass paths through unchanged and do not create parent directories for a path with a `.` or `..` component: the volume resolves it, so `/newdir/../w.txt` fails with `ENOENT` when `/newdir` does not exist. Pass `adapter.forJustBash()` to the shell: `new Bash({ fs: adapter.forJustBash() })`. just-bash requires a synchronous `getAllPaths()`, which `forJustBash()` serves from a cached list. The list is read when the wrapper is created and again after every call through the wrapper that can add, remove or rename paths; such a call settles only after the list is current. Changes made any other way (another tab or client, or the adapter used directly) are not seen until the next listing: await `refreshPaths()` on the wrapper when you need them, for example before a command. The adapter's own `getAllPaths()` stays asynchronous and always reads the volume. The live Wasmer provider (`createWasmerFileSystem`) still rejects paths containing `.` or `..` with `EINVAL`. Subscription targets are textual patterns, not lookups: they are compared with event paths after textual normalization.
 
 ## Storage defaults
 

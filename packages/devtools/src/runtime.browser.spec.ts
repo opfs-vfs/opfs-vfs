@@ -99,6 +99,23 @@ test('real application attachment, permissions, conditional saves, exclusive cop
     session.setWrites(name, false);
     await expect(session.run(name, 'printf denied > /blocked.txt')).rejects.toThrow('Enable writes');
     expect(await owner.exists('/blocked.txt')).toBe(false);
+    // Every shell mutation is refused on a read-only connection, not only file writes.
+    for (const command of [
+      'mkdir /blocked-dir',
+      'rm /note.txt',
+      'cp /note.txt /blocked-copy.txt',
+      'chmod 600 /note.txt',
+      'ln -s /note.txt /blocked-link',
+      'ln /note.txt /blocked-hard-link',
+      'touch /note.txt',
+    ]) {
+      // Each of these succeeds on a writable connection; some commands replace the refusal text with their own.
+      expect((await session.run(name, command)).exitCode, command).not.toBe(0);
+    }
+    expect((await session.run(name, 'mkdir /blocked-dir')).stderr).toContain('Enable writes');
+    expect(await owner.exists('/note.txt')).toBe(true);
+    expect(await owner.exists('/blocked-dir')).toBe(false);
+    expect(await owner.exists('/blocked-link')).toBe(false);
     session.dispose();
     await owner.writeFileBuffer('/after-detach.txt', encode('application is still alive'));
     expect(await owner.exists('/after-detach.txt')).toBe(true);
