@@ -30,6 +30,8 @@ const RECOVERY_WAIT_MS = 1000;
 // while still waiting for the caller to consume a RESULT/ERROR frame, the
 // caller is presumed dead and the slot is reset to IDLE.
 const CONSUMER_WAIT_MS = 5000;
+// How long call() waits for a response unless the caller passes its own deadline.
+const DEFAULT_CALL_TIMEOUT_MS = 30000;
 
 // PERF-11: shared encoder/decoder hoisted to module scope (mirrors data-wal.ts)
 // — TextEncoder/TextDecoder are reusable and thread-confined here, so a single
@@ -181,9 +183,23 @@ export class SyncMessenger {
    * instead of allocating an intermediate buffer — the zero-extra-copy path for
    * readInto. The returned header result then carries no `data` field. Sink
    * contents are unspecified if the call throws.
+   *
+   * `opts.timeoutMs` replaces the default 30s response deadline, so a command
+   * that scales with the volume (a durability barrier) can wait as long as it
+   * does on the asynchronous path.
    */
-  call<T = unknown>(type: string, payload: unknown, data?: Uint8Array, opts?: { dataSink?: Uint8Array }): T {
+  call<T = unknown>(
+    type: string,
+    payload: unknown,
+    data?: Uint8Array,
+    opts?: { dataSink?: Uint8Array; timeoutMs?: number },
+  ): T {
     try {
+      const requested = opts?.timeoutMs;
+      const timeoutMs =
+        typeof requested === 'number' && Number.isFinite(requested) && requested > 0
+          ? requested
+          : DEFAULT_CALL_TIMEOUT_MS;
       if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         throw new Error('Atomics.wait cannot be called on the main thread.');
       }
@@ -222,11 +238,11 @@ export class SyncMessenger {
       Atomics.store(this.int32, STATUS_SLOT, Status.COMMAND);
       Atomics.notify(this.int32, STATUS_SLOT);
 
-      const waitResult = this.waitForStatusChange(Status.COMMAND, 30000);
+      const waitResult = this.waitForStatusChange(Status.COMMAND, timeoutMs);
       if (waitResult === 'timed-out') {
         // Do NOT reset the slot here: the worker may still be running and would
         // race the next call. Leave it as-is; the next call() recovers (above).
-        throw new Error(`VFS worker did not respond within 30s (command: ${type})`);
+        throw new Error(`VFS worker did not respond within ${timeoutMs / 1000}s (command: ${type})`);
       }
       const status = Atomics.load(this.int32, STATUS_SLOT);
 
@@ -349,7 +365,14 @@ export class SyncMessenger {
       // already abandoned this request (timeout) and reused the region.
       if (callIdStale(expectedCallId)) return;
       const encoded = sharedEncoder.encode(JSON.stringify(header));
-      this.ensureFits('SyncMessenger.listen response', encoded.length, data?.length ?? 0);
+      try {
+        this.ensureFits('SyncMessenger.listen response', encoded.length, data?.length ?? 0);
+      } catch (error) {
+        // Reads and writes are chunked by the proxy, but a JSON result (a huge
+        // directory listing) is one frame. Give that failure a code so an errno
+        // mapper does not mistake it for a missing path.
+        throw Object.assign(error as Error, { code: 'EOVERFLOW' });
+      }
 
       this.int32[HEADER_LEN_SLOT] = encoded.length;
       new Uint8Array(this.sab, PAYLOAD_OFFSET).set(encoded);

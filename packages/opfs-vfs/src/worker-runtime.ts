@@ -167,6 +167,15 @@ function getNumber(payload: CommandPayload, key: string, opts?: { signed?: boole
   return value;
 }
 
+/** Fractional milliseconds are fine; metadata stores unsigned 32-bit seconds, so anything outside that range would wrap on reopen. */
+function getTime(payload: CommandPayload, key: string): number {
+  const value = payload[key];
+  if (typeof value !== 'number' || !(value >= 0 && value < 2 ** 32 * 1000)) {
+    throw createVfsError('EINVAL', undefined, `Invalid numeric payload field: ${key}`);
+  }
+  return value;
+}
+
 function getOptionalNumber(payload: CommandPayload, key: string): number | undefined {
   const value = payload[key];
   if (value === undefined) return undefined;
@@ -762,7 +771,7 @@ async function handleSyncCommand(
       vfs.chmodSync(getString(p, 'path'), getNumber(p, 'mode'));
       return { result: 'OK' };
     case 'UTIMES':
-      vfs.utimesSync(getString(p, 'path'), getNumber(p, 'atimeMs'), getNumber(p, 'mtimeMs'));
+      vfs.utimesSync(getString(p, 'path'), getTime(p, 'atimeMs'), getTime(p, 'mtimeMs'));
       return { result: 'OK' };
     case 'SYMLINK':
       vfs.symlinkSync(getString(p, 'target'), getString(p, 'path'), getOptionalNumber(p, 'mode'));

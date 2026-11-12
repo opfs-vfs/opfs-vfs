@@ -5,10 +5,14 @@ import { deleteVolume } from '../volume-files';
 import { OpfsVfsWorkerClient } from '../worker-client';
 import { changesTransportRequest } from './changes-transport-plugin';
 import {
+  announcedSharedProfile,
+  announcesOwnerLiveness,
   createMountProfile,
   createSharedMountProfile,
   mountProfileMismatch,
+  OWNER_LIVENESS_CAPABILITY,
   sharedMountProfileMismatch,
+  type SharedMountProfile,
 } from '../worker-plugins';
 
 class FakePort {
@@ -221,6 +225,240 @@ it('does not fall back after a successful probe whose fresh ATTACH port times ou
   expect(attached).toContainEqual(expect.objectContaining({ type: 'CANCEL' }));
 });
 
+it('asks the shared owner for a persistence snapshot as soon as a lone follower is ready', async () => {
+  const fileName = `shared-persistence-${crypto.randomUUID()}.bin`;
+  const generation = crypto.randomUUID();
+  const client = new OpfsVfsWorkerClient(
+    fileName,
+    { followerOnly: { generation, profile: createSharedMountProfile([]) } },
+    () => {
+      throw new Error('shared followers never spawn workers');
+    },
+  );
+  const channel = (client as unknown as { channel: BroadcastChannel }).channel;
+  const posted: Record<string, unknown>[] = [];
+  const post = vi.spyOn(channel, 'postMessage').mockImplementation((message) => void posted.push(message));
+  try {
+    await client.ready;
+    expect(client.getStatus()).toMatchObject({ state: 'ready', persistence: null });
+    // No other page pings and no owner announcement reaches this channel: the follower must ask by itself.
+    await waitFor(() => posted.some(({ type }) => type === 'PERSISTENCE_REQUEST'));
+    const request = posted.find(({ type }) => type === 'PERSISTENCE_REQUEST')!;
+    expect(request).toMatchObject({ version: 1, generation });
+    channel.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'PERSISTENCE_FRAME',
+          request: request.request,
+          payload: {
+            version: 1,
+            generation,
+            sequence: 1,
+            state: 'clean',
+            failureRevision: 0,
+            lastError: null,
+            lastSalvage: null,
+          },
+        },
+      }),
+    );
+    expect(client.getStatus().persistence).toMatchObject({ state: 'clean', failureRevision: 0 });
+  } finally {
+    post.mockRestore();
+    client.dispose();
+  }
+});
+
+const lockNames = async (state: 'held' | 'pending') =>
+  ((await navigator.locks.query())[state] ?? []).map((lock) => lock.name);
+
+it('keeps the liveness capability optional so pages and hosts of different builds still attach', () => {
+  const required = createSharedMountProfile([]);
+  const announced = announcedSharedProfile(required);
+
+  expect(announced.capabilities).toContain(OWNER_LIVENESS_CAPABILITY);
+  expect(required.capabilities).not.toContain(OWNER_LIVENESS_CAPABILITY);
+  // An older follower validates a newer owner's announcement against its own required profile.
+  expect(sharedMountProfileMismatch(announced, required)).toBeUndefined();
+  // A newer follower validates an older owner's announcement the same way, and learns there is no liveness lock.
+  expect(sharedMountProfileMismatch(required, required)).toBeUndefined();
+  expect(announcesOwnerLiveness(required)).toBe(false);
+  expect(announcesOwnerLiveness(announced)).toBe(true);
+});
+
+for (const hostAnnouncesLiveness of [true, false]) {
+  it(`watches the ${hostAnnouncesLiveness ? 'liveness' : 'coordinator'} lock when the host ${
+    hostAnnouncesLiveness ? 'announces' : 'does not announce'
+  } owner liveness`, async () => {
+    const fileName = `shared-watch-${crypto.randomUUID()}.bin`;
+    const generation = crypto.randomUUID();
+    const coordinator = `opfs-vfs-lock-${fileName}`;
+    const liveness = `opfs-vfs-owner-${fileName}-${generation}`;
+    const watched = hostAnnouncesLiveness ? liveness : coordinator;
+    let releaseOwner!: () => void;
+    const ownerGone = new Promise<void>((resolve) => (releaseOwner = resolve));
+    // The test stands in for the owner and holds what an owner of that build holds.
+    const owned = [coordinator, ...(hostAnnouncesLiveness ? [liveness] : [])].map((name) =>
+      navigator.locks.request(name, () => ownerGone),
+    );
+    await waitFor(async () => (await lockNames('held')).includes(watched));
+    const port: FakePort = new FakePort((message) => {
+      const { type, profile } = message as { type: string; profile: SharedMountProfile };
+      if (type !== 'ATTACH') return;
+      queueMicrotask(() =>
+        port.onmessage?.({
+          data: {
+            type: 'READY',
+            generation,
+            profile: hostAnnouncesLiveness ? announcedSharedProfile(profile) : profile,
+          },
+        } as MessageEvent),
+      );
+    });
+    const client = await createSharedWorkerFollower(fileName, {}, worker(port));
+    try {
+      await client.ready;
+      await waitFor(async () => (await lockNames('pending')).includes(watched));
+      // With a liveness lock, a follower never queues on the lock the next owner has to claim.
+      expect((await lockNames('pending')).includes(coordinator)).toBe(!hostAnnouncesLiveness);
+      expect(client.getStatus().state).toBe('ready');
+
+      releaseOwner();
+      await waitFor(() => client.disposed);
+      expect(client.getStatus()).toMatchObject({ state: 'failed', error: { code: 'VFS_ATTACHMENT_LOST' } });
+    } finally {
+      releaseOwner();
+      await Promise.all(owned);
+      client.dispose();
+    }
+  });
+}
+
+it('holds the liveness lock for a shared owner generation before announcing it', async () => {
+  const fileName = `shared-owner-liveness-${crypto.randomUUID()}.bin`;
+  const coordinator = `opfs-vfs-lock-${fileName}`;
+  // The owner client is the one a SharedWorker host creates; a dedicated worker stands in for its runtime
+  // so the mount also works where SharedWorkers cannot open sync access handles.
+  const owner = new OpfsVfsWorkerClient(
+    fileName,
+    { sharedHost: true },
+    () => new Worker(new URL('../worker.ts', import.meta.url), { type: 'module' }),
+  );
+  const tap = new BroadcastChannel(`opfs-vfs-${fileName}`);
+  let follower: OpfsVfsWorkerClient | undefined;
+  try {
+    await owner.ready;
+    const generation = owner.getStatus().ownerGeneration!;
+    const liveness = `opfs-vfs-owner-${fileName}-${generation}`;
+    expect(await lockNames('held')).toEqual(expect.arrayContaining([coordinator, liveness]));
+
+    const announced = new Promise<{ profile: SharedMountProfile }>((resolve) => {
+      tap.onmessage = ({ data }) => data?.type === 'LEADER_READY' && resolve(data);
+    });
+    tap.postMessage({ type: 'LEADER_PING' });
+    const { profile } = await announced;
+    expect(announcesOwnerLiveness(profile)).toBe(true);
+
+    follower = new OpfsVfsWorkerClient(
+      fileName,
+      { followerOnly: { generation, profile: createSharedMountProfile([]), ownerLiveness: true } },
+      () => {
+        throw new Error('shared followers never spawn workers');
+      },
+    );
+    await follower.ready;
+    expect((await follower.stat('/')).is_dir).toBe(true);
+    await waitFor(async () => (await lockNames('pending')).includes(liveness));
+    expect(await lockNames('pending')).not.toContain(coordinator);
+    expect(follower.getStatus().state).toBe('ready');
+
+    await owner.closeVfs();
+    await waitFor(() => follower!.disposed);
+    expect(follower.getStatus().error).toMatchObject({ code: 'VFS_ATTACHMENT_LOST' });
+    expect(await lockNames('held')).not.toContain(liveness);
+  } finally {
+    tap.close();
+    follower?.dispose();
+    owner.dispose();
+    await sleep(20);
+    await deleteVolume(fileName).catch(() => {});
+  }
+});
+
+it('admits a lone page follower through the host with liveness and a first persistence snapshot', async () => {
+  const fileName = `shared-host-bridge-${crypto.randomUUID()}.bin`;
+  const coordinator = `opfs-vfs-lock-${fileName}`;
+  const NativeChannel = MessageChannel;
+  const scope: { onconnect?: (event: { ports: MessagePort[] }) => void; close: ReturnType<typeof vi.fn> } = {
+    close: vi.fn(),
+  };
+  vi.stubGlobal('self', scope);
+  try {
+    startVfsSharedWorker();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+  // The host code runs in this page. Its private runtime channel is bridged to a dedicated worker, so the
+  // mount also works where a SharedWorker cannot open sync access handles. Only the channel the host creates
+  // while it handles ATTACH is bridged; every other MessageChannel stays native.
+  const runtime = new Worker(new URL('../worker.ts', import.meta.url), { type: 'module' });
+  let hostStarting = false;
+  class HostChannel {
+    constructor() {
+      if (!hostStarting) return new NativeChannel();
+      return {
+        port1: { onmessage: null, postMessage() {} },
+        port2: Object.assign(runtime, { start() {}, close: () => runtime.terminate() }),
+      };
+    }
+  }
+  const handles = FileSystemFileHandle.prototype as { createSyncAccessHandle?: unknown };
+  const pretendSyncHandles = typeof handles.createSyncAccessHandle !== 'function';
+  if (pretendSyncHandles) handles.createSyncAccessHandle = () => {};
+  vi.stubGlobal('MessageChannel', HostChannel);
+  const connect = () => {
+    const link = new NativeChannel();
+    scope.onconnect!({ ports: [link.port2] });
+    const receive = link.port2.onmessage!;
+    link.port2.onmessage = (event) => {
+      hostStarting = true;
+      try {
+        return receive.call(link.port2, event);
+      } finally {
+        hostStarting = false;
+      }
+    };
+    return { port: link.port1, onerror: null };
+  };
+  let follower: OpfsVfsWorkerClient | undefined;
+  try {
+    follower = await createSharedWorkerFollower(fileName, {}, connect);
+    await follower.ready;
+    const generation = follower.getStatus().ownerGeneration!;
+    expect(follower.getStatus()).toMatchObject({ transport: 'shared-worker', role: 'follower', state: 'ready' });
+    expect((await follower.stat('/')).is_dir).toBe(true);
+
+    // No second page pings the owner, yet the follower learns the owner's persistence state.
+    await waitFor(() => follower!.getStatus().persistence !== null);
+
+    // The host announced the liveness lock it holds, so the follower watches that and stays off the
+    // coordinator lock the next owner has to claim.
+    await waitFor(async () => (await lockNames('pending')).includes(`opfs-vfs-owner-${fileName}-${generation}`));
+    expect(await lockNames('pending')).not.toContain(coordinator);
+
+    await follower.shutdownSharedVfs();
+    await waitFor(() => scope.close.mock.calls.length > 0);
+    await waitFor(async () => !(await lockNames('held')).includes(coordinator));
+  } finally {
+    vi.unstubAllGlobals();
+    if (pretendSyncHandles) delete handles.createSyncAccessHandle;
+    follower?.dispose();
+    runtime.terminate();
+    await sleep(20);
+    await deleteVolume(fileName).catch(() => {});
+  }
+});
+
 it.skipIf(!canRunSharedWorker)('releases a mounted owner when the last ATTACH cancels after host READY', async () => {
   const fileName = `shared-cancel-${crypto.randomUUID()}.bin`;
   const real = realWorker(fileName);
@@ -402,7 +640,8 @@ it.skipIf(!canRunSharedWorker)(
     try {
       const ready = nextPortMessage(raw.port, 'READY');
       raw.port.postMessage(attach);
-      await ready;
+      // The real host announces the liveness lock it holds; page followers watch that instead of the coordinator.
+      expect(announcesOwnerLiveness((await ready).profile)).toBe(true);
       const repeated = nextPortMessage(raw.port, 'ERROR');
       raw.port.postMessage(attach);
       expect((await repeated).error).toMatchObject({ code: 'EINVAL' });

@@ -1,16 +1,21 @@
 # API and package boundaries
 
-| Import                              | Contents                                                                                |
-| ----------------------------------- | --------------------------------------------------------------------------------------- |
-| `@opfs-vfs/opfs-vfs`                | Direct `OpfsVfs`, `OpenFlags`, errors, `peekVolume`, `deleteVolume`, persistence types  |
-| `@opfs-vfs/opfs-vfs/worker`         | `OpfsVfsWorker`, `createSharedWorkerFollower`, `startVfsSharedWorker`, and options      |
-| `@opfs-vfs/opfs-vfs/pglite`         | `OpfsVfsPGliteAdapter` and its synchronous VFS interface                                |
-| `@opfs-vfs/opfs-vfs/just-bash`      | `OpfsVfsJustBashAdapter` and structural filesystem types                                |
-| `@opfs-vfs/opfs-vfs/wasmer`         | `OpfsVfsWasmerAdapter` and `WasmerWorkspace` for explicit workspace copies              |
-| `@opfs-vfs/opfs-vfs/wasmer-sync`    | Experimental `createWasmerFileSystem` live synchronous filesystem provider              |
-| `@opfs-vfs/opfs-vfs/storage`        | Internal volume-storage contract and persistence helpers; version-coupled extension API |
-| `@opfs-vfs/opfs-vfs/worker-client`  | Shared client for extension worker construction                                         |
-| `@opfs-vfs/opfs-vfs/worker-runtime` | Shared command dispatcher for extension workers                                         |
+| Import                              | Contents                                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@opfs-vfs/opfs-vfs`                | Direct `OpfsVfs`, `OpenFlags`, errors, `peekVolume`, `deleteVolume`, persistence types                                                     |
+| `@opfs-vfs/opfs-vfs/worker`         | `openOpfsVfsWorker`, `OpfsVfsWorker`, `getSupport`, `createSharedWorkerFollower`, `probeSharedWorker`, `startVfsSharedWorker`, and options |
+| `@opfs-vfs/opfs-vfs/pglite`         | `OpfsVfsPGliteAdapter` and its synchronous VFS interface                                                                                   |
+| `@opfs-vfs/opfs-vfs/just-bash`      | `OpfsVfsJustBashAdapter` and structural filesystem types                                                                                   |
+| `@opfs-vfs/opfs-vfs/wasmer`         | `OpfsVfsWasmerAdapter` and `WasmerWorkspace` for explicit workspace copies                                                                 |
+| `@opfs-vfs/opfs-vfs/wasmer-sync`    | Experimental `createWasmerFileSystem` live synchronous filesystem provider                                                                 |
+| `@opfs-vfs/opfs-vfs/duckdb`         | Experimental `createDuckDBRuntime` synchronous DuckDB-Wasm filesystem adapter                                                              |
+| `@opfs-vfs/opfs-vfs/plugins`        | Plugin author types: configured plugins, worker registrations and requests                                                                 |
+| `@opfs-vfs/opfs-vfs/changes`        | Logical-change contribution and file-change channel types                                                                                  |
+| `@opfs-vfs/opfs-vfs/storage`        | Internal volume-storage contract and persistence helpers; version-coupled extension API                                                    |
+| `@opfs-vfs/opfs-vfs/worker-client`  | Shared client for extension worker construction                                                                                            |
+| `@opfs-vfs/opfs-vfs/worker-runtime` | Shared command dispatcher for extension workers                                                                                            |
+
+`openOpfsVfsWorker()` chooses the transport: a compatible SharedWorker when the capability probe passes, otherwise the dedicated worker, with the reason in `getStatus().fallbackReason`. It selects the dedicated worker only when the page has no `SharedWorker` API, the shared scope cannot open sync access handles, no compatible `sharedWorker` factory exists for an application worker or plugin request, or a compatible dedicated owner already holds the volume. A SharedWorker that cannot be created or reached, a probe timeout, and every attach or mount failure reject. Every worker client needs a cross-origin isolated page because it allocates the SharedArrayBuffer bridge, even for asynchronous-only use; `getSupport()` lists what is missing, and construction fails with `VFS_UNSUPPORTED`.
 
 Await `ready` before filesystem operations. A direct mount uses `openSync`, `writeSync`, `readSync`, `fsyncSync` and `closeSync` for file descriptors; await `closeVfs()` to release the volume and its locks. Worker clients provide corresponding asynchronous methods, `flushVfs()` and `closeVfs()`. File close and volume close are different operations.
 
@@ -35,6 +40,8 @@ Balanced mode schedules synchronization about 150 ms after the first dirty chang
 Both memory and disk buffering use OPFS. Select `bufferMode: 'memory'` to cache file contents and `localDurabilityMode: 'relaxed'` to manage synchronization explicitly. Relaxed mode defers flushes to explicit synchronization or orderly volume close. Strict mode adds immediate memory-mode recovery-log flushes; it does not flush every disk-mode write. The PGlite adapter's separate `relaxedDurability` option is unchanged.
 
 When switching a volume from memory to disk buffering, a nonempty memory recovery log causes a disk mount to fail with `EBUSY`. Reopen that volume explicitly with `bufferMode: 'memory'`, await readiness and successfully close it with `closeVfs()`. It can then be reopened with the disk default. Do not delete recovery logs or reset the volume to work around this error. A cleanly closed volume can switch buffer modes directly.
+
+File times are stored in whole seconds. `stat()` and `utimes()` work in milliseconds while a volume is mounted, but after it is reopened `atimeMs`, `mtimeMs` and `ctimeMs` read back rounded down to the second. Do not compare a time read before a reopen with one read after it at millisecond precision. Times before 1970 or from 7 February 2106 onward cannot be stored.
 
 ## Live EdgeJS files
 

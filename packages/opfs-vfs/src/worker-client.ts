@@ -9,8 +9,10 @@ import {
 import { SAB_SIZE, SyncMessenger } from './sync-messenger';
 import type { VfsPluginRequest } from './plugins';
 import {
+  announcedSharedProfile,
   createSharedMountProfile,
   mountProfileMismatch,
+  ownerLivenessLockName,
   preparePluginRequests,
   sharedMountProfileMismatch,
   type MountProfile,
@@ -32,6 +34,7 @@ import {
   PERSISTENCE_STATUS,
   type ClientPersistenceStatus,
 } from './persistence-status';
+import { getSupport } from './support';
 
 export { getSupport, type VfsSupport, type VfsSupportRequirement } from './support';
 export type { RemoteErrorDetails } from './remote-error';
@@ -201,10 +204,16 @@ const PROTOCOL_MISMATCH_MESSAGE =
 const DISCONNECTED_FOLLOWER_CHANGE_ERROR = 'The follower disconnected. Reconnect to use this volume.';
 const LEADER_ONLY_COMMANDS = new Set(['INIT', 'CLOSE_VFS', 'PING']);
 const FILE_CHANGE_COMMANDS = new Set(['FILE_CHANGES_OPEN', 'FILE_CHANGES_COMMAND', 'FILE_CHANGES_CLOSE']);
-const LONG_COMMANDS = new Set(['FLUSH', 'SYNC', 'FSYNC', 'CLOSE_VFS', 'LIST_PATHS']);
+// SHUTDOWN_LEADER wraps the owner's CLOSE_VFS, so a relayed shutdown gets the same deadline.
+const LONG_COMMANDS = new Set(['FLUSH', 'SYNC', 'FSYNC', 'CLOSE_VFS', 'LIST_PATHS', 'SHUTDOWN_LEADER']);
 const LONG_COMMAND_TIMEOUT_MS = 300_000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
+// Messages posted before a worker script has loaded are queued, so this deadline covers its fetch and evaluation.
+const MIN_WORKER_START_TIMEOUT_MS = 5_000;
 const TAKEOVER_SHUTDOWN_TIMEOUT_MS = 3_000;
+// A promoted follower can reach its mount before the previous owner's worker has finished tearing down and
+// released the volume. It holds the coordinator lock, so no other owner may start: wait briefly, then retry.
+const TAKEOVER_BUSY_RETRY_DELAYS_MS = [50, 150, 300];
 // Passive observers (devtools) fail fast so their UI can offer a reconnect.
 const OBSERVER_COMMAND_TIMEOUT_MS = 5_000;
 const commandTimeout = (type: string) =>
@@ -293,6 +302,17 @@ function hasExactOwnKeys(value: unknown, fields: readonly string[]) {
   }
 }
 
+/**
+ * Bytes safe to hand to another context. A view that owns its entire plain ArrayBuffer is sent as is. Any other
+ * view (a window into an application or Wasm heap, or SharedArrayBuffer-backed memory) is copied first: transferring
+ * it would detach unrelated data, and cloning it would serialize the whole backing buffer rather than the window.
+ */
+function ownedBytes(data: Uint8Array): Uint8Array {
+  return data.buffer instanceof ArrayBuffer && data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
+    ? data
+    : data.slice();
+}
+
 function makeCodedError(message: string, code?: string) {
   const error = new Error(message) as Error & { code?: string };
   if (code) {
@@ -347,7 +367,12 @@ export interface OpfsVfsWorkerClientOptions extends Omit<OpfsVfsOptions, 'plugin
   /** @internal SharedWorker host admission; not part of normal page ownership. */
   sharedHost?: boolean;
   /** @internal A page follower admitted by a validated SharedWorker host. */
-  followerOnly?: { readonly generation: string; readonly profile: SharedMountProfile };
+  followerOnly?: {
+    readonly generation: string;
+    readonly profile: SharedMountProfile;
+    /** The host announced that it holds the per-generation liveness lock. */
+    readonly ownerLiveness?: boolean;
+  };
   /** @internal Stable page identity supplied by a SharedWorker ATTACH. */
   attachmentId?: string;
   /** @internal Releases the bootstrap transport with this page client. */
@@ -396,7 +421,7 @@ export class OpfsVfsWorkerClient {
   private pluginRequests: VfsPluginRequest[];
   private readonly profile: MountProfile;
   private readonly sharedProfile?: SharedMountProfile;
-  private readonly followerOnly?: { readonly generation: string; readonly profile: SharedMountProfile };
+  private readonly followerOnly?: OpfsVfsWorkerClientOptions['followerOnly'];
   private readonly sharedHost: boolean;
   private readonly volumeOptions: Pick<
     OpfsVfsOptions,
@@ -555,8 +580,9 @@ export class OpfsVfsWorkerClient {
     const prepared = preparePluginRequests(options.plugins, options.openMode, fileName);
     this.pluginRequests = prepared.requests;
     this.profile = prepared.profile;
+    // A shared owner announces what it offers beyond the required profile; see `holdOwnerLiveness`.
     this.sharedProfile = options.sharedHost
-      ? createSharedMountProfile(prepared.requests)
+      ? announcedSharedProfile(createSharedMountProfile(prepared.requests))
       : options.followerOnly?.profile;
     if (options.attachTo !== undefined && this.pluginRequests.length) {
       throw makeCodedError('Passive attachments cannot request plugins', 'EINVAL');
@@ -602,6 +628,15 @@ export class OpfsVfsWorkerClient {
     // SharedWorker owners relay asynchronous page commands. Page followers retain
     // the synchronous bridge, so WebKit hosts without SharedArrayBuffer can mount.
     if (!options.sharedHost) {
+      // Every page client allocates the bridge, so a page without cross-origin isolation cannot construct one.
+      // Report that as the same typed refusal `openOpfsVfsWorker()` gives, before any resource is created.
+      if (typeof SharedArrayBuffer !== 'function') {
+        const { missing } = getSupport();
+        throw Object.assign(new Error(`Unsupported VFS requirements: ${missing.join(', ')}`), {
+          code: 'VFS_UNSUPPORTED',
+          missing,
+        });
+      }
       const sabSize = options.sabSize ?? SAB_SIZE;
       this.messenger = new SyncMessenger(new SharedArrayBuffer(sabSize + 64));
     }
@@ -843,6 +878,13 @@ export class OpfsVfsWorkerClient {
       .catch(() => {});
   }
 
+  /** A follower asks the owner of `generation` for a tagged snapshot; until its reply, other frames are ignored. */
+  private requestOwnerPersistence(generation: string) {
+    const request = crypto.randomUUID();
+    this.persistenceSnapshotRequest = request;
+    this.channel.postMessage({ type: 'PERSISTENCE_REQUEST', version: 1, generation, request });
+  }
+
   private recordCloseFailure(error: unknown) {
     this.closeFailure = error;
     this.closeFailed = true;
@@ -915,6 +957,9 @@ export class OpfsVfsWorkerClient {
             async () => {
               this.onLeaderReady = null;
               resolve();
+              // The host announced readiness before this page's channel existed, and this follower never
+              // pings, so ask for the first persistence snapshot here.
+              if (!this.resourcesDisposed) this.requestOwnerPersistence(expected.generation);
               this.watchSharedOwner(expected.generation);
               await new Promise<void>((done) => {
                 if (this.abortController.signal.aborted) done();
@@ -929,10 +974,17 @@ export class OpfsVfsWorkerClient {
     });
   }
 
-  /** A follower may observe the owner lock, but never mounts or promotes on release. */
+  /**
+   * A follower observes owner loss, but never mounts or promotes on release. With an owner that announced its
+   * liveness lock, the follower queues on that per-generation name: a hidden page that is granted it cannot keep
+   * the next owner out. An owner of an older build holds only the coordinator lock, so that is watched instead.
+   */
   private watchSharedOwner(generation: string) {
+    const name = this.followerOnly?.ownerLiveness
+      ? ownerLivenessLockName(this.fileName, generation)
+      : `opfs-vfs-lock-${this.fileName}`;
     const watch = navigator.locks
-      .request(`opfs-vfs-lock-${this.fileName}`, { signal: this.abortController.signal }, async (lock) => {
+      .request(name, { signal: this.abortController.signal }, async (lock) => {
         if (!lock || this.resourcesDisposed || this.closing) return;
         this.disposeLocalResources(
           makeCodedError(
@@ -945,6 +997,23 @@ export class OpfsVfsWorkerClient {
       })
       .catch(() => {});
     this.lockRequests.push(watch);
+  }
+
+  /** A shared owner holds this for its whole generation, and takes it before it announces readiness. */
+  private holdOwnerLiveness() {
+    const signal = this.abortController.signal;
+    return new Promise<void>((resolve, reject) => {
+      const held = navigator.locks
+        .request(ownerLivenessLockName(this.fileName, this.generation), { signal }, async () => {
+          resolve();
+          await new Promise<void>((done) => {
+            if (signal.aborted) done();
+            else signal.addEventListener('abort', () => done(), { once: true });
+          });
+        })
+        .catch(reject);
+      this.lockRequests.push(held);
+    });
   }
 
   private async initWithTimeout(initTimeout: number) {
@@ -1058,7 +1127,10 @@ export class OpfsVfsWorkerClient {
             this.isLeader = true;
             this.trace('owner-lock-acquired');
             try {
-              await this.spawnWorker();
+              // Only a client that followed an owner retries a busy mount; a fresh claim reports it at once.
+              await this.spawnWorker(this.clientLockRequested);
+              // Followers that read the announcement queue on this lock, so it must be held first.
+              if (this.sharedHost) await this.holdOwnerLiveness();
               if (!this.abortController.signal.aborted && !this.isShuttingDown && !this.closing) {
                 // SAB-6: leader is fully ready — announce it so already-waiting
                 // followers can resolve, and answer future readiness pings.
@@ -1097,7 +1169,7 @@ export class OpfsVfsWorkerClient {
     });
   }
 
-  private spawnWorker() {
+  private spawnWorker(retryBusy = false) {
     this.invalidateRouting();
     this.generation = crypto.randomUUID();
     this.leaderReady = false;
@@ -1107,7 +1179,7 @@ export class OpfsVfsWorkerClient {
     if (this.debug) {
       console.log('OpfsVfsWorker: Spawning worker...');
     }
-    this.workerReady = this._spawnWorkerInner().then(
+    this.workerReady = this.mountWorker(retryBusy).then(
       () => {
         this.leaderReady = true;
         this.refreshStatus();
@@ -1118,6 +1190,44 @@ export class OpfsVfsWorkerClient {
       },
     );
     return this.workerReady;
+  }
+
+  private async mountWorker(retryBusy: boolean) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this._spawnWorkerInner();
+      } catch (error) {
+        const delay = retryBusy ? TAKEOVER_BUSY_RETRY_DELAYS_MS[attempt] : undefined;
+        const stopped = () => this.resourcesDisposed || this.closing || this.isShuttingDown;
+        if (
+          delay === undefined ||
+          stopped() ||
+          this.workerFailure ||
+          typeof error !== 'object' ||
+          error === null ||
+          !this.remoteErrors.has(error) ||
+          (error as { code?: unknown }).code !== 'EBUSY'
+        )
+          throw error;
+        this.trace('takeover-mount-busy', `attempt-${attempt + 1}`);
+        // The refused worker mounted nothing. Each attempt gets a fresh worker and generation.
+        this.worker?.terminate();
+        this.worker = null;
+        this.initSent = false;
+        const signal = this.abortController.signal;
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', done);
+            resolve();
+          };
+          const timer = setTimeout(done, delay);
+          signal.addEventListener('abort', done, { once: true });
+        });
+        if (stopped()) throw error;
+        this.generation = crypto.randomUUID();
+      }
+    }
   }
 
   private async _spawnWorkerInner() {
@@ -1158,7 +1268,7 @@ export class OpfsVfsWorkerClient {
         this.receiveWorkerPersistence(event.data.persistence);
     };
 
-    await this.requestWorker('PING', {}, undefined, 5000);
+    await this.requestWorker('PING', {}, undefined, Math.max(this.initTimeout, MIN_WORKER_START_TIMEOUT_MS));
     this.trace('worker-pong-received');
 
     if (this.debug) {
@@ -1330,11 +1440,8 @@ export class OpfsVfsWorkerClient {
           !this.ownerPersistence ||
           this.ownerPersistence.generation !== generation ||
           this.ownerPersistence.value === null
-        ) {
-          const request = crypto.randomUUID();
-          this.persistenceSnapshotRequest = request;
-          this.channel.postMessage({ type: 'PERSISTENCE_REQUEST', version: 1, generation, request });
-        }
+        )
+          this.requestOwnerPersistence(generation);
         this.onLeaderReady?.(generation);
       }
       return;
@@ -2151,12 +2258,7 @@ export class OpfsVfsWorkerClient {
         // (e.g. an Emscripten/app heap) would otherwise detach unrelated data, so
         // we copy those into a fresh buffer and transfer the copy instead.
         // SharedArrayBuffer is not transferable, so it is always copied.
-        const ownsFullBuffer =
-          data !== undefined &&
-          data.buffer instanceof ArrayBuffer &&
-          data.byteOffset === 0 &&
-          data.byteLength === data.buffer.byteLength;
-        const outData = data === undefined ? undefined : ownsFullBuffer ? data : data.slice();
+        const outData = data === undefined ? undefined : ownedBytes(data);
         // outData is either the caller's full-owner view or a fresh slice; both
         // fully own a plain ArrayBuffer, so it is always safe to transfer.
         worker.postMessage({ id, type, payload, data: outData }, outData ? [outData.buffer] : []);
@@ -2388,7 +2490,9 @@ export class OpfsVfsWorkerClient {
           clientId: this.attachmentId,
           payload: { type, payload },
           tabId,
-          data,
+          // BroadcastChannel clones a view's whole backing buffer for every listening tab, and cannot carry
+          // shared memory to another tab at all. Relay only the bytes being written.
+          data: data === undefined ? undefined : ownedBytes(data),
         });
         if (dispatch) dispatch.sent = true;
       } catch (error) {

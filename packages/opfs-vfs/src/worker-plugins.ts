@@ -90,6 +90,28 @@ export function createSharedMountProfile(
   return { ...createMountProfile(plugins), transport: 'shared-worker' };
 }
 
+/**
+ * Optional capability a shared owner announces once it holds {@link ownerLivenessLockName} for its generation.
+ * It is never part of an expected profile: owners of an older build do not announce it, and followers of an older
+ * build ignore it, so pages and hosts of different builds keep attaching to each other.
+ */
+export const OWNER_LIVENESS_CAPABILITY = 'owner-liveness-lock';
+
+/** Held by a shared owner for as long as `generation` is mounted; followers queue on it to observe owner loss. */
+export const ownerLivenessLockName = (fileName: string, generation: string) =>
+  `opfs-vfs-owner-${fileName}-${generation}`;
+
+/** The profile a shared owner announces: its required profile plus the optional capabilities it provides. */
+export function announcedSharedProfile(profile: SharedMountProfile): SharedMountProfile {
+  return { ...profile, capabilities: [...new Set([...profile.capabilities, OWNER_LIVENESS_CAPABILITY])].sort() };
+}
+
+/** Whether an announced owner profile offers the per-generation liveness lock. */
+export function announcesOwnerLiveness(profile: unknown): boolean {
+  const capabilities = record(profile) ? profile.capabilities : undefined;
+  return Array.isArray(capabilities) && capabilities.includes(OWNER_LIVENESS_CAPABILITY);
+}
+
 /** Return the incompatibility code for a remote mount profile, if any. */
 export function mountProfileMismatch(
   value: unknown,
