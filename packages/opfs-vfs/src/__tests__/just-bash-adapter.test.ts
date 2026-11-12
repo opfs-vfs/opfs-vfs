@@ -67,6 +67,25 @@ for (const backend of backends) {
       expect(new Set(await fs.getAllPaths())).toEqual(new Set(['/', '/nested', '/nested/hello.txt']));
     });
 
+    it("resolves dot-dot in the volume, while resolvePath stays the shell's textual arithmetic", async () => {
+      const fs = await createAdapter();
+      await fs.writeFile('/a/x', 'inner');
+      await fs.writeFile('/x', 'root');
+      await fs.mkdir('/a/b');
+      await fs.symlink('/a/b', '/link');
+
+      // Through the symlink, `..` is the parent of its target.
+      expect(await fs.readFile('/link/../x')).toBe('inner');
+      expect(await fs.realpath('/link/../x')).toBe('/a/x');
+      expect((await fs.stat('/link/..')).isDirectory).toBe(true);
+      await expect(fs.readFile('/missing/../x')).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.stat('/x/..')).rejects.toMatchObject({ code: 'ENOTDIR' });
+
+      // The shell's logical path, as just-bash computes it before calling the file methods.
+      expect(fs.resolvePath('/link', '../x')).toBe('/x');
+      expect(fs.resolvePath('/', '/link/./../x')).toBe('/x');
+    });
+
     it('preserves caller-owned full-buffer input across writeFile', async () => {
       const fs = await createAdapter();
       // Node/browser Buffer is a Uint8Array subtype whose slice() aliases the same backing store.

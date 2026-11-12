@@ -152,6 +152,11 @@ export class OpfsVfsPGliteAdapter extends BaseFilesystem {
     }
   }
 
+  /**
+   * Tidies slashes only. `.` and `..` are left for the volume, which resolves
+   * them against the directories and symlinks it reaches; Emscripten resolves
+   * them itself before it calls this layer, so node paths never carry them.
+   */
   private normalizePath(path: string): string {
     return normalizeFsPath(path).path;
   }

@@ -815,6 +815,17 @@ async function exercise(mode: 'memory' | 'disk'): Promise<Result> {
     vfs.writeFileBufferSync('/new-link', bytes(6));
     check('writes through symlinks update only the resolved target', recorder.take().completed, ['update:file:/new']);
 
+    vfs.symlinkSync('/made/deep', '/deep-link');
+    vfs.writeFileBufferSync('/deep-link/../via-dots', bytes(3));
+    vfs.unlinkSync('/deep-link/../via-dots');
+    vfs.unlinkSync('/deep-link');
+    check('dot-dot after a symlink records the resolved path', recorder.take().completed, [
+      'create:symlink:/deep-link',
+      'create:file:/made/via-dots',
+      'delete:file:/made/via-dots',
+      'delete:symlink:/deep-link',
+    ]);
+
     vfs.linkSync('/new', '/alias');
     check('hardlink only creates new name', recorder.take().completed, ['create:file:/alias']);
     const aliasFd = vfs.openSync('/alias', OpenFlags.O_WRONLY);

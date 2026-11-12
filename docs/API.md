@@ -31,6 +31,21 @@ Keep the same volume name and origin when reopening. `openMode: 'create-new'` re
 
 `peekVolume` is read-only and returns plaintext metadata information plus protection-marker presence. It does not decode a vault or report cipher parameters. `deleteVolume` explicitly removes the complete named volume, including reserved extension sidecars, under the volume lock; use it only when deletion is intended.
 
+## Path resolution
+
+Every path is resolved from the volume root, one component at a time, as POSIX does. Empty components are ignored; a relative path starts at the root.
+
+- **`.` and `..`** are resolved against the directories actually reached, after symbolic links. With a link `/link` to `/a/b`, `/link/../x` names `/a/x`. They need an existing directory to stand on: after a name that does not exist the call fails with `ENOENT`, after a file with `ENOTDIR`. `..` at the root stays at the root.
+- **Symbolic links** in the middle of a path are always followed; the last component is followed by `stat`, `open`, `readdir`, `chmod`, `utimes`, `truncate`, `realpath` and `exists`, and not by `lstat`, `readlink`, `unlink`, `rmdir`, `rename`, `link`, `symlink` and `mkdir`. A relative target is resolved from the link's own directory. A link whose target does not exist resolves to that missing path, so `..` after it fails with `ENOENT`. More than 40 links in one resolution fail with `ELOOP`.
+- **Search permission** is needed on every directory the walk passes through, including one that a link or `..` leads through and that is not part of the final path; otherwise the call fails with `EACCES`.
+- **A trailing slash** requires the resolved entry to be a directory (`ENOTDIR` otherwise). A final `.` or `..` does too.
+- **Removing or renaming `.` or `..`** (`removeSync`, `rmdirSync`, `renameSync`, source and destination) fails with `EINVAL`, also behind a trailing slash or a symbolic link, and changes nothing.
+- **`realpath`** returns the resolved path without links or dot components and fails with `ENOENT` if it does not exist. Paths in change events, `listPaths()` and stored metadata are always these resolved paths.
+
+Breaking change from earlier versions, which collapsed `..` textually before looking anything up: `/missing/../file` now fails with `ENOENT` instead of reaching `/file`, `/file/..` and `/file/.` fail with `ENOTDIR`, and `..` after a symbolic link leads to the parent of the link's target instead of the parent of the link.
+
+The `just-bash` adapter's `resolvePath()` remains the shell's textual path arithmetic (`cd ..` from `/a/b` is `/a`); its file methods pass paths through unchanged. The live Wasmer provider (`createWasmerFileSystem`) still rejects paths containing `.` or `..` with `EINVAL`. Subscription targets are textual patterns, not lookups: they are compared with event paths after textual normalization.
+
 ## Storage defaults
 
 Direct `OpfsVfs` mounts and `OpfsVfsWorker` clients default to `bufferMode: 'disk'` and `localDurabilityMode: 'balanced'`. Disk mode accesses mapped OPFS blocks without retaining a full copy of file contents in RAM. Metadata and I/O buffers still consume memory.
