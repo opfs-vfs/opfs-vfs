@@ -23,11 +23,13 @@ To remove a sample later, reload this page to close its application worker, then
 
 ## Load it explicitly
 
-Install devtools alongside `@opfs-vfs/opfs-vfs`. Live attachment requires the standard worker's observer protocol, included with this devtools release; update the application worker as well as the devtools package.
+Install devtools alongside `@opfs-vfs/opfs-vfs`. Live attachment requires the standard worker's observer protocol, included with this devtools release; update the application worker as well as the devtools package. The panel renders with React 19: `react` and `react-dom` 19 are peer dependencies, so add them if your application does not already use them.
 
 ```sh
-pnpm add -D @opfs-vfs/devtools
+pnpm add -D @opfs-vfs/devtools react react-dom
 ```
+
+Devtools previews PDFs with `@opfs-vfs/file-preview`. On the Vite 7 development server, follow its [bundler setup](https://github.com/opfs-vfs/opfs-vfs/tree/main/packages/file-preview#bundler-setup); Vite 8 needs no configuration.
 
 In a Vite application's browser entry:
 

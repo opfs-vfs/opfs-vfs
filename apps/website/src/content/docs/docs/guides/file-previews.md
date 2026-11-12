@@ -65,4 +65,4 @@ import { Suspense } from 'react';
 
 The host owns file reads, permissions, drafts and persistence. `TextEditor` is read-only by default and rejects edits larger than 16 MiB. Scrolling virtualizes the rendered lines; the bounded document still resides in memory. Markdown larger than 256 KiB uses the virtualized source view.
 
-The built-in PDF renderer uses a bundled PDF.js worker. Your content security policy must permit its worker asset and the image previews' `blob:` URLs. No renderer uploads file contents to a server.
+PDF.js, CodeMirror and the Markdown renderer are dependencies your bundler includes. The built-in PDF renderer starts a module worker that your bundler emits as a same-origin asset. Vite 8, and Vite 7 production builds, need no configuration. Vite 7's development server needs either `setPdfWorkerSrc(url)` or an `optimizeDeps` entry; the [package README](https://github.com/opfs-vfs/opfs-vfs/tree/main/packages/file-preview#bundler-setup) lists both. Your content security policy must permit that worker (`worker-src 'self'`), `blob:` URLs for raster image previews, and `data:` URLs for SVG previews. No renderer uploads file contents to a server.

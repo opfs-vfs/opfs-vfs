@@ -43,3 +43,38 @@ Reuse sources inspected at `frachter-app/opfs-vfs` commit `4d88149`:
 The bash-console DOCX, spreadsheet and Excalidraw plugins depend on its UI shell and editor-host capabilities. They are candidates for subsequent extensions, not current exports. The full console workbench, Monaco and terminal integration are not dependencies of this package.
 
 The build emits ES modules, declarations and a separate stylesheet. PDF, Markdown and editor implementations are lazy chunks.
+
+## Bundler setup
+
+PDF.js, CodeMirror, react-markdown and remark-gfm are regular dependencies that this package imports, not code compiled into it. Your bundler bundles them and your lockfile decides their patch versions. The first PDF preview starts one shared module worker with `new Worker(new URL('./pdf.worker.js', import.meta.url), { type: 'module' })`; bundlers that support this pattern bundle the worker together with its PDF.js import.
+
+Checked with the packed package in a minimal React app (PDF, Markdown and code previews):
+
+| Setup                  | Works without configuration |
+| ---------------------- | --------------------------- |
+| Vite 8 `build` / `dev` | Yes                         |
+| Vite 7 `build`         | Yes                         |
+| Vite 7 `dev`           | No: PDF previews fail       |
+
+Vite 7's dependency pre-bundling moves this package into `node_modules/.vite/deps`, where `pdf.worker.js` does not exist, so the PDF worker cannot start and the PDF preview shows an error that points at `setPdfWorkerSrc`. Either set the worker URL yourself (below), or keep the package out of pre-bundling:
+
+```ts
+// vite.config.ts (Vite 7)
+export default defineConfig({
+  optimizeDeps: {
+    exclude: ['@opfs-vfs/file-preview'],
+    include: ['react/jsx-runtime', '@opfs-vfs/file-preview > react-markdown', '@opfs-vfs/file-preview > remark-gfm'],
+  },
+});
+```
+
+For a bundler that does not handle the worker pattern inside dependencies, call `setPdfWorkerSrc` once before the first PDF preview. PDF.js rejects a worker from a different PDF.js release, so add `pdfjs-dist` to your own dependencies at exactly the version this package depends on, then pass the URL of its worker build:
+
+```ts
+import { setPdfWorkerSrc } from '@opfs-vfs/file-preview';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'; // Vite; use your bundler's asset URL import
+
+setPdfWorkerSrc(pdfWorkerUrl);
+```
+
+If your application already configures `GlobalWorkerOptions` on the same `pdfjs-dist` instance, the preview keeps that configuration. Webpack 5, Rspack and Parcel 2 document support for the worker pattern, but they have not been checked with this package.
