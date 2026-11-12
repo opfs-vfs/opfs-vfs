@@ -40,6 +40,13 @@ export interface RmOptions {
   force?: boolean;
 }
 
+export interface CreateExclusiveOptions {
+  /** Permission bits the entry is created with. */
+  mode: number;
+  /** Create a directory instead of an empty regular file. */
+  directory?: boolean;
+}
+
 export interface CpOptions {
   recursive?: boolean;
 }
@@ -258,6 +265,7 @@ function messageForOperation(code: string, operation: AdapterOperation, path: st
       if (code === 'ENOENT') return `ENOENT: no such file or directory, open '${path}'`;
       if (code === 'EISDIR') return `EISDIR: illegal operation on a directory, read '${path}'`;
       if (code === 'ELOOP') return `ELOOP: too many levels of symbolic links, open '${path}'`;
+      if (code === 'EEXIST') return `EEXIST: file already exists, open '${path}'`;
       return undefined;
     case 'write':
       if (code === 'ENOENT') return `ENOENT: no such file or directory, write '${path}'`;
@@ -598,20 +606,47 @@ export class OpfsVfsJustBashAdapter {
       }
     }
 
-    // COR-8: non-recursive `rm` must NOT remove directories. POSIX `rm` and
-    // Node `fs.rm` without `{recursive:true}` reject a directory (EISDIR) rather
-    // than silently rmdir-ing an empty one. Only `unlink` here; the recursive
-    // branch above is the sole path that removes directories.
+    // Like just-bash's own filesystems, a non-recursive `rm` removes an empty directory and fails with ENOTEMPTY on
+    // a non-empty one. A symlink (even to a directory) is unlinked, never followed. The `rm` command itself refuses
+    // a directory without `-r` before it gets here.
     try {
       await this.call<void>('unlink', 'unlinkSync', 'rm', validated.vfsPath, validated.vfsPath);
       return;
     } catch (error) {
       const code = extractCode(error);
+      if (code === 'EISDIR') {
+        try {
+          await this.call<void>('rmdir', 'rmdirSync', 'rm', validated.vfsPath, validated.vfsPath);
+        } catch (rmdirError) {
+          // Another client may have removed it in between; `force` tolerates that like any missing path.
+          if (!(options?.force && extractCode(rmdirError) === 'ENOENT')) throw rmdirError;
+        }
+        return;
+      }
       if (options?.force && code === 'ENOENT') {
         return;
       }
       throw error;
     }
+  }
+
+  /** Create a file or directory only if nothing, not even a symlink, exists at `path`. Parents are not created. */
+  async createExclusive(path: string, options: CreateExclusiveOptions): Promise<void> {
+    const validated = this.validatePath(path, options.directory ? 'mkdir' : 'open');
+    if (options.directory) {
+      await this.call<void>('mkdir', 'mkdirSync', 'mkdir', validated.vfsPath, validated.vfsPath, options.mode);
+      return;
+    }
+    const fd = await this.call<number>(
+      'open',
+      'openSync',
+      'open',
+      validated.vfsPath,
+      validated.vfsPath,
+      OpenFlags.O_WRONLY | OpenFlags.O_CREAT | OpenFlags.O_EXCL,
+      options.mode,
+    );
+    await this.closeQuietly(fd);
   }
 
   async cp(src: string, dest: string, options?: CpOptions): Promise<void> {
@@ -727,7 +762,7 @@ export class OpfsVfsJustBashAdapter {
    * What the cached list guarantees:
    * - A listing is taken when the wrapper is created, and again after every call
    *   through the wrapper that can add, remove or rename paths (`writeFile`,
-   *   `appendFile`, `mkdir`, `rm`, `cp`, `mv`, `symlink`, `link`). Such a call
+   *   `appendFile`, `mkdir`, `createExclusive`, `rm`, `cp`, `mv`, `symlink`, `link`). Such a call
    *   settles only after its listing has finished, so the list already shows the
    *   change when the shell moves on.
    * - Every call through the wrapper waits for the first listing. Before any call
@@ -776,6 +811,7 @@ export class OpfsVfsJustBashAdapter {
       exists: forward('exists'),
       stat: forward('stat'),
       mkdir: forward('mkdir', true),
+      createExclusive: forward('createExclusive', true),
       readdir: forward('readdir'),
       readdirWithFileTypes: forward('readdirWithFileTypes'),
       rm: forward('rm', true),

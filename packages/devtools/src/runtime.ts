@@ -52,6 +52,10 @@ class InspectorFilesystem extends OpfsVfsJustBashAdapter {
     this.permit();
     await super.mkdir(...args);
   }
+  override async createExclusive(...args: Parameters<OpfsVfsJustBashAdapter['createExclusive']>) {
+    this.permit();
+    await super.createExclusive(...args);
+  }
   override async rm(...args: Parameters<OpfsVfsJustBashAdapter['rm']>) {
     this.permit();
     await super.rm(...args);
