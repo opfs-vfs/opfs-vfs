@@ -41,7 +41,9 @@ Configure an npm trusted publisher for **each public package**, including newly 
 - Repository: `opfs-vfs`
 - Workflow filename: `release.yml`
 - Environment: leave empty, since this workflow does not declare one
-- Allow direct publication with `npm publish`
+- Allowed actions: tick **Allow `npm publish`**. Only `npm stage publish` is allowed by default, and this workflow publishes directly. Leave `npm dist-tag` unticked.
+
+A new trusted publisher shows **Pending validation** on the package's access page (`https://www.npmjs.com/package/<name>/access`) until a release publishes the package through it. npm shows a deadline for that first publish, two days after creation when this was written. A publisher that is not used by then shows **Expired** and no longer works: delete it and create it again. Before merging a version PR, check that every package in it shows **Valid** or **Pending validation**.
 
 The package's `repository.url` must point to `git+https://github.com/opfs-vfs/opfs-vfs.git`. Initial publication of a new package must happen through an authorized maintainer before configuring its trusted publisher. Existing packages do not need another manual publication.
 
@@ -59,7 +61,7 @@ pnpm --filter @opfs-vfs/effect pack --pack-destination /tmp/opfs-release-check
 
 Substitute the affected package name. Inspect the tarball's version, exports, runtime files, README where included, repository metadata, and `LICENSE.md`. The root and packaged copies of the PolyForm license must match.
 
-If publishing fails, inspect the Release workflow logs before retrying it with **Run workflow** on `main`. Check trusted publisher settings for the affected package and confirm whether any packages were published before the failure. Never overwrite or unpublish a released version to retry. If npm publication succeeded but a GitHub release is missing, check its tag and create the missing release from the corresponding package changelog; do not bump a version just to repair release notes.
+If publishing fails, inspect the Release workflow logs before retrying it with **Run workflow** on `main`. Check trusted publisher settings for the affected package and confirm whether any packages were published before the failure. A `404 Not Found` from the registry for one package, while others publish, often means npm did not accept that package's trusted publisher, but it can have other causes. Check the publisher's status on the package's access page first. Recreate it only if it shows **Expired** or is missing, because a new one starts a new validation deadline. If it shows **Valid** or **Pending validation**, look for another cause in the logs. Then re-run the failed job: versions already on the registry are skipped. Never overwrite or unpublish a released version to retry. If npm publication succeeded but a GitHub release is missing, check its tag and create the missing release from the corresponding package changelog; do not bump a version just to repair release notes.
 
 ## References
 
