@@ -1,5 +1,44 @@
 # @opfs-vfs/devtools
 
+## 0.3.0
+
+### Minor Changes
+
+- 453fe9a: Breaking for some bundler setups: both packages import their dependencies instead of compiling them in.
+
+  - File previews import PDF.js, CodeMirror, react-markdown, and remark-gfm from your dependencies. The PDF worker is bundled by your bundler as a module worker instead of being inlined as a `data:` URL. Vite 8 and Vite 7 builds need no changes. The Vite 7 development server needs the new `setPdfWorkerSrc()` or the `optimizeDeps` entry described in the README.
+  - A PDF worker that cannot start shows an error instead of leaving the preview at "Rendering PDF…".
+  - The developer tools list `react` and `react-dom` ^19 as peer dependencies, so install them alongside if your application does not already. just-bash, JSZip, Base UI, and Lucide are imported from your dependencies.
+
+### Patch Changes
+
+- cc26a55: Type declarations resolve under TypeScript's `node16` and `nodenext` module resolution. Relative imports now carry file extensions.
+- c775de1: The just-bash adapter gains `forJustBash()`, a filesystem you can pass straight to `new Bash({ fs })`. It has the synchronous path list just-bash requires, re-read after every path-changing call made through it. The developer tools shell uses it, so its path list follows changes made within a command line.
+
+  The adapter's file methods no longer create parent directories for a path that contains `.` or `..`. The volume resolves such paths, so `/missing/../file` fails with `ENOENT` and creates nothing.
+
+- cf048fd: The just-bash adapter's non-recursive `rm` removes an empty directory, so `rmdir` works in a shell. A non-empty directory fails with `ENOTEMPTY`, and a symlink to a directory is still only unlinked. The adapter also gains `createExclusive`, so `mktemp` works once its directory exists. The developer tools refuse both on read-only connections.
+- 4b5fc7f: Update the developer tools to just-bash 3.6.0 and file previews to pdf.js 6.5.
+- 442c399: Update runtime dependencies: React 19.3.1, Base UI 1.9.0, JSZip 3.10.2, and lucide-react 1.72.0 in the developer tools, and newer CodeMirror and Lezer releases in file previews.
+- ab4834d: SVG previews load from a `data:` URL instead of a same-origin `blob:` URL, so opening a previewed SVG in a new tab can no longer run its scripts on your origin. Images larger than 50 megapixels show a message instead of being decoded.
+- Updated dependencies [cc26a55]
+- Updated dependencies [6010a8b]
+- Updated dependencies [c775de1]
+- Updated dependencies [cf048fd]
+- Updated dependencies [4b5fc7f]
+- Updated dependencies [452f840]
+- Updated dependencies [998ca7c]
+- Updated dependencies [453fe9a]
+- Updated dependencies [cc37142]
+- Updated dependencies [442c399]
+- Updated dependencies [ab4834d]
+- Updated dependencies [a3eba3e]
+- Updated dependencies [19e80f5]
+- Updated dependencies [99ed87a]
+- Updated dependencies [3d32b9e]
+  - @opfs-vfs/opfs-vfs@2.2.0
+  - @opfs-vfs/file-preview@0.2.0
+
 ## 0.2.1
 
 ### Patch Changes
